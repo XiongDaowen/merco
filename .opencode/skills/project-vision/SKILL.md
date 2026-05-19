@@ -93,6 +93,7 @@ cp -r .opencode/skills/project-vision ~/.agents/skills/
 
 ## 里程碑
 
+- [x] Phase 0: 项目初始化与 vision skill 创建
 - [ ] Phase 1: 核心 Agent-Loop 与基础工具
 - [ ] Phase 2: Skill 系统与 MCP 集成
 - [ ] Phase 3: 记忆系统与上下文管理
@@ -100,6 +101,40 @@ cp -r .opencode/skills/project-vision ~/.agents/skills/
 - [ ] Phase 5: 多代理协作与定时任务
 - [ ] Phase 6: 可观测性与沙箱
 - [ ] Phase 7: 文档、测试与发布
+
+## 项目进展
+
+> 此部分记录当前开发状态，Agent 每次工作后应更新此处。
+
+### 当前状态
+- **阶段**: Phase 0 → Phase 1 过渡
+- **最后更新**: 2026-05-20
+- **当前焦点**: 项目初始化完成，准备开始核心架构开发
+
+### 已完成
+- [x] 项目仓库初始化
+- [x] README 架构文档
+- [x] project-vision skill 创建与同步机制
+- [x] 基础 Python 项目结构（pyproject.toml）
+- [x] 核心模块骨架文件（agent/cli/web）
+
+### 进行中
+- [ ] Phase 1 详细设计
+- [ ] Agent-Loop 核心实现
+- [ ] 基础工具集开发
+
+### 下一步
+1. 设计 Agent-Loop 核心架构
+2. 实现基础工具（文件操作、终端执行）
+3. 建立配置系统
+4. 编写单元测试框架
+
+### 关键决策记录
+| 日期 | 决策 | 原因 |
+|------|------|------|
+| 2026-05-20 | 采用 Python 3.12+ | 现代语法特性，asyncio 支持完善 |
+| 2026-05-20 | 使用 uv 作为包管理 | 速度快，依赖解析优秀 |
+| 2026-05-20 | 混合架构设计 | 结合两家框架优势，精简冗余 |
 
 ## Skill 更新与同步机制
 
