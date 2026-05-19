@@ -146,7 +146,7 @@ When you need to perform actions, use the available tools. Always be concise and
 
     async def _compress_context(self):
         """压缩上下文"""
-        from .memory.compressor import ContextCompressor
+        from openmercury.memory.compressor import ContextCompressor
 
         compressor = ContextCompressor()
         compressed = await compressor.compress(

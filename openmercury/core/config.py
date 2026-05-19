@@ -23,7 +23,7 @@ class OpenMercuryConfig:
     """主配置类"""
     username: str = "user"
     model: ModelConfig = field(default_factory=ModelConfig)
-    skills_paths: list = field(default_factory=lambda: ["./.opencode/skills", "~/.config/openmercury/skills"])
+    skills_paths: list = field(default_factory=lambda: ["./.openmercury/skills", "~/.config/openmercury/skills"])
     memory_enabled: bool = True
     memory_path: str = "~/.openmercury/memory"
     log_level: str = "INFO"
@@ -59,6 +59,8 @@ class OpenMercuryConfig:
             "model": {
                 "provider": self.model.provider,
                 "model": self.model.model,
+                "api_key": self.model.api_key,
+                "base_url": self.model.base_url,
                 "temperature": self.model.temperature,
                 "max_tokens": self.model.max_tokens,
             },
@@ -75,13 +77,15 @@ class OpenMercuryConfig:
         model = ModelConfig(
             provider=model_data.get("provider", "openai"),
             model=model_data.get("model", "gpt-4"),
+            api_key=model_data.get("api_key"),
+            base_url=model_data.get("base_url"),
             temperature=model_data.get("temperature", 0.7),
             max_tokens=model_data.get("max_tokens", 4096),
         )
         return cls(
             username=data.get("username", "user"),
             model=model,
-            skills_paths=data.get("skills_paths", cls.skills_paths.default_factory()),
+            skills_paths=data.get("skills_paths", ["./.openmercury/skills", "~/.config/openmercury/skills"]),
             memory_enabled=data.get("memory_enabled", True),
             memory_path=data.get("memory_path", "~/.openmercury/memory"),
             log_level=data.get("log_level", "INFO"),
@@ -93,7 +97,7 @@ class OpenMercuryConfig:
         """查找配置文件"""
         candidates = [
             "./openmercury.json",
-            "./.opencode/openmercury.json",
+            "./.openmercury/openmercury.json",
             os.path.expanduser("~/.config/openmercury/config.json"),
         ]
         for path in candidates:

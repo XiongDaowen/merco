@@ -8,7 +8,7 @@
     "max_tokens": 4096
   },
   "skills_paths": [
-    "./.opencode/skills",
+    "./.openmercury/skills",
     "~/.config/openmercury/skills"
   ],
   "memory_enabled": true,

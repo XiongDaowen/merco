@@ -181,7 +181,7 @@ def skills_cmd(
         if path:
             registry.load_from_paths([path])
         else:
-            registry.load_from_paths(["./.opencode/skills", "~/.config/openmercury/skills"])
+            registry.load_from_paths(["./.openmercury/skills", "~/.config/openmercury/skills"])
 
         skills = registry.list_skills()
         if skills:

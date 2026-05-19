@@ -1,5 +1,5 @@
 """CLI 入口"""
 
-from .main import main
+from .main import app
 
-__all__ = ["main"]
+__all__ = ["app"]

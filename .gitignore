@@ -40,3 +40,9 @@ config/*.json
 
 # References (external repos)
 references/
+
+# Agent runtime (generated copies for agent auto-discovery)
+.opencode/
+
+# Local working config (template at config/)
+/openmercury.json
