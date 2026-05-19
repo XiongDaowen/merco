@@ -12,7 +12,7 @@
 # opencode:  ~/.config/opencode/skills/
 # openclaw:  ~/.config/openclaw/skills/
 # 其他 agent: 参考对应文档的 skill 目录
-cp -r docs/project-vision <你的agent-skill目录>/
+cp -r docs/project-vision <你的agent-skill目录>/project-vision/
 ```
 
 这将帮助你第一时间理解项目目标、架构方向与开发原则，避免偏离核心路线。
