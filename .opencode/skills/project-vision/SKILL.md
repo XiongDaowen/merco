@@ -155,19 +155,18 @@ cp -r .opencode/skills/project-vision ~/.agents/skills/
 
 ### 更新流程
 
-**每次更新本 skill 后，必须执行以下同步步骤：**
+**每次更新本 skill 后，执行以下同步步骤：**
 
 ```bash
 # 1. 同步到全局 skill 目录（确保当前 agent 立即生效）
 cp .opencode/skills/project-vision/SKILL.md ~/.config/opencode/skills/project-vision/SKILL.md
-
-# 2. 提交到项目仓库
-git add .opencode/skills/project-vision/SKILL.md
-git commit -m "docs: 更新 project-vision skill"
-
-# 3. 推送到远程仓库
-git push
 ```
+
+**Git 提交时机**（无需频繁提交）：
+- 完成一个阶段性里程碑后
+- 用户明确要求提交时
+- 准备切换任务或结束会话前
+- 有重要架构决策需要记录时
 
 ### 更新检查清单
 
@@ -186,6 +185,21 @@ git push
 - **及时同步** — 更新后立即刷新所有副本
 - **版本意识** — 重大变更可在文件顶部添加版本注释
 - **双向更新** — 用户可以在全局目录修改后同步回项目，反之亦然
+
+## 参考资料库
+
+项目根目录下的 `references/` 文件夹包含了三个核心参考项目的最新源码，供开发时随时查阅：
+
+| 项目 | 路径 | 说明 |
+|------|------|------|
+| **Hermes Agent** | `references/hermes-agent/` | Nous Research 开发的自改进 AI Agent，具备记忆系统、Skill 自动创建、多平台网关等特性 |
+| **OpenClaw** | `references/openclaw/` | 个人 AI 助手框架，支持多平台、插件系统、定时任务等 |
+| **OpenCode** | `references/opencode/` | 终端 AI 编码助手，提供 TUI、Skill 系统、MCP 集成等 |
+
+**使用指引**：
+- 实现功能时优先参考这些项目的源码
+- 学习它们的架构设计、工具实现、配置管理等
+- 注意：`references/` 已被 git 忽略，不需要提交
 
 ## 注意事项
 
