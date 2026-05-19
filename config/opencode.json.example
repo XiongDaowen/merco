@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "username": "openmercury",
+  "model": "openai/gpt-4",
+  "skills": {
+    "paths": [
+      "./.opencode/skills",
+      "~/.config/openmercury/skills"
+    ]
+  }
+}

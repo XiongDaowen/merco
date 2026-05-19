@@ -107,16 +107,30 @@ cp -r .opencode/skills/project-vision ~/.agents/skills/
 > 此部分记录当前开发状态，Agent 每次工作后应更新此处。
 
 ### 当前状态
-- **阶段**: Phase 0 → Phase 1 过渡
+- **阶段**: Phase 1 进行中
 - **最后更新**: 2026-05-20
-- **当前焦点**: 项目初始化完成，准备开始核心架构开发
+- **当前焦点**: 核心架构实现 - 目录结构已重建，各模块骨架已完成
 
 ### 已完成
 - [x] 项目仓库初始化
 - [x] README 架构文档
 - [x] project-vision skill 创建与同步机制
-- [x] 基础 Python 项目结构（pyproject.toml）
-- [x] 核心模块骨架文件（agent/cli/web）
+- [x] 参考代码库克隆 (hermes-agent, openclaw, opencode)
+- [x] 目录结构重新设计 (集三家之长)
+- [x] 核心模块骨架实现:
+  - [x] core/ - Agent, Session, Message, Context, Config
+  - [x] tools/ - Registry, Base, File, Bash, Web, Task, MCP
+  - [x] skills/ - Loader, Registry
+  - [x] memory/ - Store, Recall, Compressor, Search
+  - [x] hooks/ - Registry, Lifecycle, Tool, Chat
+  - [x] sandbox/ - Permissions, Isolation, Security
+  - [x] scheduler/ - Cron, Jobs, Delivery
+  - [x] observability/ - Logger, Metrics, Tracing, Audit
+  - [x] gateway/ - Base, Telegram, Discord
+  - [x] utils/ - Helpers
+  - [x] cli/ - Main, Commands, TUI
+  - [x] web/ - FastAPI App
+  - [x] tests/ - Unit tests for config, tools, session
 
 ### 进行中
 - [ ] Phase 1 详细设计
@@ -200,6 +214,29 @@ cp .opencode/skills/project-vision/SKILL.md ~/.config/opencode/skills/project-vi
 - 实现功能时优先参考这些项目的源码
 - 学习它们的架构设计、工具实现、配置管理等
 - 注意：`references/` 已被 git 忽略，不需要提交
+
+## 项目目录结构
+
+```
+openmercury/
+├── core/           # 核心引擎 (agent, session, message, context, config)
+├── tools/          # 工具系统 (registry, file, bash, web, task, mcp)
+├── skills/         # 技能系统 (loader, registry, builtin/)
+├── memory/         # 记忆系统 (store, recall, compressor, search)
+├── hooks/          # 钩子系统 (registry, lifecycle, tool, chat)
+├── sandbox/        # 沙箱环境 (permissions, isolation, security)
+├── scheduler/      # 定时任务 (cron, jobs, delivery)
+├── observability/  # 可观测性 (logger, metrics, tracing, audit)
+├── gateway/        # 消息网关 (base, telegram, discord, web)
+└── utils/          # 工具函数
+
+cli/                # CLI 入口 (main, commands, tui)
+web/                # Web 界面 (FastAPI app)
+tests/              # 测试 (unit, integration, fixtures)
+docs/               # 文档
+config/             # 配置示例
+references/         # 参考源码 (git 忽略)
+```
 
 ## 注意事项
 

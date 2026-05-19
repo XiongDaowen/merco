@@ -29,12 +29,14 @@ Thumbs.db
 # Logs
 *.log
 
-# Config
+# Memory & Data
+~/.openmercury/
+*.db
+*.sqlite
+
+# Config (keep examples)
 config/*.json
 !config/*.example.json
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.next/
+# References (external repos)
 references/
