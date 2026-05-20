@@ -34,8 +34,8 @@ class BashTool(BaseTool):
                     process.communicate(), timeout=timeout
                 )
                 return {
-                    "stdout": stdout.decode() if stdout else "",
-                    "stderr": stderr.decode() if stderr else "",
+                    "stdout": stdout.decode("utf-8", errors="replace") if stdout else "",
+                    "stderr": stderr.decode("utf-8", errors="replace") if stderr else "",
                     "returncode": process.returncode,
                 }
             except asyncio.TimeoutError:

@@ -40,6 +40,7 @@ config/*.json
 
 # References (external repos)
 references/
+!docs/project-vision/references/
 
 # Agent runtime (generated copies for agent auto-discovery)
 .opencode/

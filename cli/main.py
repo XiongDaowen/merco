@@ -1,6 +1,7 @@
 """CLI 主入口"""
 
 import asyncio
+import signal
 import typer
 import os
 from rich.console import Console
@@ -20,13 +21,27 @@ def run_cmd(
     config: str = typer.Option(None, "--config", "-c", help="配置文件路径"),
     model: str = typer.Option(None, "--model", "-m", help="指定模型"),
     api_key: str = typer.Option(None, "--api-key", "-k", help="API Key"),
+    debug: bool = typer.Option(False, "--debug", "-d", help="开启调试日志"),
 ):
     """启动 OpenMercury 交互模式"""
+    import logging
     from openmercury.core.config import OpenMercuryConfig
     from openmercury.core.agent import Agent
     from openmercury.tools.registry import ToolRegistry
     from openmercury.tools.file_tools import ReadFile, WriteFile
     from openmercury.tools.bash_tools import BashTool
+
+    # 配置日志级别
+    if debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        logging.getLogger("openmercury").setLevel(logging.DEBUG)
+        console.print("[yellow]🔍 调试模式已开启[/yellow]")
+    else:
+        logging.basicConfig(level=logging.WARNING)
 
     # 加载配置
     cfg = OpenMercuryConfig.load(config)
@@ -71,12 +86,26 @@ def run_cmd(
 
     # REPL 循环
     async def repl():
+        loop = asyncio.get_event_loop()
+        current_task: asyncio.Task | None = None
+
+        def handle_interrupt():
+            """SIGINT 处理：取消正在运行的任务并退出"""
+            nonlocal current_task
+            console.print("\n[yellow]正在退出...[/yellow]")
+            if current_task and not current_task.done():
+                current_task.cancel()
+            # 退出循环
+            loop.call_soon(loop.stop)
+
+        # 注册信号处理
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, handle_interrupt)
+
         while True:
             try:
-                # 获取用户输入
-                user_input = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: input("\n> ")
-                )
+                # 使用 asyncio.to_thread 替代 run_in_executor（Python 3.9+）
+                user_input = await asyncio.to_thread(input, "\n> ")
                 user_input = user_input.strip()
 
                 if not user_input:
@@ -89,21 +118,36 @@ def run_cmd(
                     else:
                         break
 
-                # 调用 Agent
+                # 调用 Agent（可被 Ctrl+C 中断）
                 with console.status("[bold blue]思考中...[/bold blue]"):
+                    current_task = asyncio.current_task()
                     response = await agent.run(user_input)
+                    current_task = None
 
                 # 显示回复
                 console.print(f"\n{response}")
 
-            except KeyboardInterrupt:
-                console.print("\n[dim]按 /exit 退出[/dim]")
+            except asyncio.CancelledError:
+                # Ctrl+C 取消操作
+                console.print("\n[dim]操作已取消。再按一次退出。[/dim]")
+                current_task = None
             except EOFError:
                 break
+            except KeyboardInterrupt:
+                # 直接退出
+                console.print("\n[dim]再见！[/dim]")
+                break
             except Exception as e:
+                current_task = None
                 console.print(f"[red]错误: {e}[/red]")
 
-    asyncio.run(repl())
+    try:
+        asyncio.run(repl())
+    finally:
+        # 清理信号处理器
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.remove_signal_handler(sig)
 
 
 async def handle_command(cmd: str, agent) -> bool:

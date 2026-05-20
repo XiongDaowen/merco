@@ -22,9 +22,11 @@ description: OpenMercury project vision, architecture, design decisions, develop
 
 | 文档 | 内容 |
 |------|------|
-| [项目进展](progress.md) | 已完成清单、骨架待实现、里程碑、下一步计划 |
-| [架构设计](architecture.md) | 模块设计、目录结构、技术栈、参考资料库 |
-| [关键决策](decisions.md) | 重要决策记录与原因 |
+| [项目进展](references/progress.md) | 已完成清单、骨架待实现、里程碑、下一步计划 |
+| [架构设计](references/architecture.md) | 模块设计、目录结构、技术栈、参考资料库 |
+| [关键决策](references/decisions.md) | 重要决策记录与原因 |
+| [开发教训](references/lessons.md) | 犯过的错、反思、以后的规则 |
+| [Bug 追踪](references/bugs.md) | 已修复和待修复的 bug |
 
 ## 工作原则
 
@@ -34,6 +36,15 @@ description: OpenMercury project vision, architecture, design decisions, develop
 2. **约定优于配置** — 提供合理默认值
 3. **渐进式实现** — 先跑起来，再优化，最后重构
 4. **测试驱动** — 核心逻辑必须有单元测试覆盖
+5. **根因优先** — 修改 bug 必须先找到根因，再根据根因修复。禁止只修表面症状（如加 `except: pass`、在调用方 try/catch 掩盖源头问题）。修复前必须评估对总体架构的影响和副作用，确保改动兼容项目目标。
+
+## Bug 修复流程
+
+1. **写根因陈述** — 一句话描述为什么会出现这个 bug
+2. **检查架构影响** — 这个 bug 属于哪个模块？修复会不会影响后续 Phase 规划？
+3. **最小修复** — 只改根因涉及的代码行，不顺手改别的
+4. **副作用检查** — 会不会让其他地方炸？要不要加 guard/fallback？
+5. **验证** — 复现 → 确认修好，不能只靠推测
 
 ## 同步机制
 
@@ -50,6 +61,8 @@ cp -r docs/project-vision <你的agent-skill目录>/
 **提交后检查清单**：
 - [ ] `progress.md` — 模块状态有无变更？里程碑推进了？
 - [ ] `decisions.md` — 有新的架构/技术决策？
+- [ ] `lessons.md` — 有值得记录的教训？
+- [ ] `bugs.md` — 有新 bug 或修复？
 - [ ] `architecture.md` — 目录结构/模块设计有变化？
 - [ ] `SKILL.md` 状态行 — 计数是否准确？
 - [ ] 同步到 `.opencode/skills/project-vision/` 和 `~/.config/opencode/skills/project-vision/`

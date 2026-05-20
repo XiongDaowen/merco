@@ -1,6 +1,8 @@
 """Agent 主循环与核心逻辑"""
 
 import json
+import asyncio
+import logging
 from typing import Optional
 from rich.console import Console
 
@@ -12,6 +14,7 @@ from .context import ContextManager
 
 
 console = Console()
+logger = logging.getLogger("openmercury.agent")
 
 
 class Agent:
@@ -40,6 +43,8 @@ When you need to perform actions, use the available tools. Always be concise and
             base_url=config.model.base_url,
             temperature=config.model.temperature,
             max_tokens=config.model.max_tokens,
+            retry_delays=(2, 4),
+            cooldown=1,  # 请求冷却（秒），0=禁用；共享网关可调大
         )
 
         self._tool_calls_count = 0
@@ -71,21 +76,56 @@ When you need to perform actions, use the available tools. Always be concise and
             if self.tool_registry:
                 tools = self.tool_registry.get_definitions()
 
-            # 调用 LLM
-            response = await self.llm.chat(messages, tools=tools)
+            # 调用 LLM（SDK 自带智能重试，含 Retry-After 支持）
+            logger.debug("→ Agent 循环 #%d: 发送 %d 条消息", 
+                         self._tool_calls_count, len(messages))
+            try:
+                response = await self.llm.chat(messages, tools=tools)
+            except Exception as e:
+                # 记录失败时的上下文状态，帮助诊断
+                logger.error("✗ Agent 循环 #%d 失败: %s", 
+                            self._tool_calls_count, str(e))
+                logger.error("  当前上下文: %d 条消息", len(self.context.messages))
+                logger.error("  工具调用计数: %d", self._tool_calls_count)
+                raise
 
             # 检查是否有工具调用
             tool_calls = response.get("tool_calls")
+            logger.debug("← LLM 响应: %s", 
+                        "工具调用" if tool_calls else "文本回复")
 
             if not tool_calls:
                 # 没有工具调用，直接返回回复
                 content = response.get("content", "")
                 self.session.add_message("assistant", content)
                 self.context.add({"role": "assistant", "content": content})
+                logger.debug("✓ 最终回复: %s", content[:200])
                 return content
 
             # 执行工具调用
+            # 先记录 assistant 消息（含 tool_calls），保持 API 消息顺序
+            # 转换为 OpenAI 标准格式: {id, type, function: {name, arguments}}
+            api_tool_calls = [
+                {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tc["name"],
+                        "arguments": json.dumps(tc["arguments"], ensure_ascii=True),
+                    },
+                }
+                for tc in tool_calls
+            ]
+            assistant_msg = {"role": "assistant", "content": "", "tool_calls": api_tool_calls}
+            self.context.add(assistant_msg)
+
+            logger.debug("⚙ 执行 %d 个工具调用: %s", 
+                        len(tool_calls), 
+                        [tc["name"] for tc in tool_calls])
+
             await self._execute_tool_calls(tool_calls)
+            # 工具执行后稍作停顿，防止连续请求触发突发限制
+            await asyncio.sleep(0.5)
 
         return "Error: Maximum tool call iterations reached"
 
@@ -98,6 +138,7 @@ When you need to perform actions, use the available tools. Always be concise and
             arguments = tc["arguments"]
             tool_call_id = tc["id"]
 
+            logger.debug("  ▶ 工具 %s: args=%s", tool_name, json.dumps(arguments, ensure_ascii=True))
             console.print(f"[dim]→ Calling tool: {tool_name}({json.dumps(arguments)})[/dim]")
 
             # 执行工具
@@ -106,16 +147,25 @@ When you need to perform actions, use the available tools. Always be concise and
             else:
                 result = {"error": f"Tool '{tool_name}' not available"}
 
+            logger.debug("  ◀ 工具 %s 返回: %s", tool_name, 
+                        str(result)[:500])
+
             tool_results.append({
                 "role": "tool",
                 "tool_call_id": tool_call_id,
-                "content": json.dumps(result, ensure_ascii=False) if not isinstance(result, str) else result,
+                "content": json.dumps(result, ensure_ascii=True) if not isinstance(result, str) else result,
             })
 
             self._tool_calls_count += 1
 
         # 将工具结果添加到上下文
         for tr in tool_results:
+            # 截断过长结果，防止上下文爆炸触发 API 拒绝
+            content = tr["content"]
+            max_len = 4000
+            if isinstance(content, str) and len(content) > max_len:
+                # 保留前 3500 字 + 截断提示（500 字） = 4000 上限
+                tr["content"] = content[:3500] + f"\n... (结果过长，已截断 {len(content) - 3500} 字符)"
             self.context.add(tr)
 
     def _build_messages(self) -> list[dict]:
