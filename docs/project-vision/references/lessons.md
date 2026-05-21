@@ -8,19 +8,11 @@
 
 **场景**：调试 SCNet 的 429 限流时，在 `llm.py` 的注释和变量名里写了 "SCNet"。
 
-**错误**：
-- `# 关闭 SDK 自动重试（SCNet 不返回 Retry-After，SDK 退避太快）`
-- 重试逻辑硬编码 `2s / 4s`，没有参数化
+**错误**：`# 关闭 SDK 自动重试（SCNet 不返回 Retry-After，SDK 退避太快）`；重试逻辑硬编码 `2s / 4s`，没有参数化。
 
-**教训**：
-1. **核心模块不应知道任何 provider 的名字**。LLMClient 是一个通用客户端，今天接 SCNet，明天接 OpenAI，后天接 Groq。provider 特定的行为应该通过配置/参数传入，而不是写死在核心代码。
-2. **看到自己在注释里写 provider 名时，立即停下来问：这个行为是所有 provider 都需要的，还是这一个的？** 如果是通用的，去掉 provider 名；如果是特定的，通过参数化暴露出去。
-3. **评论是代码坏味道的镜子**——如果评论需要提到具体厂商名来解释为什么这里这样做，说明这个逻辑应该被参数化。
+**教训**：核心模块不应知道任何 provider 的名字。provider 特定的行为通过配置/参数传入。评论提到具体厂商名 → 说明这个逻辑应该被参数化。
 
-**正确做法**：
-- 重试间隔参数化：`LLMClient(retry_delays=(2, 4))`
-- 注释改为通用描述："部分网关不返回 Retry-After，SDK 内置退避过快"
-- provider 特定的值由配置层传入
+**正确做法**：`LLMClient(retry_delays=(2, 4))`；注释改为通用描述。
 
 ---
 
@@ -28,15 +20,15 @@
 
 **场景**：给 `chat()` 加了重试逻辑，但忘了 `chat_stream()` 也有同样的问题。
 
-**教训**：改完一个方法后，搜索同类方法是否有同样的问题。在这个项目里，`chat` 和 `chat_stream` 是同一层的两个入口，改了一个必须检查另一个。
+**教训**：改完一个方法后，搜索同类方法是否有同样的问题。
 
 ---
 
 ## 2026-05-21: patch 大段代码前先完整读取文件
 
-**场景**：用分页读取（offset/limit）看了文件，然后直接 patch，结果写入验证失败。
+**场景**：用分页读取看了文件，然后直接 patch，写入验证失败。
 
-**教训**：patch 操作需要完整文件内容来做写入后验证。如果之前用了 offset/limit 分页读取，**必须先 `read_file(path)` 无参读取整个文件**，再执行 patch。
+**教训**：patch 操作需要完整文件内容验证。如果用了 offset/limit，**必须先 `read_file(path)` 无参读取整个文件**，再执行 patch。
 
 ---
 
@@ -44,7 +36,7 @@
 
 **场景**：给 `chat()` 加 try/except 时只修了异常处理，没同步给 `chat_stream()`。
 
-**教训**："最小修复"指改动范围最小，但不等于只改一个方法。同类代码的问题要一起修，否则留着一个已知的坑就是给自己埋雷。
+**教训**："最小修复"指改动范围最小，不等于只改一个方法。同类代码要一起修。
 
 ---
 
@@ -52,24 +44,74 @@
 
 **场景**：之前有人在调用方用 `try/except: pass` 掩盖底层崩溃。
 
-**教训**：已纳入 Bug 修复流程规范。修复必须从根因改起，不允许在调用方加 `except: pass` 来掩盖问题。
+**教训**：修复必须从根因改起，不允许在调用方加 `except: pass` 来掩盖问题。
 
 ---
 
-## 遗留问题：会话启动前缺少模型探活
+## 2026-05-22: `write_file` 覆盖整个文件 — 局部改动用 `patch`
 
-**场景**：Agent 启动时不验证模型是否可用，用户输入第一句话后才收到 422 "Model Not Exist" 或 401 认证失败。
+**场景**：用 `write_file` 只放 `run_repl` 函数体，300 行 main.py 覆盖成 100 行碎片。`git checkout` 救命但丢了所有未提交改动。
 
-**影响**：用户进了 REPL、打了招呼，然后才看到报错——体验很糟。今天切换 deepseek-v4-pro 时就踩了这个坑，模型不存在但 REPL 照样启动。
+**根因**：`write_file` 是全量覆盖，不是替换片段。参数 `content` 是整个文件的新内容。
 
-**应做**：Agent 初始化时发一个最小探活请求（`messages=[{"role":"user", "content":"ping"}], max_tokens=1`），通过才进 REPL，失败则立即报错退出。Hermes/OpenCode 都有这个机制。
+**教训**：修改已有文件一律用 `patch`。`patch` 失败读完整文件调整 old_string 重试，不退回到 write_file。大规模重写先读完整文件确认内容再写。
 
 ---
 
-## 遗留问题：敏感操作无权限拦截
+## 2026-05-22: 超标不是终点 — 让 LLM 自己收尾
 
-**场景**：Bash 工具直接执行任意命令，没有经过 `SecurityChecker` 或 `PermissionManager`。Sandbox 隔离、沙箱、危险命令检测的代码都在 `openmercury/sandbox/` 里写好了，但 `bash_tools.py` 和 `file_tools.py` 根本没 import 它们。
+**场景**：`max_tool_calls` 撞墙返回 `"Error: Maximum tool call iterations reached"`。用户说"这也太他妈抽象了"。
 
-**影响**：Agent 可以通过工具执行 `rm -rf /`、修改系统文件、读取敏感路径——完全没有拦截。
+**修复**：达到上限后注入系统消息「请基于已有信息给出最终回答」→ 再调一次 LLM（不带 tools）→ LLM 自己总结前面获取的信息，自然收尾。
 
-**应做**：工具执行前走 `PermissionManager.check()` + `SecurityChecker.scan()`，敏感操作弹确认或直接拒绝。代码已经有了（`sandbox/isolation.py`, `sandbox/permissions.py`, `sandbox/security.py`），只需要在工具层接入。
+**教训**：只要 LLM 还能用，就不该 agent 代码替它说话。所有限制（token、时间、调用次数）都应该走同一模式：通知 LLM 收尾，它决定怎么结束。
+
+---
+
+## 2026-05-22: 动态反馈 — `console.status(spinner="dots")` 包裹阻塞操作
+
+**场景**：工具执行没有进度反馈，长命令像卡死。用户要动态标志。
+
+**修复**：`with console.status("", spinner="dots"): result = await tool.execute(...)` — 执行期间 dots 动画旋转，完成后印 `✓ 2.3s`。
+
+**教训**：阻塞操作前给视觉反馈，完成后替换为结果。`spinner="dots"` 比静态图标提供"在动"的信息。
+
+---
+
+## 2026-05-22: 信号 handler 做动作不打印
+
+**场景**：按一次 Ctrl+C 出现两条 "操作已取消"。
+
+**根因**：信号 handler 打了一条，`CancelledError` except 又打一条。
+
+**修复**：信号 handler 只负责 `current_task.cancel()`，silent；消息由 except 块统一打。
+
+**教训**：信号 handler 是动作层，不是展示层。
+
+---
+
+## 2026-05-22: `input()` + 简单计数器 — 不手搓输入引擎
+
+**场景**：为"按任意键取消"写了 60 行 `_readline()` 逐字符轮询，WSL 下 select 不稳定，readline 功能全丢。被质疑"有必要吗"。
+
+**教训**：`input()` 是几十年的工业标准——除非你能证明它不够，别替换它。需求"按任意键取消"本质和行缓冲冲突，要么接受要么换 prompt_toolkit——不要手搓。
+
+---
+
+## 2026-05-22: 代码注释只写契约语义 — 变更历史走 commit message + skill docs
+
+**场景**：想顺手加注释。用户阻止："不要随便加注释，补充文档可以"。
+
+**教训**：注释写"为什么是这个值"不写"为什么改这个值"；inline 是最后手段；知识放 skill references/；改完代码同步 skill 文档。
+
+---
+
+## 2026-05-22: key=value 替代 json.dumps 显示参数 — 根因级别的转义消除
+
+**场景**：工具参数 `\"` 转义符一直显示。修过 `\n`→空格、`\uXXXX`→中文，但 `\"` 还在。用户怒："你他妈不知道修根因吗"。
+
+**根因**：`json.dumps()` 的职责是生成合法 JSON——`"` 必须转义为 `\"`。之前的修复是事后清洗，每发现一种转义符补一个 replace，永远修不完。
+
+**修复**：不再用 `json.dumps()` 做显示。改用 `key=value` 拼接。完整 JSON 仍保留在 `logger.debug`。
+
+**教训**：不要在显示层补 replace 列表——修症状不是修根因。显示和序列化是两个不同需求，用同一工具必然冲突。

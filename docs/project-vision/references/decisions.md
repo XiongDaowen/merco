@@ -15,3 +15,7 @@
 | 2026-05-21 | 重试策略扩展为 429 + 5xx | 510 错误未纳入重试。改为：捕获 `APIStatusError`，429 和所有 5xx 均可重试，4xx 不重试。 |
 | 2026-05-21 | 新增请求冷却 `cooldown` 参数 | LLMClient 新增 `cooldown`（默认 1s），成功请求后强制等待，防止连续请求触发网关频控。Zero-cost for generous providers, safety net for strict ones。 |
 | 2026-05-21 | tool_calls 格式修正为 OpenAI 标准 | 原格式 `{id, name, arguments}` 在 MiniMax-M2.5 上报 400。改为标准格式 `{id, type:"function", function:{name, arguments}}`。Qwen3 容忍了简化格式，但严格实现的产品不认。 |
+| 2026-05-22 | CLI 输出分区架构：rule 分隔 + Markdown 渲染 | 输入/输出界限不清晰。采用 `console.rule(style="dim")` 框出响应区，`Markdown()` 渲染回复。工具调用走 stderr。不要 spinner——第一条输出自证"在干活"。 |
+| 2026-05-22 | LLM 中间文字保留 | LLM 返回 tool_calls 时可能同时有文字（如"让我查询..."），原硬写 `content=""` 丢弃。改为 `response.get("content", "")` 保留渲染。不强制 prompt 要求 always comment。 |
+| 2026-05-22 | readline prompt 用 `\x01`/`\x02` 包裹 ANSI | `input()` 的 ANSI 颜色码需用 readline 的 `RL_PROMPT_START_IGNORE`(`\x01`) 和 `RL_PROMPT_END_IGNORE`(`\x02`) 包裹，否则 prompt 宽度计算错误。 |
+| 2026-05-22 | prompt 归还 `input()` 管理，不用 Rich 打印 | Rich 的 `console.print` 输出 ANSI 码后 readline 不知自己在哪行，导致光标越界删除。颜色通过 `input(prompt_string)` 中原生 ANSI 实现。 |

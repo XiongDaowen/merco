@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-05-20
+> 最后更新: 2026-05-22
 
 ## 目标对标
 
@@ -10,6 +10,12 @@
 ## 当前状态
 
 **阶段**: Phase 1 完成 → Phase 2 起步 | **焦点**: 打通关键集成链路，补齐骨架模块
+
+### 最近更新 (2026-05-22)
+- **CLI 大修**: `@app.callback` 直接启动、readline 历史/光标、termios 去 ^C 回显、Markdown 响应渲染、rule 分隔视觉区、退出钩子 `_on_exit`/`_run_exit_hooks`、Ctrl+C 两段式、`uv tool install -e .` 全局可用
+- **Agent 优化**: 中间文字保留、`max_tool_calls` 走配置、超标时 LLM 自收尾而非硬停、工具调用 key=value 无转义 + 终端宽度截断 + `Live` 原地更新（spinner + timing）、`bright_black` 颜色
+- **视觉打磨**: Panel 框回复（┌┐└┘）、`─── Agent ───` 统一分界、工具日志全回 stdout、无折叠逐条显示、Ctrl+C 取消补底线
+- **Skill 文档**: bugs.md +14 条修复，lessons.md +10 条教训（write_file 陷阱、信号 handler 不打印、超标 LLM 收尾、input() 不手搓等）
 
 ## 里程碑
 
@@ -30,7 +36,7 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `agent.py` | 🟢 REAL | Full agent loop: user prompt → LLM chat → tool-call dispatch → response。Tool execution, context compression, session tracking, and max-iteration guard 均已实现。AgentLoop wrapper 可用。**但**: hooks 未接入、sandbox 未调用、observability 未埋点。Quality: working-but-basic。|
+| `agent.py` | 🟢 POLISHED | Full agent loop。中间文字保留、`max_tool_calls` 走配置、超标 LLM 自收尾。工具调用：key=value 无转义、终端宽度截断、同类折叠、spinner 动态反馈、耗时显示。**但**: hooks/sandbox/observability 未接入。 |
 | `config.py` | 🟢 REAL | Complete config system: `OpenMercuryConfig` + `ModelConfig` dataclass，JSON load/save，multi-path discovery，dict round-trip，merge()。Production-ready。|
 | `llm.py` | 🟢 REAL | Full OpenAI-compatible async client：`chat()` (non-streaming, with tool calling) + `chat_stream()`。tool_calls JSON 解析正常。Production-ready。|
 | `session.py` | 🟡 PARTIAL | `Session.add_message()` / `get_history()` 可用，但 `compact()` 为 `NotImplementedError`。`SessionStore.save()` / `.load()` / `.list_sessions()` 全部为 `NotImplementedError`。无持久化。|
@@ -112,7 +118,7 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `main.py` | 🟢 REAL | Full Typer CLI：`run` (REPL 交互，async input，tool 注册，Agent 集成，错误处理)、`init` (创建配置文件)、`skills` (列出技能)。`/help`/`/exit`/`/new`/`/model`/`/tools` 可用。**仅注册 3 个工具** (ReadFile/WriteFile/BashTool)，未注册 web/MCP 工具。|
+| `main.py` | 🟢 POLISHED | `@app.callback` 无子命令启动。REPL：readline、termios ECHOCTL、Markdown 渲染、rule 视觉分隔、`_on_exit`/`_run_exit_hooks` 退出钩子、Ctrl+C 两段式。`uv tool install -e .` 全局可用。**仅注册 3 工具**。 |
 | `tui.py` | 🔴 SKELETON | `run_tui()` 打印 `"TUI mode - coming soon"`。无 Textual/Rich 实现。|
 | `commands.py` | 🔴 SKELETON | 仅注释 `# 命令将在 main.py 中统一定义`。|
 

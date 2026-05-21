@@ -23,6 +23,7 @@ class OpenMercuryConfig:
     """主配置类"""
     username: str = "user"
     model: ModelConfig = field(default_factory=ModelConfig)
+    max_tool_calls: int = 15  # 单次对话最大工具调用次数，防死循环
     skills_paths: list = field(default_factory=lambda: ["./.openmercury/skills", "~/.config/openmercury/skills"])
     memory_enabled: bool = True
     memory_path: str = "~/.openmercury/memory"
@@ -64,6 +65,7 @@ class OpenMercuryConfig:
                 "temperature": self.model.temperature,
                 "max_tokens": self.model.max_tokens,
             },
+            "max_tool_calls": self.max_tool_calls,
             "skills_paths": self.skills_paths,
             "memory_enabled": self.memory_enabled,
             "memory_path": self.memory_path,
@@ -85,6 +87,7 @@ class OpenMercuryConfig:
         return cls(
             username=data.get("username", "user"),
             model=model,
+            max_tool_calls=data.get("max_tool_calls", 15),
             skills_paths=data.get("skills_paths", ["./.openmercury/skills", "~/.config/openmercury/skills"]),
             memory_enabled=data.get("memory_enabled", True),
             memory_path=data.get("memory_path", "~/.openmercury/memory"),

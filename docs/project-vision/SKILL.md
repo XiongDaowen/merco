@@ -1,6 +1,6 @@
 ---
 name: project-vision
-description: OpenMercury project vision, architecture, design decisions, development guidelines, coding standards, milestones, tech stack, and project conventions. 项目愿景、架构设计、开发指南、编码规范、技术决策、里程碑、技术栈。Use when working on OpenMercury: planning features, making architecture decisions, understanding project direction, or implementing code.
+description: "OpenMercury project vision, architecture, design decisions, development guidelines, coding standards, milestones, tech stack, and project conventions. 项目愿景、架构设计、开发指南、编码规范、技术决策、里程碑、技术栈。Use when working on OpenMercury: planning features, making architecture decisions, understanding project direction, or implementing code."
 ---
 
 # OpenMercury 项目愿景
@@ -14,9 +14,31 @@ description: OpenMercury project vision, architecture, design decisions, develop
 3. **Python 原生** — uv/pyproject.toml，asyncio 异步生态
 4. **落地优先** — 每个功能有明确使用场景，避免过度工程化
 
+## 开发环境
+
+```bash
+# 首次安装依赖
+cd /home/xiowen/code/OpenMercury
+uv sync
+
+# 全局安装（之后任意目录直接敲 openmercury）
+uv tool install -e .
+# 注意：-e 是 editable 安装，改代码后无需重新 install，只有加新依赖才需要 --reinstall
+
+# 运行
+openmercury                  # 直接启动交互模式（无需子命令）
+openmercury --debug          # 调试模式
+openmercury -m MiniMax-M2.5  # 指定模型
+openmercury run              # 显式 run 子命令，同上
+openmercury init             # 初始化项目配置
+openmercury skills -l        # 列出技能
+```
+
+> 实现方式：`@app.callback(invoke_without_command=True)` 注册为 Typer 回调，通过 `ctx.invoked_subcommand is None` 判断无子命令时进入交互模式。`run` 子命令通过共享 `_setup_agent()` + `run_repl()` 函数消除代码重复。
+
 ## 当前状态
 
-**Phase 1 完成 → Phase 2 起步** | 19 REAL + 8 PARTIAL + 12 SKELETON + 6 NOT WIRED | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-20
+**Phase 1 完成 → Phase 2 起步** | 19 REAL + 8 PARTIAL + 12 SKELETON + 6 NOT WIRED | CLI 已深度打磨（Ctrl+C、视觉层次、readline、_readline） | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-22
 
 ## 详细文档
 
@@ -27,6 +49,9 @@ description: OpenMercury project vision, architecture, design decisions, develop
 | [关键决策](references/decisions.md) | 重要决策记录与原因 |
 | [开发教训](references/lessons.md) | 犯过的错、反思、以后的规则 |
 | [Bug 追踪](references/bugs.md) | 已修复和待修复的 bug |
+| [CLI 模式](references/cli-patterns.md) | CLI 信号处理、终端控制、输出优化等踩坑记录 |
+
+| [CLI Display Patterns](references/cli-display-patterns.md) | 终端输出格式、工具调用显示、退出交互、输入提示的约定 |
 
 ## 工作原则
 
@@ -36,7 +61,13 @@ description: OpenMercury project vision, architecture, design decisions, develop
 2. **约定优于配置** — 提供合理默认值
 3. **渐进式实现** — 先跑起来，再优化，最后重构
 4. **测试驱动** — 核心逻辑必须有单元测试覆盖
-5. **根因优先** — 修改 bug 必须先找到根因，再根据根因修复。禁止只修表面症状（如加 `except: pass`、在调用方 try/catch 掩盖源头问题）。修复前必须评估对总体架构的影响和副作用，确保改动兼容项目目标。
+5. **根因优先** — 修改 bug 必须先找到根因，再根据根因修复。禁止只修表面症状（如加 `except: pass`、在调用方 try/catch 掩盖源头问题）。修复前必须评估对总体架构的影响和副作用。
+6. **同类全检** — 修一个方法/文件时，必须搜索并同步修复所有同类代码。例如改 `chat()` 必须看 `chat_stream()`，改工具执行必须看所有工具。禁止"就这一个方法改"。
+7. **核心无关 provider** — `core/` 层代码（llm.py, agent.py 等）的注释、变量名、逻辑中禁止出现任何具体 provider 名。Provider 特定行为通过参数化暴露（如 `retry_delays`、`cooldown`），由配置层或 Agent 初始化时传入。
+8. **小 patch 优于大替换** — patch 工具只改 3-10 行，不要替换整个方法。patch 前必须用 `read_file(path)` 无参完整读取整个文件，禁止 offset/limit 分页读取后直接 patch。
+9. **注释进文档不进代码** — 代码注释只写"为什么"（设计意图、边界条件），不写"做了什么"和调试记录（如"上次 10 不够"、"修复了 XX bug"）。改动原因和教训写入 `docs/project-vision/references/` 对应文档。禁止 `write_file` 覆盖整文件——用 `patch`。
+9. **注释写为什么，不写为什么改** — 代码注释是给未来维护者看的，描述值的语义和约束（"最大工具调用次数，防死循环"），不描述变更历史（"上次 10 不够"）。"上次""昨天"等相对时间词禁止出现在注释中——那是 git commit 的事。硬编码的魔法数字必须可配置或附清晰的语义常量名。
+10. **阻塞 I/O + 异步信号 = 不可控** — `input()` 是 C 阻塞调用，信号处理器能设 flag 但 `input()` 不返回就永远读不到。CLI 交互需要即时响应信号时，用 `select` 轮询替代阻塞 I/O。这不是架构洁癖——七次迭代才证明 `input()` + exit_flag 方案根本不可行。
 
 ## Bug 修复流程
 
@@ -45,6 +76,7 @@ description: OpenMercury project vision, architecture, design decisions, develop
 3. **最小修复** — 只改根因涉及的代码行，不顺手改别的
 4. **副作用检查** — 会不会让其他地方炸？要不要加 guard/fallback？
 5. **验证** — 复现 → 确认修好，不能只靠推测
+6. **记录** — 修复后必须立即更新 `bugs.md`（含根因 + 修复方案），并同步到 skill 目录。用户对此零容忍。
 
 ## 同步机制
 

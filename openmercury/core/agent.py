@@ -3,8 +3,11 @@
 import json
 import asyncio
 import logging
+import shutil
 from typing import Optional
 from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
 
 from .config import OpenMercuryConfig
 from .llm import LLMClient
@@ -44,11 +47,11 @@ When you need to perform actions, use the available tools. Always be concise and
             temperature=config.model.temperature,
             max_tokens=config.model.max_tokens,
             retry_delays=(2, 4),
-            cooldown=1,  # 请求冷却（秒），0=禁用；共享网关可调大
+            cooldown=0.3,  # 请求冷却（秒），0=禁用；共享网关可调大
         )
 
         self._tool_calls_count = 0
-        self._max_tool_calls = 10  # 防止无限工具调用循环
+        self._max_tool_calls = config.max_tool_calls
 
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
@@ -103,7 +106,11 @@ When you need to perform actions, use the available tools. Always be concise and
                 return content
 
             # 执行工具调用
-            # 先记录 assistant 消息（含 tool_calls），保持 API 消息顺序
+            # 保留 LLM 可能同时返回的文字（如 "让我搜索一下..."）
+            assistant_content = response.get("content", "")
+            if assistant_content:
+                console.print(Panel(Markdown(assistant_content), border_style="dim"))
+
             # 转换为 OpenAI 标准格式: {id, type, function: {name, arguments}}
             api_tool_calls = [
                 {
@@ -116,7 +123,7 @@ When you need to perform actions, use the available tools. Always be concise and
                 }
                 for tc in tool_calls
             ]
-            assistant_msg = {"role": "assistant", "content": "", "tool_calls": api_tool_calls}
+            assistant_msg = {"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls}
             self.context.add(assistant_msg)
 
             logger.debug("⚙ 执行 %d 个工具调用: %s", 
@@ -127,7 +134,23 @@ When you need to perform actions, use the available tools. Always be concise and
             # 工具执行后稍作停顿，防止连续请求触发突发限制
             await asyncio.sleep(0.5)
 
-        return "Error: Maximum tool call iterations reached"
+        # 达到最大调用次数：让 LLM 基于已有信息收尾，而非硬报错
+        self.context.add({
+            "role": "user",
+            "content": (
+                "你已达到工具调用上限。请根据目前已获取的信息，"
+                "简洁地总结你的发现并给出最终回答。不要再调用工具。"
+            ),
+        })
+        try:
+            response = await self.llm.chat(self._build_messages(), tools=[])
+        except Exception:
+            return "已达到最大工具调用次数，且无法让模型收尾。请简化任务后重试。"
+
+        content = response.get("content", "")
+        self.session.add_message("assistant", content)
+        self.context.add({"role": "assistant", "content": content})
+        return content
 
     async def _execute_tool_calls(self, tool_calls: list[dict]):
         """执行一组工具调用"""
@@ -138,12 +161,34 @@ When you need to perform actions, use the available tools. Always be concise and
             arguments = tc["arguments"]
             tool_call_id = tc["id"]
 
-            logger.debug("  ▶ 工具 %s: args=%s", tool_name, json.dumps(arguments, ensure_ascii=True))
-            console.print(f"[dim]→ Calling tool: {tool_name}({json.dumps(arguments)})[/dim]")
+            # 构建显示文本
+            progress = f"{self._tool_calls_count + 1}/{self._max_tool_calls}"
+            arg_parts = [f"{k}={v}" for k, v in arguments.items()]
+            arg_str = ", ".join(arg_parts)
+            term_w = shutil.get_terminal_size().columns or 80
+            # 截断需要为最终状态 `✓ ... 0.0s` 预留空间
+            final_line = f"[dim]  ✓ {tool_name} ({progress}) {arg_str}  99.9s[/dim]"
+            if len(final_line) >= term_w:
+                avail = term_w - len(f"  ✓ {tool_name} ({progress}) ") - 3 - 7
+                arg_str = arg_str[:max(0, avail)] + "..."
 
-            # 执行工具
             if self.tool_registry:
-                result = await self.tool_registry.execute(tool_name, **arguments)
+                import time
+                t0 = time.monotonic()
+                from rich.live import Live
+                from rich.text import Text
+                with Live(Text.from_markup(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]"), refresh_per_second=8, transient=False) as live:
+                    import itertools
+                    spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+                    async def _run_with_spinner():
+                        task = asyncio.create_task(self.tool_registry.execute(tool_name, **arguments))
+                        while not task.done():
+                            live.update(Text.from_markup(f"[bright_black]  {next(spinner)} {tool_name} ({progress}) {arg_str}[/bright_black]"))
+                            await asyncio.sleep(0.1)
+                        return await task
+                    result = await _run_with_spinner()
+                    elapsed = time.monotonic() - t0
+                    live.update(Text.from_markup(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]"))
             else:
                 result = {"error": f"Tool '{tool_name}' not available"}
 
