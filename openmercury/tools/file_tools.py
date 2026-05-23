@@ -14,11 +14,12 @@ class ReadFile(BaseTool):
         "properties": {
             "path": {"type": "string", "description": "文件路径"},
             "limit": {"type": "integer", "description": "读取行数限制"},
+            "offset": {"type": "integer", "description": "起始行号 (1-indexed)"},
         },
         "required": ["path"],
     }
 
-    async def execute(self, path: str, limit: int = None) -> dict:
+    async def execute(self, path: str, limit: int = None, offset: int = None) -> dict:
         file_path = Path(path)
         if not file_path.exists():
             return {"error": f"File not found: {path}"}
@@ -26,6 +27,8 @@ class ReadFile(BaseTool):
         content = file_path.read_text()
         lines = content.splitlines()
 
+        if offset and offset > 0:
+            lines = lines[offset - 1:]
         if limit:
             lines = lines[:limit]
 
