@@ -28,6 +28,15 @@
 | 2026-05-22 | 同批同类工具折叠显示不受认可 | 用户不想要折叠，每步都要可见 | 删除折叠逻辑，全部逐条显示 |
 | 2026-05-22 | `Live()` 内颜色丢失 | `Text(f\"...\", style=\"dim\")` 未渲染 Rich markup | 改用 `Text.from_markup(f\"[bright_black]...[/bright_black]\")` |
 | 2026-05-22 | Ctrl+C 取消后 Agent 区下底线缺失 | 取消异常处理未输出 `console.rule()` | 补 `console.rule(style=\"dim\")` |
+| 2026-05-22 | 工具调用失败直接报错退出，后续对话断掉 | `ToolRegistry.execute()` 无异常兜底，`TypeError` 等直接 propagate → agent 崩溃 | registry.execute() 加 try/except：`TypeError` 返回 `{error, available_params, received_params}` 让 LLM 自愈；通用异常返回 `{error: "类型: 消息"}`；所有错误以工具结果形式喂回 LLM |
+| 2026-05-22 | ReadFile 不支持 `offset` 参数 | LLM 传 `offset=` 但 execute() 不接 → `TypeError` | 加 `offset` 参数（1-indexed，切片 `lines[offset-1:]`），同步更新 parameters 定义 |
+| 2026-05-22 | max_tool_calls 超标后 LLM 无法申请额外预算 | 硬编码收尾 prompt，LLM 没有「续命」选项 | 新增 `_ask_continuation()`：LLM 评估完成度→回复 `CONTINUE:N` 拓展预算或给最终答案 |
+| 2026-05-22 | `_ask_continuation` 大多数未触发 | `while count < max` 循环条件 kill 了底部续命检查 | 改 `while True` + 顶部 guard；重置 `_max_tool_calls` 每轮 |
+| 2026-05-22 | LLM 倾向于「做完了停下」而非继续 | 决策 prompt 太中性 | 改任务驱动 prompt：「优先完成任务」「答案不完整就继续」 |
+| 2026-05-22 | LLM API 错误（404/401）直接杀对话 | `chat()` 异常 → `raise` 崩溃 | `return f"模型调用失败：{e}"` 不杀对话 |
+| 2026-05-22 | Context compressed 后 API 400: "Message has tool role, but no previous assistant message with tool call" | `_truncate()`/`_summarize()` 保留最后 N 条消息时可能切掉带 `tool_calls` 的 assistant，但保留其后 tool 结果 → 孤立 tool 消息被 API 拒绝 | compressor 全面重写：`_sliding()` 滑动窗口 + 锚点保留 + `_extend_to_chain()` 向前追溯补全 tool 链 + `max_input_tokens` 配置驱动（不再是 `messages[-10:]` 硬编码） |
+| 2026-05-23 | 续命—LLM 幻觉工具调用绕过预算 | 预算耗尽时仅给 `continue_task` 工具，LLM 从上下文记忆里幻觉出 `read_file`/`bash`，绕过续命 | 改用 `tool_choice="none"` + `tools=[]` 强制纯文字，解析文字中 `CONTINUE N`。详见 `references/continuation-evolution.md` |
+| 2026-05-23 | 续命 `role: "system"` 触发 MiniMax 400 | MiniMax 不允许对话中途插入 system 消息 | 回退 `role: "user"` |
 
 ## 待修复
 

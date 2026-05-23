@@ -12,10 +12,12 @@
 **阶段**: Phase 1 完成 → Phase 2 起步 | **焦点**: 打通关键集成链路，补齐骨架模块
 
 ### 最近更新 (2026-05-22)
+- **Architecture**: `_ask_continuation()` 通用续命架构（LLM 自评是否继续）、`ToolRegistry.execute()` 异常自愈（TypeError→结构化错误喂回 LLM）
 - **CLI 大修**: `@app.callback` 直接启动、readline 历史/光标、termios 去 ^C 回显、Markdown 响应渲染、rule 分隔视觉区、退出钩子 `_on_exit`/`_run_exit_hooks`、Ctrl+C 两段式、`uv tool install -e .` 全局可用
-- **Agent 优化**: 中间文字保留、`max_tool_calls` 走配置、超标时 LLM 自收尾而非硬停、工具调用 key=value 无转义 + 终端宽度截断 + `Live` 原地更新（spinner + timing）、`bright_black` 颜色
-- **视觉打磨**: Panel 框回复（┌┐└┘）、`─── Agent ───` 统一分界、工具日志全回 stdout、无折叠逐条显示、Ctrl+C 取消补底线
-- **Skill 文档**: bugs.md +14 条修复，lessons.md +10 条教训（write_file 陷阱、信号 handler 不打印、超标 LLM 收尾、input() 不手搓等）
+- **Agent 增强**: `_ask_continuation()` 通用续命架构、工具错误自愈（registry try/except→喂回 LLM）、中间文字保留、`max_tool_calls` 走配置
+- **压缩器重写**: Token 感知滑动窗口（`_sliding()`）、`_extend_to_chain()` 保证 tool_calls 链完整性、`max_input_tokens` 配置驱动（对标三家）
+- **视觉打磨**: Panel 框回复（┌┐└┘）、`─── Agent ───` 统一分界、工具日志全回 stdout、无折叠逐条显示、Ctrl+C 取消补底线、Live spinner + timing
+- **Skill 文档**: bugs.md +17 条修复，architecture.md +2 架构模式
 
 ## 里程碑
 
@@ -36,7 +38,7 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `agent.py` | 🟢 POLISHED | Full agent loop。中间文字保留、`max_tool_calls` 走配置、超标 LLM 自收尾。工具调用：key=value 无转义、终端宽度截断、同类折叠、spinner 动态反馈、耗时显示。**但**: hooks/sandbox/observability 未接入。 |
+| `agent.py` | 🟢 POLISHED | Full agent loop。工具调用：key=value + 终端宽度截断 + Live spinner/timing + `bright_black` 颜色 + 错误自愈（registry try/except）。超标时 `_ask_continuation()` 让 LLM 自评续命。中间文字 Panel 框。 |
 | `config.py` | 🟢 REAL | Complete config system: `OpenMercuryConfig` + `ModelConfig` dataclass，JSON load/save，multi-path discovery，dict round-trip，merge()。Production-ready。|
 | `llm.py` | 🟢 REAL | Full OpenAI-compatible async client：`chat()` (non-streaming, with tool calling) + `chat_stream()`。tool_calls JSON 解析正常。Production-ready。|
 | `session.py` | 🟡 PARTIAL | `Session.add_message()` / `get_history()` 可用，但 `compact()` 为 `NotImplementedError`。`SessionStore.save()` / `.load()` / `.list_sessions()` 全部为 `NotImplementedError`。无持久化。|
@@ -48,8 +50,8 @@
 | File | Status | Details |
 |------|--------|---------|
 | `base.py` | 🟢 REAL | `BaseTool` ABC，`definition` property 生成 OpenAI function-calling schema，`validate()`。Production-ready。|
-| `registry.py` | 🟢 REAL | `ToolRegistry`：register/unregister/get/list/get_definitions/async execute。Production-ready。|
-| `file_tools.py` | 🟢 REAL | `ReadFile` 支持行数限制，`WriteFile` 自动创建父目录。**未接入 Sandbox/权限检查。** |
+| `registry.py` | 🟢 REAL | `ToolRegistry`：register/unregister/get/list/get_definitions/async execute（含 try/except 异常转结构化错误）。Production-ready。 |
+| `file_tools.py` | 🟢 REAL | `ReadFile` 支持 path/limit/offset（1-indexed），`WriteFile` 自动创建父目录。**未接入 Sandbox/权限检查。** |
 | `bash_tools.py` | 🟢 REAL | `BashTool` 通过 `asyncio.create_subprocess_shell` 执行，支持 timeout + cwd，返回 stdout/stderr/returncode。**未调用 `SecurityChecker`，无沙箱隔离。** |
 | `web_tools.py` | 🟡 PARTIAL | `WebFetch` 可用 (httpx + HTML strip)。`WebSearch` 为骨架 — 返回 `"not yet configured"`。|
 | `task_tools.py` | 🔴 SKELETON | `TaskTool` 返回 `"not yet implemented"`，无子代理派发逻辑。|
@@ -69,7 +71,7 @@
 |------|--------|---------|
 | `store.py` | 🟢 REAL | `MemoryStore`：JSON 文件 CRUD + tag 列表 + 文本匹配搜索。Production-ready。|
 | `recall.py` | 🟢 REAL | `MemoryRecall`：关键词召回 + tag 筛选 + `get_relevant_context()`。Functional。|
-| `compressor.py` | 🟡 PARTIAL | `_summarize()` 为占位文本 `"[Earlier conversation summarized]"` 而非调用 LLM。`_truncate()` 可用。|
+| `compressor.py` | 🟢 REAL | `ContextCompressor` — token 感知滑动窗口（`_sliding()`）、锚点保留（system+第一条 user）、反序 token 预算填充、`_extend_to_chain()` 向前追溯补全 tool_calls 链。统计摘要。`max_input_tokens` 配置驱动。 |
 | `search.py` | 🟢 REAL | `MemorySearch`：SQLite FTS5 全文索引。`index()` 写入，`search()` 查询。Production-ready。|
 
 ### openmercury/hooks/ — Hook System

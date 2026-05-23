@@ -19,3 +19,5 @@
 | 2026-05-22 | LLM 中间文字保留 | LLM 返回 tool_calls 时可能同时有文字（如"让我查询..."），原硬写 `content=""` 丢弃。改为 `response.get("content", "")` 保留渲染。不强制 prompt 要求 always comment。 |
 | 2026-05-22 | readline prompt 用 `\x01`/`\x02` 包裹 ANSI | `input()` 的 ANSI 颜色码需用 readline 的 `RL_PROMPT_START_IGNORE`(`\x01`) 和 `RL_PROMPT_END_IGNORE`(`\x02`) 包裹，否则 prompt 宽度计算错误。 |
 | 2026-05-22 | prompt 归还 `input()` 管理，不用 Rich 打印 | Rich 的 `console.print` 输出 ANSI 码后 readline 不知自己在哪行，导致光标越界删除。颜色通过 `input(prompt_string)` 中原生 ANSI 实现。 |
+| 2026-05-22 | 工具异常喂回 LLM 自愈，不硬停 Agent | 工具执行出错原直接 propagate → agent 崩溃。改为 `ToolRegistry.execute()` 统一 try/except：`TypeError` 返回结构化 `{error, available_params, received_params}`，通用异常返回 `{error}`。所有错误以工具结果形式喂给 LLM，LLM 自己修正。此模式可扩展至权限拦截、超时等场景。 |
+| 2026-05-23 | 收尾架构定稿：`_wrap_up_messages` + `_wrap_up_call` | 删 grace call（MiniMax 不配合），回到直接收尾。提示词收敛为一条 user 消息。预算到顶 + 批量截停共用同一对方法。tool_choice="none" best-effort，幻觉校验 + regex 清理兜底。版本号修正（v0.1.0）。 |

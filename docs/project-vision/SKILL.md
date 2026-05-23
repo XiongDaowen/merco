@@ -38,7 +38,7 @@ openmercury skills -l        # 列出技能
 
 ## 当前状态
 
-**Phase 1 完成 → Phase 2 起步** | 19 REAL + 8 PARTIAL + 12 SKELETON + 6 NOT WIRED | CLI 已深度打磨（Ctrl+C、视觉层次、readline、_readline） | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-22
+**Phase 1 完成 → Phase 2 起步** | 20 REAL + 7 PARTIAL + 12 SKELETON + 6 NOT WIRED | 收尾方案定型：_wrap_up_messages + _wrap_up_call | 幻觉校验始终执行 + 四层防线 | 压缩重写（token 滑动窗口 + 链完整 + LLM 语义摘要） | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-23
 
 ## 详细文档
 
@@ -49,9 +49,10 @@ openmercury skills -l        # 列出技能
 | [关键决策](references/decisions.md) | 重要决策记录与原因 |
 | [开发教训](references/lessons.md) | 犯过的错、反思、以后的规则 |
 | [Bug 追踪](references/bugs.md) | 已修复和待修复的 bug |
-| [CLI 模式](references/cli-patterns.md) | CLI 信号处理、终端控制、输出优化等踩坑记录 |
-
+| [收尾模式](references/wrap-up-pattern.md) | 最终收尾方案：_wrap_up_messages + _wrap_up_call |
+| [Grace Call（废弃）](references/grace-call-pattern.md) | Hermes 式 grace call 验证失败记录 |
 | [CLI Display Patterns](references/cli-display-patterns.md) | 终端输出格式、工具调用显示、退出交互、输入提示的约定 |
+| [续命机制演进](references/continuation-evolution.md) | 5 次迭代的死胡同记录（留存以警示） |
 
 ## 工作原则
 
@@ -65,9 +66,8 @@ openmercury skills -l        # 列出技能
 6. **同类全检** — 修一个方法/文件时，必须搜索并同步修复所有同类代码。例如改 `chat()` 必须看 `chat_stream()`，改工具执行必须看所有工具。禁止"就这一个方法改"。
 7. **核心无关 provider** — `core/` 层代码（llm.py, agent.py 等）的注释、变量名、逻辑中禁止出现任何具体 provider 名。Provider 特定行为通过参数化暴露（如 `retry_delays`、`cooldown`），由配置层或 Agent 初始化时传入。
 8. **小 patch 优于大替换** — patch 工具只改 3-10 行，不要替换整个方法。patch 前必须用 `read_file(path)` 无参完整读取整个文件，禁止 offset/limit 分页读取后直接 patch。
-9. **注释进文档不进代码** — 代码注释只写"为什么"（设计意图、边界条件），不写"做了什么"和调试记录（如"上次 10 不够"、"修复了 XX bug"）。改动原因和教训写入 `docs/project-vision/references/` 对应文档。禁止 `write_file` 覆盖整文件——用 `patch`。
-9. **注释写为什么，不写为什么改** — 代码注释是给未来维护者看的，描述值的语义和约束（"最大工具调用次数，防死循环"），不描述变更历史（"上次 10 不够"）。"上次""昨天"等相对时间词禁止出现在注释中——那是 git commit 的事。硬编码的魔法数字必须可配置或附清晰的语义常量名。
-10. **阻塞 I/O + 异步信号 = 不可控** — `input()` 是 C 阻塞调用，信号处理器能设 flag 但 `input()` 不返回就永远读不到。CLI 交互需要即时响应信号时，用 `select` 轮询替代阻塞 I/O。这不是架构洁癖——七次迭代才证明 `input()` + exit_flag 方案根本不可行。
+9. **注释写为什么，不写怎么做** — 代码注释描述设计意图和边界条件（"防死循环"），不描述变更历史（"上次 10 不够"）和操作步骤（"写入文件"）。"上次""昨天"等相对时间词禁止出现在注释中——那是 git commit 的事。硬编码的魔法数字必须可配置或附清晰的语义常量名。改动原因和教训写入 `docs/project-vision/references/` 对应文档。禁止 `write_file` 覆盖整文件——用 `patch`。
+10. **input() + 信号整数计数器 = 简洁可靠的两段退出** — 用户按 Ctrl+C 时信号 handler 递增 `exit_count`（0→1→2=退出）。`input()` 阻塞期间连续 Ctrl+C 可累加计数，正常输入后自动复位（手工 `exit_count = 0`）。不要手搓替代方案。\n11. **通解不补丁，可拓展不硬编码** — 用户纠正 bug 时必须问：这是当前场景的补丁还是所有同类问题的通解？通解必须可被其他功能复用、可拓展到新场景。每个\"智能\"功能必须配一个\"我不认识这个\"的 fallback——收录的自动补、未收录的警告不崩溃。新增配置项优先、方法参数化优先、provider 注册表优先。
 
 ## Bug 修复流程
 

@@ -84,10 +84,43 @@ Agent.run(prompt)
        ├─ Hooks → emit("tool.before")             ← 未连接
        ├─ Sandbox.Permissions.check()             ← 未连接
        ├─ Sandbox.Security.check_command()        ← 未连接
-       ├─ ToolRegistry.execute() + Sandbox隔离    ← 未连接
+│       ├─ ToolRegistry.execute() + Sandbox隔离    ← 未连接
        ├─ Observability.Metrics.record()          ← 未连接
        ├─ Observability.Audit.log()               ← 未连接
        ├─ Hooks → emit("tool.after")              ← 未连接
        │
+       ├─ _ask_continuation() → LLM 自评续命       ← ✅ 已实现 (max_tool_calls)
+       │
        └─ Memory.Store.save() → 持久化会话        ← 未连接
 ```
+
+## 架构模式
+
+### Tool Error Resilience (registry try/except)
+
+工具执行通过 `ToolRegistry.execute()` 统一入口。所有异常在此捕获并转为结构化错误：
+
+```
+TypeError → {error, available_params, received_params}  # LLM 自愈
+Exception → {error: "TypeName: message"}                 # 通用兜底
+```
+
+错误以工具结果形式喂回 LLM，绝不 propagate 中断 agent 循环。
+
+### Continuation Evaluation (_ask_continuation)
+
+通用续命架构：任何预算耗尽时，让 LLM 自评是否继续。
+
+```
+触发点（max_tool_calls / retry_limit / token_budget / permission_deny）
+  → _ask_continuation(limit_type, current, maximum)
+    → 注入评估 prompt（无 tools）
+    → LLM 回复 "CONTINUE:N" → 扩展预算，继续循环
+    → LLM 回复 最终回答 → 直接返回
+```
+
+设计原则：
+- 单一入口 `_ask_continuation()`，参数化决策 prompt
+- LLM 是决策者而非执行机器
+- 预算扩展后 context 不残留决策对话（CONTINUE 回复仅用于控制流）
+- 可复用至任何资源限制场景
