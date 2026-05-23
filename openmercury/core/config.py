@@ -1,10 +1,23 @@
-"""配置系统 - 支持多层级配置合并"""
+"""配置系统 - 支持多层级配置合并 + provider 自动发现"""
 
 import os
 import json
+import logging
 from pathlib import Path
-from typing import Any, Optional
 from dataclasses import dataclass, field
+
+logger = logging.getLogger("openmercury.config")
+
+# ── Provider 注册表：内置平台的默认配置 ──
+# 用户只需写 provider: "minimax"，自动补 base_url。
+# 新平台只需加一条记录即可扩展。
+PROVIDER_REGISTRY = {
+    "openai":     {"base_url": "https://api.openai.com/v1",       "key_env": "OPENAI_API_KEY"},
+    "minimax":    {"base_url": "https://api.minimaxi.com/v1",     "key_env": "MINIMAX_API_KEY"},
+    "anthropic":  {"base_url": "https://api.anthropic.com",       "key_env": "ANTHROPIC_API_KEY"},
+    "openrouter": {"base_url": "https://openrouter.ai/api/v1",    "key_env": "OPENROUTER_API_KEY"},
+    "deepseek":   {"base_url": "https://api.deepseek.com/v1",     "key_env": "DEEPSEEK_API_KEY"},
+}
 
 
 @dataclass
@@ -12,10 +25,25 @@ class ModelConfig:
     """模型配置"""
     provider: str = "openai"
     model: str = "gpt-4"
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
+    api_key: str | None = None
+    base_url: str | None = None
     temperature: float = 0.7
     max_tokens: int = 4096
+
+    def resolve(self):
+        """后处理：根据 provider 名补齐未填的字段"""
+        entry = PROVIDER_REGISTRY.get(self.provider)
+        if entry:
+            if not self.base_url:
+                self.base_url = entry["base_url"]
+            if not self.api_key:
+                self.api_key = os.environ.get(entry["key_env"], "")
+        elif not self.base_url:
+            # 未收录的 provider —— 用户必须显式写 base_url
+            logger.warning(
+                "Provider '%s' 未在注册表中。请确认 base_url 已正确填写，"
+                "或使用 provider: 'custom' 明确标注。", self.provider
+            )
 
 
 @dataclass
@@ -23,33 +51,36 @@ class OpenMercuryConfig:
     """主配置类"""
     username: str = "user"
     model: ModelConfig = field(default_factory=ModelConfig)
-    max_tool_calls: int = 15  # 单次对话最大工具调用次数，防死循环
+    max_tool_calls: int = 50
+    max_input_tokens: int = 64000
+    compression_threshold: float = 0.75
     skills_paths: list = field(default_factory=lambda: ["./.openmercury/skills", "~/.config/openmercury/skills"])
     memory_enabled: bool = True
     memory_path: str = "~/.openmercury/memory"
     log_level: str = "INFO"
-    sandbox_mode: str = "ask"  # allow, ask, deny
+    sandbox_mode: str = "ask"
 
     @classmethod
-    def load(cls, config_path: Optional[str] = None) -> "OpenMercuryConfig":
-        """从文件加载配置"""
+    def load(cls, config_path: str | None = None) -> "OpenMercuryConfig":
         if config_path is None:
             config_path = cls._find_config()
 
         if config_path and Path(config_path).exists():
             with open(config_path) as f:
                 data = json.load(f)
-            return cls._from_dict(data)
+            cfg = cls._from_dict(data)
+        else:
+            cfg = cls()
 
-        return cls()
+        # 后处理：根据 provider 补全未填字段
+        cfg.model.resolve()
+        return cfg
 
     def save(self, config_path: str):
-        """保存配置到文件"""
         with open(config_path, "w") as f:
             json.dump(self._to_dict(), f, indent=2)
 
     def merge(self, other: "OpenMercuryConfig"):
-        """合并配置（other 优先级更高）"""
         for key, value in vars(other).items():
             if value is not None:
                 setattr(self, key, value)
@@ -66,6 +97,8 @@ class OpenMercuryConfig:
                 "max_tokens": self.model.max_tokens,
             },
             "max_tool_calls": self.max_tool_calls,
+            "max_input_tokens": self.max_input_tokens,
+            "compression_threshold": self.compression_threshold,
             "skills_paths": self.skills_paths,
             "memory_enabled": self.memory_enabled,
             "memory_path": self.memory_path,
@@ -87,7 +120,9 @@ class OpenMercuryConfig:
         return cls(
             username=data.get("username", "user"),
             model=model,
-            max_tool_calls=data.get("max_tool_calls", 15),
+            max_tool_calls=data.get("max_tool_calls", 50),
+            max_input_tokens=data.get("max_input_tokens", 64000),
+            compression_threshold=data.get("compression_threshold", 0.75),
             skills_paths=data.get("skills_paths", ["./.openmercury/skills", "~/.config/openmercury/skills"]),
             memory_enabled=data.get("memory_enabled", True),
             memory_path=data.get("memory_path", "~/.openmercury/memory"),
@@ -96,8 +131,7 @@ class OpenMercuryConfig:
         )
 
     @staticmethod
-    def _find_config() -> Optional[str]:
-        """查找配置文件"""
+    def _find_config() -> str | None:
         candidates = [
             "./openmercury.json",
             "./.openmercury/openmercury.json",
