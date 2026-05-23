@@ -4,7 +4,7 @@ import logging
 import re
 import time
 import asyncio
-from typing import Optional, AsyncIterator
+from typing import Any, Optional, AsyncIterator
 from openai import AsyncOpenAI, APIStatusError
 
 
@@ -59,7 +59,7 @@ class LLMClient:
         self,
         messages: list[dict],
         tools: list[dict] = None,
-        tool_choice: str = "auto",
+        tool_choice: str | dict[str, Any] = "auto",
     ) -> dict:
         """发送聊天请求并获取响应"""
 
@@ -118,7 +118,7 @@ class LLMClient:
         self,
         messages: list[dict],
         tools: list[dict] = None,
-        tool_choice: str = "auto",
+        tool_choice: str | dict[str, Any] = "auto",
     ) -> AsyncIterator[dict]:
         """流式聊天"""
 

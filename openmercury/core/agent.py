@@ -1,6 +1,7 @@
 """Agent 主循环与核心逻辑"""
 
 import json
+import re
 import asyncio
 import logging
 import shutil
@@ -29,12 +30,13 @@ class Agent:
 - Executing shell commands
 - Searching and managing files
 
-When you need to perform actions, use the available tools. Always be concise and helpful."""
+When you need to perform actions, use the available tools.
+Always be concise and helpful."""
 
     def __init__(self, config: OpenMercuryConfig, tool_registry=None, skill_registry=None):
         self.config = config
         self.session = Session()
-        self.context = ContextManager(max_tokens=config.model.max_tokens * 2)
+        self.context = ContextManager(max_tokens=config.max_input_tokens)
         self.tool_registry = tool_registry
         self.skill_registry = skill_registry
 
@@ -51,7 +53,7 @@ When you need to perform actions, use the available tools. Always be concise and
         )
 
         self._tool_calls_count = 0
-        self._max_tool_calls = config.max_tool_calls
+        self._max_tool_calls = self.config.max_tool_calls
 
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
@@ -66,52 +68,86 @@ When you need to perform actions, use the available tools. Always be concise and
         # 执行 Agent 循环
         return await self._agent_loop()
 
+    def _wrap_up_messages(self, messages):
+        """构造收尾消息列表：追加总结请求。"""
+        return messages + [{
+            "role": "user",
+            "content": "已达到最大工具调用次数。请基于已有信息给出最终回复，不要再调用工具。"
+        }]
+
+    async def _wrap_up_call(self, messages):
+        """收尾调用：无工具文字回应。"""
+        try:
+            resp = await self.llm.chat(messages, tools=[], tool_choice="none")
+        except Exception:
+            return "模型调用失败"
+        content = resp.get("content", "") or "已达到调用上限。"
+        self.session.add_message("assistant", content)
+        self.context.add({"role": "assistant", "content": content})
+        return content
+
     async def _agent_loop(self) -> str:
-        """Agent 主循环 - 支持连续工具调用"""
+        """Agent 主循环。工具预算耗尽时直接收尾。"""
         self._tool_calls_count = 0
+        self._max_tool_calls = self.config.max_tool_calls
 
-        while self._tool_calls_count < self._max_tool_calls:
-            # 构建消息
+        while True:
             messages = self._build_messages()
+            tools = self.tool_registry.get_definitions() if self.tool_registry else []
+            tools = list(tools)
 
-            # 获取工具定义
-            tools = None
-            if self.tool_registry:
-                tools = self.tool_registry.get_definitions()
+            if self._tool_calls_count >= self._max_tool_calls:
+                return await self._wrap_up_call(self._wrap_up_messages(messages))
 
-            # 调用 LLM（SDK 自带智能重试，含 Retry-After 支持）
-            logger.debug("→ Agent 循环 #%d: 发送 %d 条消息", 
-                         self._tool_calls_count, len(messages))
+            logger.debug("→ Agent 循环 #%d: 发送 %d 条消息",
+                        self._tool_calls_count, len(messages))
             try:
-                response = await self.llm.chat(messages, tools=tools)
+                response = await self.llm.chat(messages, tools=tools or None, tool_choice="auto")
             except Exception as e:
-                # 记录失败时的上下文状态，帮助诊断
-                logger.error("✗ Agent 循环 #%d 失败: %s", 
+                logger.error("✗ Agent 循环 #%d 失败: %s",
                             self._tool_calls_count, str(e))
-                logger.error("  当前上下文: %d 条消息", len(self.context.messages))
-                logger.error("  工具调用计数: %d", self._tool_calls_count)
-                raise
+                return f"模型调用失败：{e}"
 
-            # 检查是否有工具调用
             tool_calls = response.get("tool_calls")
-            logger.debug("← LLM 响应: %s", 
-                        "工具调用" if tool_calls else "文本回复")
-
             if not tool_calls:
-                # 没有工具调用，直接返回回复
-                content = response.get("content", "")
+                content = response.get("content", "") or ""
+                # 清理 LLM 幻觉的工具调用语法（通用匹配）
+                content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL)
+                content = content.strip()
                 self.session.add_message("assistant", content)
                 self.context.add({"role": "assistant", "content": content})
-                logger.debug("✓ 最终回复: %s", content[:200])
                 return content
 
+            # 校验：过滤不在当前工具列表中的幻觉调用（预算耗尽时 tools 为空，全部拦截）
+            valid_names = {t["function"]["name"] for t in tools} if tools else set()
+            valid_calls = [tc for tc in tool_calls if tc["name"] in valid_names]
+            if len(valid_calls) < len(tool_calls):
+                logger.debug("过滤 %d 个幻觉工具调用: %s",
+                            len(tool_calls) - len(valid_calls),
+                            [tc["name"] for tc in tool_calls if tc["name"] not in valid_names])
+            if not valid_calls:
+                # 全部是幻觉或无工具可用 → 当作文字回答
+                content = response.get("content", "") or ""
+                # 清理 LLM 幻觉的工具调用标签
+                content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL)
+                content = content.strip()
+                if not content:
+                    content = "已达到调用上限。"
+                self.session.add_message("assistant", content)
+                self.context.add({"role": "assistant", "content": content})
+                return content
+            tool_calls = valid_calls
+
+            # 批量超上限 → 不执行工具，直接收尾
+            if self._tool_calls_count + len(tool_calls) > self._max_tool_calls:
+                console.print("[dim]  已截停，达到调用上限[/dim]")
+                return await self._wrap_up_call(self._wrap_up_messages(self._build_messages()))
+
             # 执行工具调用
-            # 保留 LLM 可能同时返回的文字（如 "让我搜索一下..."）
             assistant_content = response.get("content", "")
             if assistant_content:
                 console.print(Panel(Markdown(assistant_content), border_style="dim"))
 
-            # 转换为 OpenAI 标准格式: {id, type, function: {name, arguments}}
             api_tool_calls = [
                 {
                     "id": tc["id"],
@@ -126,31 +162,12 @@ When you need to perform actions, use the available tools. Always be concise and
             assistant_msg = {"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls}
             self.context.add(assistant_msg)
 
-            logger.debug("⚙ 执行 %d 个工具调用: %s", 
-                        len(tool_calls), 
+            logger.debug("⚙ 执行 %d 个工具调用: %s",
+                        len(tool_calls),
                         [tc["name"] for tc in tool_calls])
 
             await self._execute_tool_calls(tool_calls)
-            # 工具执行后稍作停顿，防止连续请求触发突发限制
             await asyncio.sleep(0.5)
-
-        # 达到最大调用次数：让 LLM 基于已有信息收尾，而非硬报错
-        self.context.add({
-            "role": "user",
-            "content": (
-                "你已达到工具调用上限。请根据目前已获取的信息，"
-                "简洁地总结你的发现并给出最终回答。不要再调用工具。"
-            ),
-        })
-        try:
-            response = await self.llm.chat(self._build_messages(), tools=[])
-        except Exception:
-            return "已达到最大工具调用次数，且无法让模型收尾。请简化任务后重试。"
-
-        content = response.get("content", "")
-        self.session.add_message("assistant", content)
-        self.context.add({"role": "assistant", "content": content})
-        return content
 
     async def _execute_tool_calls(self, tool_calls: list[dict]):
         """执行一组工具调用"""
@@ -243,16 +260,50 @@ When you need to perform actions, use the available tools. Always be concise and
         """压缩上下文"""
         from openmercury.memory.compressor import ContextCompressor
 
-        compressor = ContextCompressor()
+        compressor = ContextCompressor(
+            max_input_tokens=self.config.max_input_tokens,
+            threshold=self.config.compression_threshold,
+        )
+
+        async def llm_summary(messages: list[dict]) -> str:
+            """LLM 生成语义摘要——保留用户意图 + 关键决策"""
+            lines = []
+            for m in messages:
+                role = m.get("role", "unknown")
+                content = m.get("content", "")
+                if isinstance(content, str) and content.strip():
+                    # tool 结果只取前 200 字
+                    text = content[:200] if role == "tool" else content[:600]
+                    lines.append(f"[{role}]: {text}")
+
+            prompt = (
+                "Summarize this conversation segment into one concise paragraph "
+                "(under 150 words). Include: what the user asked, what tools were "
+                "used, key findings or decisions. Use natural language, not bullet "
+                "points.\n\n"
+                + "\n".join(lines[-30:])  # 最多 30 条
+                + "\n\nSummary:"
+            )
+            try:
+                response = await self.llm.chat(
+                    [{"role": "user", "content": prompt}], tools=[]
+                )
+                content = response.get("content", "").strip()
+                return f"[Earlier conversation summary]: {content}"
+            except Exception as e:
+                logger.warning("LLM summary failed: %s", e)
+                return f"[{len(messages)} earlier messages — summary unavailable]"
+
         compressed = await compressor.compress(
             self.context.messages,
-            strategy="summary",
+            strategy="sliding",
+            summary_fn=llm_summary,
         )
         self.context.messages = compressed
         self.context.current_tokens = sum(
             self.context._estimate_tokens(m) for m in compressed
         )
-        console.print("[dim]→ Context compressed[/dim]")
+        console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
 
     def reset(self):
         """重置会话"""
@@ -262,16 +313,12 @@ When you need to perform actions, use the available tools. Always be concise and
 
     @staticmethod
     def _get_api_key(provider: str) -> str:
-        """从环境变量获取 API Key"""
+        """从环境变量获取 API Key——由 PROVIDER_REGISTRY 驱动"""
         import os
-
-        provider_keys = {
-            "openai": os.environ.get("OPENAI_API_KEY", ""),
-            "anthropic": os.environ.get("ANTHROPIC_API_KEY", ""),
-            "openrouter": os.environ.get("OPENROUTER_API_KEY", ""),
-        }
-
-        return provider_keys.get(provider, "")
+        from .config import PROVIDER_REGISTRY
+        entry = PROVIDER_REGISTRY.get(provider, {})
+        key_env = entry.get("key_env", "")
+        return os.environ.get(key_env, "") if key_env else ""
 
 
 class AgentLoop:

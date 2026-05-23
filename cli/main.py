@@ -24,13 +24,14 @@ app = typer.Typer(
 def _setup_agent(config_path: str | None, model: str | None, api_key: str | None, debug: bool):
     from openmercury.core.config import OpenMercuryConfig
     from openmercury.core.agent import Agent
+    import openmercury
     from openmercury.tools.registry import ToolRegistry
     from openmercury.tools.file_tools import ReadFile, WriteFile
     from openmercury.tools.bash_tools import BashTool
 
     if debug:
         logging.basicConfig(
-            level=logging.DEBUG,
+            level=logging.WARNING,  # 全局默认 WARNING，不污染第三方库
             format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
             datefmt="%H:%M:%S",
         )
@@ -66,10 +67,20 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
 
     agent = Agent(config=cfg, tool_registry=tool_registry)
 
+    # 显示加载的配置来源
+    import os
+    config_source = "默认值"
+    for candidate in ["./openmercury.json", "./.openmercury/openmercury.json",
+                       os.path.expanduser("~/.config/openmercury/config.json")]:
+        if os.path.exists(candidate):
+            config_source = candidate
+            break
+
     console.print(Panel(
-        f"[bold green]OpenMercury v{cfg.__class__.__module__.split('.')[0]}[/bold green]\n"
+        f"[bold green]OpenMercury v{openmercury.__version__}[/bold green]\n"
         f"模型: {cfg.model.provider}/{cfg.model.model}\n"
-        f"工具: {', '.join(t.name for t in tool_registry.list_tools())}\n\n"
+        f"工具: {', '.join(t.name for t in tool_registry.list_tools())}\n"
+        f"配置: [dim]{config_source}[/dim]\n\n"
         "[dim]输入消息开始对话，/help 查看命令，/exit 退出[/dim]",
         title="🚀 OpenMercury",
     ))
