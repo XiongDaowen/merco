@@ -176,7 +176,6 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
                   skill_registry=skill_registry)
 
     # 显示加载的配置来源
-    import os
     config_source = "默认值"
     for candidate in ["./merco.json", "./.merco/merco.json",
                        os.path.expanduser("~/.config/merco/config.json")]:
