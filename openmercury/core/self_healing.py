@@ -108,19 +108,29 @@ def tool_error(
 def _is_retryable_llm_error(exc: Exception) -> bool:
     """判断 LLM API 错误是否可重试。
 
-    复用 llm._is_transient_429 的多层检测逻辑（Retry-After 头 + 消息模式）。
+    按 HTTP 状态码大类判断（429 限流 + 5xx 服务端），
+    辅以错误消息关键字匹配覆盖非标准 provider。
     """
     try:
         from openai import APIStatusError
-        from openmercury.core.llm import _is_transient_429
-        if isinstance(exc, APIStatusError):
-            if exc.status_code >= 500:
-                return True
-            if exc.status_code == 429:
-                return _is_transient_429(exc)
     except ImportError:
-        pass
-    return False
+        return False
+    if not isinstance(exc, APIStatusError):
+        return False
+
+    status = exc.status_code
+    # 429 限流 — 所有 provider 通用
+    if status == 429:
+        return True
+    # 5xx 服务端错误 — 所有 provider 通用
+    if 500 <= status <= 599:
+        return True
+    # 关键字兜底：部分 provider 用 4xx 返回临时错误
+    body = str(exc).lower()
+    return any(kw in body for kw in (
+        "rate limit", "too many requests", "overloaded",
+        "capacity", "throttl", "temporarily unavailable",
+    ))
 
 
 def empty_response() -> dict:
