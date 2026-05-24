@@ -123,7 +123,9 @@ def _render_context_bar(stats: dict) -> str:
         color = "red"
     est = "~" if stats["is_estimate"] else ""
     tool_info = f"🔧 {stats['tool_count']}/{stats['max_tool_calls']}"
-    return f"  [{color}]{bar}[/{color}]  {est}{stats['current']//1024}K/{stats['max']//1024}K  {tool_info}"
+    cur = stats["current"]; mx = stats["max"]
+    def _f(n): return str(n) if n < 1024 else f"{n/1024:.1f}K"
+    return f"  [{color}]{bar}[/{color}]  {est}{_f(cur)}/{_f(mx)}  {tool_info}"
 
 
 # ── REPL 交互循环 ────────────────────────────────────────────────────────
