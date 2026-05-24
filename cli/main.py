@@ -150,7 +150,7 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
         if env_key:
             cfg.model.api_key = env_key
         else:
-            candidates = ["./merco.json", "../merco.json", "~/.config/merco/config.json"]
+            candidates = ["./merco.json", "~/.config/merco/config.json"]
             searched = "\n".join(f"  • {c}" for c in candidates)
             console.print(Panel(
                 f"[red]未找到 API Key。请设置：\n"
