@@ -9,7 +9,7 @@ class AuditLogger:
     """记录安全与操作审计日志"""
 
     def __init__(self, log_path: str = None):
-        self.log_path = Path(log_path or "~/.openmercury/audit.log").expanduser()
+        self.log_path = Path(log_path or "~/.merco/audit.log").expanduser()
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(self, action: str, user: str, details: dict = None):

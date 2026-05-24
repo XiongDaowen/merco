@@ -6,14 +6,14 @@ from fastapi import FastAPI
 def create_app() -> FastAPI:
     """创建 FastAPI 应用"""
     app = FastAPI(
-        title="OpenMercury",
+        title="Mercury Code",
         description="AI 驱动的自改进软件开发平台",
         version="0.1.0",
     )
 
     @app.get("/")
     async def root():
-        return {"message": "OpenMercury API", "version": "0.1.0"}
+        return {"message": "Mercury Code API", "version": "0.1.0"}
 
     @app.get("/health")
     async def health():

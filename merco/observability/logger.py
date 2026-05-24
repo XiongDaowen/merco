@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def setup_logger(
-    name: str = "openmercury",
+    name: str = "merco",
     level: str = "INFO",
     log_file: str = None,
 ) -> logging.Logger:

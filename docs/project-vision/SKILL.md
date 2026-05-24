@@ -16,17 +16,17 @@
 cd /home/xiowen/code/OpenMercury
 uv sync
 
-# 全局安装（之后任意目录直接敲 openmercury）
+# 全局安装（之后任意目录直接敲 merco）
 uv tool install -e .
 # 注意：-e 是 editable 安装，改代码后无需重新 install，只有加新依赖才需要 --reinstall
 
 # 运行
-openmercury                  # 直接启动交互模式（无需子命令）
-openmercury --debug          # 调试模式
-openmercury -m MiniMax-M2.5  # 指定模型
-openmercury run              # 显式 run 子命令，同上
-openmercury init             # 初始化项目配置
-openmercury skills -l        # 列出技能
+merco                  # 直接启动交互模式（无需子命令）
+merco --debug          # 调试模式
+merco -m MiniMax-M2.5  # 指定模型
+merco run              # 显式 run 子命令，同上
+merco init             # 初始化项目配置
+merco skills -l        # 列出技能
 ```
 
 > 实现方式：`@app.callback(invoke_without_command=True)` 注册为 Typer 回调，通过 `ctx.invoked_subcommand is None` 判断无子命令时进入交互模式。`run` 子命令通过共享 `_setup_agent()` + `run_repl()` 函数消除代码重复。
@@ -76,7 +76,7 @@ openmercury skills -l        # 列出技能
 修改 `docs/project-vision/` 下任何文件后，需同步到 agent 的 skill 目录:
 
 ```bash
-cp -r docs/project-vision .openmercury/skills/
+cp -r docs/project-vision .merco/skills/
 ```
 
 **更新纪律**：每次重大提交后，必须根据提交内容更新 `progress.md`（模块状态变更）、`decisions.md`（新决策）、`architecture.md`（架构变更），然后同步到所有位置。不要在代码变更后留下过期的 skill 文档。

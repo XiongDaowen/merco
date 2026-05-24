@@ -10,7 +10,7 @@ class MemoryStore:
     """持久化记忆存储"""
 
     def __init__(self, base_path: str = None):
-        self.base_path = Path(base_path or "~/.openmercury/memory").expanduser()
+        self.base_path = Path(base_path or "~/.merco/memory").expanduser()
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     def save(self, key: str, value: dict, tags: list = None):

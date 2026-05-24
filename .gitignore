@@ -30,7 +30,7 @@ Thumbs.db
 *.log
 
 # Memory & Data
-~/.openmercury/
+~/.merco/
 *.db
 *.sqlite
 
@@ -46,9 +46,9 @@ references/
 .opencode/
 
 # Local working config (template at config/)
-/openmercury.json
+/merco.json
 
 # IDE & runtime
 .reasonix/
-.openmercury/
+.merco/
 .pytest_cache/

@@ -1,8 +1,8 @@
 """工具注册测试"""
 
 import pytest
-from openmercury.tools.registry import ToolRegistry
-from openmercury.tools.base import BaseTool
+from merco.tools.registry import ToolRegistry
+from merco.tools.base import BaseTool
 
 
 class MockTool(BaseTool):

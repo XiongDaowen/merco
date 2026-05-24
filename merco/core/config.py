@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from dataclasses import dataclass, field
 
-logger = logging.getLogger("openmercury.config")
+logger = logging.getLogger("merco.config")
 
 # ── Provider 注册表：内置平台的默认配置 ──
 # 用户只需写 provider: "minimax"，自动补 base_url。
@@ -47,16 +47,16 @@ class ModelConfig:
 
 
 @dataclass
-class OpenMercuryConfig:
+class MercoConfig:
     """主配置类"""
     username: str = "user"
     model: ModelConfig = field(default_factory=ModelConfig)
     max_tool_calls: int = 50
     max_input_tokens: int = 64000
     compression_threshold: float = 0.75
-    skills_paths: list = field(default_factory=lambda: ["./.openmercury/skills", "~/.config/openmercury/skills"])
+    skills_paths: list = field(default_factory=lambda: ["./.merco/skills", "~/.config/merco/skills"])
     memory_enabled: bool = True
-    memory_path: str = "~/.openmercury/memory"
+    memory_path: str = "~/.merco/memory"
     log_level: str = "INFO"
     sandbox_mode: str = "ask"
     streaming: bool = False
@@ -64,7 +64,7 @@ class OpenMercuryConfig:
     stream_content: bool = False
 
     @classmethod
-    def load(cls, config_path: str | None = None) -> "OpenMercuryConfig":
+    def load(cls, config_path: str | None = None) -> "MercoConfig":
         if config_path is None:
             config_path = cls._find_config()
 
@@ -83,7 +83,7 @@ class OpenMercuryConfig:
         with open(config_path, "w") as f:
             json.dump(self._to_dict(), f, indent=2)
 
-    def merge(self, other: "OpenMercuryConfig"):
+    def merge(self, other: "MercoConfig"):
         for key, value in vars(other).items():
             if value is not None:
                 setattr(self, key, value)
@@ -113,7 +113,7 @@ class OpenMercuryConfig:
         }
 
     @classmethod
-    def _from_dict(cls, data: dict) -> "OpenMercuryConfig":
+    def _from_dict(cls, data: dict) -> "MercoConfig":
         model_data = data.get("model", {})
         model = ModelConfig(
             provider=model_data.get("provider", "openai"),
@@ -129,9 +129,9 @@ class OpenMercuryConfig:
             max_tool_calls=data.get("max_tool_calls", 50),
             max_input_tokens=data.get("max_input_tokens", 64000),
             compression_threshold=data.get("compression_threshold", 0.75),
-            skills_paths=data.get("skills_paths", ["./.openmercury/skills", "~/.config/openmercury/skills"]),
+            skills_paths=data.get("skills_paths", ["./.merco/skills", "~/.config/merco/skills"]),
             memory_enabled=data.get("memory_enabled", True),
-            memory_path=data.get("memory_path", "~/.openmercury/memory"),
+            memory_path=data.get("memory_path", "~/.merco/memory"),
             log_level=data.get("log_level", "INFO"),
             sandbox_mode=data.get("sandbox_mode", "ask"),
             streaming=data.get("streaming", False),
@@ -142,9 +142,9 @@ class OpenMercuryConfig:
     @staticmethod
     def _find_config() -> str | None:
         candidates = [
-            "./openmercury.json",
-            "./.openmercury/openmercury.json",
-            os.path.expanduser("~/.config/openmercury/config.json"),
+            "./merco.json",
+            "./.merco/merco.json",
+            os.path.expanduser("~/.config/merco/config.json"),
         ]
         for path in candidates:
             if Path(path).exists():

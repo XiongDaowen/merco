@@ -1,18 +1,18 @@
 """配置模块测试"""
 
 import pytest
-from openmercury.core.config import OpenMercuryConfig, ModelConfig
+from merco.core.config import MercoConfig, ModelConfig
 
 
 class TestConfig:
     def test_default_config(self):
-        cfg = OpenMercuryConfig()
+        cfg = MercoConfig()
         assert cfg.username == "user"
         assert cfg.model.provider == "openai"
         assert cfg.model.model == "gpt-4"
 
     def test_config_to_dict(self):
-        cfg = OpenMercuryConfig()
+        cfg = MercoConfig()
         data = cfg._to_dict()
         assert "username" in data
         assert "model" in data
@@ -22,6 +22,6 @@ class TestConfig:
             "username": "test_user",
             "model": {"provider": "anthropic", "model": "claude-3"},
         }
-        cfg = OpenMercuryConfig._from_dict(data)
+        cfg = MercoConfig._from_dict(data)
         assert cfg.username == "test_user"
         assert cfg.model.provider == "anthropic"

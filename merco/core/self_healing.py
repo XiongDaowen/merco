@@ -10,7 +10,7 @@
 import logging
 from typing import Any, Callable
 
-logger = logging.getLogger("openmercury.self_healing")
+logger = logging.getLogger("merco.self_healing")
 
 # ── 错误分类 ────────────────────────────────────────────
 

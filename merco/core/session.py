@@ -31,7 +31,7 @@ class SessionStore:
     """会话持久化存储"""
 
     def __init__(self, db_path: str = None):
-        self.db_path = db_path or "~/.openmercury/sessions.db"
+        self.db_path = db_path or "~/.merco/sessions.db"
 
     def save(self, session: Session):
         """保存会话"""

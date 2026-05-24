@@ -70,7 +70,7 @@ class ToolRegistry:
         try:
             return await tool.execute(**kwargs)
         except Exception as e:
-            from openmercury.core.self_healing import tool_error
+            from merco.core.self_healing import tool_error
             return tool_error(e, tool_name, getattr(tool, 'parameters', None))
 
 

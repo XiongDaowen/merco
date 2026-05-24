@@ -1,5 +1,5 @@
 [project]
-name = "openmercury"
+name = "merco"
 version = "0.1.0"
 description = "AI-driven self-improving development platform"
 readme = "README.md"
@@ -19,8 +19,8 @@ dependencies = [
 ]
 
 [project.scripts]
-openmercury = "cli.main:app"
-openmercury-web = "web.app:create_app"
+merco = "cli.main:app"
+merco-web = "web.app:create_app"
 
 [build-system]
 requires = ["hatchling"]

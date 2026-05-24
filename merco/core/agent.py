@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
-from .config import OpenMercuryConfig
+from .config import MercoConfig
 from .llm import LLMClient
 from .session import Session
 from .message import Message, MessageRole
@@ -19,7 +19,7 @@ from .context import ContextManager, msg_tokens
 from .pipeline import ProcessContext
 
 console = Console()
-logger = logging.getLogger("openmercury.agent")
+logger = logging.getLogger("merco.agent")
 
 # ── System Prompt 构建器 ─────────────────────────────
 
@@ -42,7 +42,7 @@ class PromptBuilder:
 
 class BasePromptChunk(PromptChunk):
     name = "base"
-    PROMPT = """You are OpenMercury, an AI coding assistant. You can help with:
+    PROMPT = """You are Mercury Code, an AI coding assistant. You can help with:
 - Writing and editing code
 - Answering questions about the codebase
 - Executing shell commands
@@ -171,7 +171,7 @@ class Agent:
     """AI Agent 核心类，负责对话循环与工具调度"""
 
 
-    def __init__(self, config: OpenMercuryConfig, tool_registry=None, skill_registry=None):
+    def __init__(self, config: MercoConfig, tool_registry=None, skill_registry=None):
         self.config = config
         self.session = Session()
         self.context = ContextManager(max_tokens=config.max_input_tokens)
@@ -450,7 +450,7 @@ class Agent:
 
     async def _compress_context(self):
         """压缩上下文"""
-        from openmercury.memory.compressor import ContextCompressor
+        from merco.memory.compressor import ContextCompressor
 
         compressor = ContextCompressor(
             max_input_tokens=self.config.max_input_tokens,

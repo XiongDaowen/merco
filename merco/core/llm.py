@@ -8,7 +8,7 @@ from typing import Any, Optional, AsyncIterator
 from openai import AsyncOpenAI
 
 
-logger = logging.getLogger("openmercury.llm")
+logger = logging.getLogger("merco.llm")
 
 
 # 清理字符串中的代理对字符（surrogates），防止 API 序列化崩溃

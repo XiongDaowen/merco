@@ -9,7 +9,7 @@ class SandboxIsolation:
     """提供执行隔离环境"""
 
     def __init__(self, work_dir: str = None):
-        self.work_dir = work_dir or tempfile.mkdtemp(prefix="openmercury_")
+        self.work_dir = work_dir or tempfile.mkdtemp(prefix="merco_")
         self.allowed_dirs: list[str] = []
 
     def allow_directory(self, path: str, read_only: bool = False):

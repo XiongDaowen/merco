@@ -13,8 +13,8 @@ from rich.panel import Panel
 console = Console()
 
 app = typer.Typer(
-    name="openmercury",
-    help="OpenMercury - AI 驱动的自改进软件开发平台",
+    name="merco",
+    help="Mercury Code — AI 驱动的自改进软件开发平台",
     add_completion=False,
 )
 
@@ -22,7 +22,7 @@ app = typer.Typer(
 # ── 启动首页 Dashboard ──────────────────────────────────────────────
 
 from abc import ABC, abstractmethod
-import openmercury
+import merco
 
 class DashboardSection(ABC):
     """首页展示区块基类。新增条目：继承 + 实现 render() + dashboard.use()"""
@@ -37,7 +37,7 @@ class DashboardSection(ABC):
 class WelcomeSection(DashboardSection):
     name = "welcome"
     def render(self, agent, **ctx) -> str:
-        return f"[bold green]OpenMercury v{openmercury.__version__}[/bold green]"
+        return f"[bold green]Mercury Code v{merco.__version__}[/bold green]"
 
 
 class ModelSection(DashboardSection):
@@ -122,10 +122,10 @@ class Dashboard:
 # ── 共享的 Agent 启动逻辑 ────────────────────────────────────────────────
 
 def _setup_agent(config_path: str | None, model: str | None, api_key: str | None, debug: bool):
-    from openmercury.core.config import OpenMercuryConfig
-    from openmercury.core.agent import Agent
-    import openmercury
-    from openmercury.tools import discover_tools, tool_registry
+    from merco.core.config import MercoConfig
+    from merco.core.agent import Agent
+    import merco
+    from merco.tools import discover_tools, tool_registry
     discover_tools()
 
     if debug:
@@ -134,12 +134,12 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
             format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
             datefmt="%H:%M:%S",
         )
-        logging.getLogger("openmercury").setLevel(logging.DEBUG)
+        logging.getLogger("merco").setLevel(logging.DEBUG)
         console.print("[yellow]🔍 调试模式已开启[/yellow]")
     else:
         logging.basicConfig(level=logging.WARNING)
 
-    cfg = OpenMercuryConfig.load(config_path)
+    cfg = MercoConfig.load(config_path)
     if model:
         cfg.model.model = model
     if api_key:
@@ -162,7 +162,7 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
     # tools auto-registered via discover_tools()
 
     # ── 技能注册 ──
-    from openmercury.skills.registry import SkillRegistry
+    from merco.skills.registry import SkillRegistry
     skill_registry = SkillRegistry()
     if cfg.skills_paths:
         skill_registry.load_from_paths(cfg.skills_paths)
@@ -178,8 +178,8 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
     # 显示加载的配置来源
     import os
     config_source = "默认值"
-    for candidate in ["./openmercury.json", "./.openmercury/openmercury.json",
-                       os.path.expanduser("~/.config/openmercury/config.json")]:
+    for candidate in ["./merco.json", "./.merco/merco.json",
+                       os.path.expanduser("~/.config/merco/config.json")]:
         if os.path.exists(candidate):
             config_source = candidate
             break
@@ -194,7 +194,7 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
 
     console.print(Panel(
         dashboard.render(agent, config_source=config_source),
-        title="🚀 OpenMercury",
+        title="🚀 Mercury Code",
     ))
     return agent
 
@@ -442,14 +442,14 @@ def run_cmd(
 @app.command("init")
 def init_cmd(path: str = typer.Argument(".", help="项目路径")):
     from pathlib import Path
-    from openmercury.core.config import OpenMercuryConfig
+    from merco.core.config import MercoConfig
 
-    config_path = Path(path) / "openmercury.json"
+    config_path = Path(path) / "merco.json"
     if config_path.exists():
         console.print(f"[yellow]配置已存在: {config_path}[/yellow]")
         return
 
-    cfg = OpenMercuryConfig()
+    cfg = MercoConfig()
     cfg.save(str(config_path))
     console.print(f"[green]已创建配置: {config_path}[/green]")
 
@@ -459,15 +459,15 @@ def skills_cmd(
     list: bool = typer.Option(False, "--list", "-l", help="列出已加载技能"),
     path: str = typer.Option(None, "--path", "-p", help="技能目录路径"),
 ):
-    from openmercury.skills.loader import SkillLoader
-    from openmercury.skills.registry import SkillRegistry
+    from merco.skills.loader import SkillLoader
+    from merco.skills.registry import SkillRegistry
 
     if list:
         registry = SkillRegistry()
         if path:
             registry.load_from_paths([path])
         else:
-            registry.load_from_paths(["./.openmercury/skills", "~/.config/openmercury/skills"])
+            registry.load_from_paths(["./.merco/skills", "~/.config/merco/skills"])
 
         skills = registry.list_skills()
         if skills:

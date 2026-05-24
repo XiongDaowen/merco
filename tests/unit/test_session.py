@@ -1,7 +1,7 @@
 """会话管理测试"""
 
 import pytest
-from openmercury.core.session import Session, SessionStore
+from merco.core.session import Session, SessionStore
 
 
 class TestSession:

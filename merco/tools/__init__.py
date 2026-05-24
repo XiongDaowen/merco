@@ -8,16 +8,16 @@ from pathlib import Path
 from .registry import ToolRegistry, tool_registry
 from .base import BaseTool
 
-logger = logging.getLogger("openmercury.tools")
+logger = logging.getLogger("merco.tools")
 
 # 内置工具模块列表
 _BUILTIN_MODULES = [
-    "openmercury.tools.file_tools",
-    "openmercury.tools.bash_tools",
-    "openmercury.tools.web_tools",
-    "openmercury.tools.task_tools",
-    "openmercury.tools.mcp_tools",
-    "openmercury.tools.skill_tools",
+    "merco.tools.file_tools",
+    "merco.tools.bash_tools",
+    "merco.tools.web_tools",
+    "merco.tools.task_tools",
+    "merco.tools.mcp_tools",
+    "merco.tools.skill_tools",
 ]
 
 

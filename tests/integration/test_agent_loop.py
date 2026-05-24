@@ -1,9 +1,9 @@
 """Agent 核心循环集成测试"""
 
 import pytest
-from openmercury.core.config import OpenMercuryConfig, ModelConfig
-from openmercury.tools.registry import ToolRegistry
-from openmercury.tools.base import BaseTool
+from merco.core.config import MercoConfig, ModelConfig
+from merco.tools.registry import ToolRegistry
+from merco.tools.base import BaseTool
 
 
 class MockTool(BaseTool):
@@ -24,12 +24,12 @@ class MockTool(BaseTool):
 
 class TestAgentConfig:
     def test_default_config(self):
-        cfg = OpenMercuryConfig()
+        cfg = MercoConfig()
         assert cfg.model.provider == "openai"
         assert cfg.model.model == "gpt-4"
 
     def test_config_with_model(self):
-        cfg = OpenMercuryConfig()
+        cfg = MercoConfig()
         cfg.model.model = "claude-3"
         cfg.model.provider = "anthropic"
         assert cfg.model.model == "claude-3"

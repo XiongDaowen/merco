@@ -3,7 +3,7 @@
 ## 目录结构
 
 ```
-openmercury/
+merco/
 ├── core/           # 核心引擎
 ├── tools/          # 工具系统
 ├── skills/         # 技能系统
@@ -116,7 +116,7 @@ openmercury/
 
 ### 添加新技能
 
-1. 在 `skills/` 或 `~/.config/openmercury/skills/` 创建目录
+1. 在 `skills/` 或 `~/.config/merco/skills/` 创建目录
 2. 添加 `SKILL.md` 文件（含 frontmatter）
 3. Agent 启动时自动加载
 

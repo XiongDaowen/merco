@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
-logger = logging.getLogger("openmercury.pipeline")
+logger = logging.getLogger("merco.pipeline")
 
 # ── 上下文 ───────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ class TruncationProcessor(Processor):
     对标 OpenCode truncate.ts 的缓存策略：
 
     - **触发条件**：整个 result dict 序列化为 JSON，超过 max_bytes 则截断
-    - **缓存位置**：~/.openmercury/trunc/
+    - **缓存位置**：~/.merco/trunc/
     - **文件命名**：{timestamp_ms}_{safe_tool_name}.json（毫秒时间戳防冲突）
     - **缓存格式**：完整 JSON（保留所有字段结构）
     - **文件上限**：单文件最大 max_file_bytes（默认 50 MB），超限拒绝
@@ -161,7 +161,7 @@ class TruncationProcessor(Processor):
     @property
     def trunc_dir(self) -> str:
         if self._trunc_dir is None:
-            self._trunc_dir = os.path.expanduser("~/.openmercury/trunc")
+            self._trunc_dir = os.path.expanduser("~/.merco/trunc")
         return self._trunc_dir
 
     async def process(self, ctx: ProcessContext) -> bool:
@@ -506,7 +506,7 @@ class CallbackEmptyResponse(EmptyResponseStrategy):
     async def attempt(self, ctx: EmptyResponseContext) -> bool:
         if ctx.retry_count >= ctx.max_retries:
             return False
-        from openmercury.core.self_healing import empty_response
+        from merco.core.self_healing import empty_response
         err = empty_response()
         ctx.inject_error = err["error"]
         return True
@@ -516,7 +516,7 @@ class CallbackEmptyResponse(EmptyResponseStrategy):
 
 def _is_retryable(ctx: RecoveryContext) -> bool:
     """判断错误是否可重试"""
-    from openmercury.core.self_healing import _is_retryable_llm_error
+    from merco.core.self_healing import _is_retryable_llm_error
     return _is_retryable_llm_error(ctx.error)
 
 

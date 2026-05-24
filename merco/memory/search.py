@@ -8,7 +8,7 @@ class MemorySearch:
     """基于 SQLite FTS5 的记忆搜索"""
 
     def __init__(self, db_path: str = None):
-        self.db_path = Path(db_path or "~/.openmercury/memory.db").expanduser()
+        self.db_path = Path(db_path or "~/.merco/memory.db").expanduser()
         self._init_db()
 
     def _init_db(self):

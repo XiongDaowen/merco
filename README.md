@@ -1,4 +1,4 @@
-# OpenMercury
+# Mercury Code (merco)
 
 > 混合型 AI Agent 框架 — 轻量、高效、可落地的 Python 智能开发助手
 
@@ -18,7 +18,7 @@ cp -r docs/project-vision ~/.hermes/skills/project-vision/
 
 ## 当前可用
 
-- **CLI 交互模式**: `uv run openmercury run [--debug]`
+- **CLI 交互模式**: `uv run merco run [--debug]`
 - **Agent 循环**: 用户输入 → LLM → 工具调用 → 结果返回 → 循环
 - **工具**: `bash`（终端命令）、`read_file`、`write_file`
 - **LLM 客户端**: OpenAI 兼容接口，支持多 provider，内置 429/5xx 重试 + 请求冷却
@@ -30,7 +30,7 @@ cp -r docs/project-vision ~/.hermes/skills/project-vision/
 # 安装
 uv sync
 
-# 配置 API（编辑 openmercury.json）
+# 配置 API（编辑 merco.json）
 # 示例：SCNet 代理 + MiniMax-M2.5
 {
   "model": {
@@ -42,10 +42,10 @@ uv sync
 }
 
 # 启动
-uv run openmercury run
+uv run merco run
 
 # 调试模式（查看完整 API 调用链路）
-uv run openmercury run --debug
+uv run merco run --debug
 ```
 
 ## 架构

@@ -2,8 +2,8 @@
 
 import logging
 
-logger = logging.getLogger("openmercury.compressor")
-from openmercury.core.context import msg_tokens, estimate_tokens
+logger = logging.getLogger("merco.compressor")
+from merco.core.context import msg_tokens, estimate_tokens
 
 
 class ContextCompressor:
