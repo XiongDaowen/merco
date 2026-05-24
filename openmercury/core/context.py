@@ -19,11 +19,8 @@ class ContextManager:
         self.max_tokens = max_tokens
         self.current_tokens = 0
         self.messages = []
-        self.max_tokens = max_tokens
-        self.current_tokens = 0
-        self.messages = []
         self._overhead_tokens = 0  # system prompt + tool defs 等固定开销
-        self.last_actual_tokens = 0  # API 返回的实测 prompt_tokens（流式时更新）
+        self.last_actual_tokens = 0  # API 返回的实测 prompt_tokens
 
     def add(self, message: dict):
         """添加消息到上下文"""
@@ -57,15 +54,3 @@ class ContextManager:
         if isinstance(content, str):
             return estimate_tokens(content)
         return 0
-
-
-class ContextCompressor:
-    """上下文压缩器"""
-
-    async def summarize(self, messages: list) -> str:
-        """将消息列表压缩为摘要"""
-        raise NotImplementedError
-
-    async def extract_key_points(self, messages: list) -> list:
-        """提取关键信息点"""
-        raise NotImplementedError
