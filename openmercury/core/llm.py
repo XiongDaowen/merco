@@ -26,6 +26,19 @@ def _clean_surrogates(obj):
     return obj
 
 
+def _extract_reasoning(message) -> str:
+    """从 API 响应的 model_extra 中提取 reasoning（CoT 推理）。"""
+    try:
+        extra = getattr(message, "model_extra", None)
+        if isinstance(extra, dict):
+            rc = extra.get("reasoning_content") or extra.get("reasoning") or ""
+            if rc:
+                return str(rc)
+    except Exception:
+        pass
+    return ""
+
+
 class LLMClient:
     """OpenAI 兼容的 LLM 客户端"""
 
@@ -175,6 +188,7 @@ class LLMClient:
         result = {
             "role": message.role,
             "content": message.content or "",
+            "reasoning": _extract_reasoning(message),
             "finish_reason": choice.finish_reason,
         }
 
@@ -199,10 +213,11 @@ class LLMClient:
 
         delta = choice.delta
         result = {}
-
         if delta.content:
             result["content"] = delta.content
-
+        reasoning = _extract_reasoning(delta)
+        if reasoning:
+            result["reasoning"] = reasoning
         if delta.tool_calls:
             result["tool_calls"] = [
                 {
@@ -216,5 +231,10 @@ class LLMClient:
 
         if choice.finish_reason:
             result["finish_reason"] = choice.finish_reason
-
+        if hasattr(chunk, "usage") and chunk.usage:
+            result["usage"] = {
+                "prompt_tokens": chunk.usage.prompt_tokens,
+                "completion_tokens": chunk.usage.completion_tokens,
+                "total_tokens": chunk.usage.total_tokens,
+            }
         return result if result else None

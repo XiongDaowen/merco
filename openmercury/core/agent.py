@@ -6,6 +6,7 @@ import asyncio
 import logging
 import shutil
 from typing import Optional
+from abc import ABC, abstractmethod
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -16,10 +17,103 @@ from .session import Session
 from .message import Message, MessageRole
 from .context import ContextManager
 
-
 console = Console()
 logger = logging.getLogger("openmercury.agent")
 
+class ResponseProvider(ABC):
+    """响应策略基类 — 工厂模式，Agent 不感知流/非流"""
+
+    @abstractmethod
+    async def get_response(self, agent: "Agent", messages: list,
+                           tools: list | None) -> dict:
+        ...
+
+class NonStreamingProvider(ResponseProvider):
+    """非流式：一次 chat 返回完整响应"""
+
+    async def get_response(self, agent: "Agent", messages: list,
+                           tools: list | None) -> dict:
+        response = await agent.llm.chat(
+            messages, tools=tools, tool_choice="auto")
+        reasoning = response.get("reasoning", "")
+        if reasoning and reasoning.strip():
+            agent._render_reasoning(reasoning)
+        return response
+
+class StreamingProvider(ResponseProvider):
+    """流式：thinking 用 Live Panel 逐 token 显示，content 不流"""
+
+    async def get_response(self, agent: "Agent", messages: list,
+                           tools: list | None) -> dict:
+        import itertools, sys, json as _json
+        from rich.live import Live
+
+        assembled: dict = {
+            "role": "assistant", "content": "", "reasoning": "",
+            "tool_calls": [], "finish_reason": None, "usage": None}
+        reasoning_buf = ""
+        content_buf = ""
+        tc_buf: dict[int, dict] = {}
+
+        spinner = itertools.cycle(
+            "\u280b\u2819\u2818\u281c\u2814\u2826\u2827\u2807\u280f")
+        stream_think = agent.config.stream_thinking
+
+        panel = Panel("", border_style="dim", title="🧠 Thinking",
+                      title_align="left", padding=(0, 1))
+        live = Live(panel, console=console, refresh_per_second=10,
+                    transient=False)
+        live.start()
+
+        try:
+            stream = agent.llm.chat_stream(messages, tools=tools)
+            async for chunk in stream:
+                r = chunk.get("reasoning", "")
+                if r:
+                    reasoning_buf += r
+                    if stream_think:
+                        panel = Panel(
+                            f"[dim]{reasoning_buf.rstrip()}[/dim]",
+                            border_style="dim", title="🧠 Thinking",
+                            title_align="left", padding=(0, 1))
+                        live.update(panel)
+                elif not reasoning_buf and stream_think:
+                    live.update(Panel(
+                        next(spinner), border_style="dim",
+                        title="🧠 Thinking", title_align="left",
+                        padding=(0, 1)))
+                content_buf += chunk.get("content", "")
+                for tc in chunk.get("tool_calls", []):
+                    idx = tc["index"]
+                    if idx not in tc_buf:
+                        tc_buf[idx] = {
+                            "id": tc.get("id", ""),
+                            "name": tc.get("name", ""),
+                            "arguments": ""}
+                    if tc.get("id"): tc_buf[idx]["id"] = tc["id"]
+                    if tc.get("name"): tc_buf[idx]["name"] = tc["name"]
+                    tc_buf[idx]["arguments"] += tc.get("arguments", "")
+                if chunk.get("finish_reason"):
+                    assembled["finish_reason"] = chunk["finish_reason"]
+                if chunk.get("usage"):
+                    assembled["usage"] = chunk["usage"]
+        finally:
+            live.stop()
+
+        assembled["reasoning"] = reasoning_buf
+        assembled["content"] = content_buf
+        if tc_buf:
+            assembled["tool_calls"] = [
+                {"id": v["id"], "name": v["name"],
+                 "arguments": _json.loads(v["arguments"])
+                 if v["arguments"] else {}}
+                for v in (tc_buf[i] for i in sorted(tc_buf))
+            ]
+        logger.debug(
+            "stream done: finish=%s content=%d reasoning=%d tool_calls=%d",
+            assembled.get("finish_reason"), len(assembled["content"]),
+            len(assembled["reasoning"]), len(assembled["tool_calls"]))
+        return assembled
 
 class Agent:
     """AI Agent 核心类，负责对话循环与工具调度"""
@@ -55,6 +149,12 @@ Always be concise and helpful."""
         self._tool_calls_count = 0
         self._max_tool_calls = self.config.max_tool_calls
 
+        # 工厂：根据 config 选响应策略
+        if self.config.streaming:
+            self._provider: ResponseProvider = StreamingProvider()
+        else:
+            self._provider: ResponseProvider = NonStreamingProvider()
+
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
         # 添加用户消息
@@ -86,6 +186,7 @@ Always be concise and helpful."""
         self.context.add({"role": "assistant", "content": content})
         return content
 
+
     async def _agent_loop(self) -> str:
         """Agent 主循环。工具预算耗尽时直接收尾。"""
         self._tool_calls_count = 0
@@ -102,7 +203,8 @@ Always be concise and helpful."""
             logger.debug("→ Agent 循环 #%d: 发送 %d 条消息",
                         self._tool_calls_count, len(messages))
             try:
-                response = await self.llm.chat(messages, tools=tools or None, tool_choice="auto")
+                response = await self._provider.get_response(
+                    self, messages, tools or None)
             except Exception as e:
                 logger.error("✗ Agent 循环 #%d 失败: %s",
                             self._tool_calls_count, str(e))
@@ -111,7 +213,6 @@ Always be concise and helpful."""
             tool_calls = response.get("tool_calls")
             if not tool_calls:
                 content = response.get("content", "") or ""
-                # 清理 LLM 幻觉的工具调用语法（通用匹配）
                 content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL)
                 content = content.strip()
                 self.session.add_message("assistant", content)
@@ -144,7 +245,7 @@ Always be concise and helpful."""
                 return await self._wrap_up_call(self._wrap_up_messages(self._build_messages()))
 
             # 执行工具调用
-            assistant_content = response.get("content", "")
+            assistant_content = (response.get("content", "") or "").strip()
             if assistant_content:
                 console.print(Panel(Markdown(assistant_content), border_style="dim"))
 
@@ -305,6 +406,15 @@ Always be concise and helpful."""
         )
         console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
 
+    @staticmethod
+    def _render_reasoning(reasoning: str) -> None:
+        """非流式：渲染 thinking 面板"""
+        text = reasoning.strip()
+        if not text:
+            return
+        console.print(Panel(f"[dim]{text}[/dim]", border_style="dim",
+                      title="🧠 Thinking", title_align="left", padding=(0, 1)))
+
     def reset(self):
         """重置会话"""
         self.session = Session()
@@ -319,7 +429,6 @@ Always be concise and helpful."""
         entry = PROVIDER_REGISTRY.get(provider, {})
         key_env = entry.get("key_env", "")
         return os.environ.get(key_env, "") if key_env else ""
-
 
 class AgentLoop:
     """Agent 循环控制器 - 管理多轮对话"""

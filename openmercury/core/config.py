@@ -59,6 +59,9 @@ class OpenMercuryConfig:
     memory_path: str = "~/.openmercury/memory"
     log_level: str = "INFO"
     sandbox_mode: str = "ask"
+    streaming: bool = False
+    stream_thinking: bool = True
+    stream_content: bool = False
 
     @classmethod
     def load(cls, config_path: str | None = None) -> "OpenMercuryConfig":
@@ -104,6 +107,9 @@ class OpenMercuryConfig:
             "memory_path": self.memory_path,
             "log_level": self.log_level,
             "sandbox_mode": self.sandbox_mode,
+            "streaming": self.streaming,
+            "stream_thinking": self.stream_thinking,
+            "stream_content": self.stream_content,
         }
 
     @classmethod
@@ -128,6 +134,9 @@ class OpenMercuryConfig:
             memory_path=data.get("memory_path", "~/.openmercury/memory"),
             log_level=data.get("log_level", "INFO"),
             sandbox_mode=data.get("sandbox_mode", "ask"),
+            streaming=data.get("streaming", False),
+            stream_thinking=data.get("stream_thinking", True),
+            stream_content=data.get("stream_content", False),
         )
 
     @staticmethod
