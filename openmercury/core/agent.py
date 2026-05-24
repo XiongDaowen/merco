@@ -204,7 +204,7 @@ class Agent:
                                WaitRecovery, ContextCompressRecovery,
                                EmptyResponsePipeline, CallbackEmptyResponse)
         self.result_pipeline = ResultPipeline()
-        self.result_pipeline.use(TruncationProcessor(max_bytes=4000))
+        self.result_pipeline.use(TruncationProcessor(max_bytes=8000))
         self.result_pipeline.use(SkillViewProcessor())
         self.recovery_pipeline = RecoveryPipeline()
         self.recovery_pipeline.use(WaitRecovery(delay=3.0))
