@@ -1,3 +1,8 @@
+---
+name: project-vision
+description: "Mercury Code (merco) project vision, architecture, design decisions, development guidelines, coding standards, milestones, tech stack, and project conventions. Use when working on merco: planning features, making architecture decisions, understanding project direction, or implementing code."
+---
+
 # Mercury Code (merco) 项目愿景
 
 混合型 AI Agent 框架，融合两家主流 Agent 框架的核心优势，构建一个**轻量、高效、可落地**的 Python 智能开发助手。
