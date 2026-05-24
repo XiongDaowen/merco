@@ -15,7 +15,7 @@ from .config import OpenMercuryConfig
 from .llm import LLMClient
 from .session import Session
 from .message import Message, MessageRole
-from .context import ContextManager
+from .context import ContextManager, msg_tokens
 from .pipeline import ProcessContext
 
 console = Console()
@@ -474,7 +474,7 @@ class Agent:
         )
         self.context.messages = compressed
         self.context.current_tokens = sum(
-            self.context._msg_tokens(m) for m in compressed
+            msg_tokens(m) for m in compressed
         )
         console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
 

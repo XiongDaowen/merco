@@ -25,7 +25,7 @@ class ContextManager:
     def add(self, message: dict):
         """添加消息到上下文"""
         self.messages.append(message)
-        self.current_tokens += self._msg_tokens(message)
+        self.current_tokens += msg_tokens(message)
 
     def set_overhead(self, system_prompt: str, tool_count: int):
         """设置固定开销（system prompt + tool definitions）"""
@@ -47,10 +47,11 @@ class ContextManager:
             return self.messages
         return self.messages[-n:]
 
-    @staticmethod
-    def _msg_tokens(message: dict) -> int:
-        """单条消息 token 估算"""
-        content = message.get("content", "")
-        if isinstance(content, str):
-            return estimate_tokens(content)
-        return 0
+
+
+def msg_tokens(message: dict) -> int:
+    """单条消息 token 估算"""
+    content = message.get("content", "")
+    if isinstance(content, str):
+        return estimate_tokens(content)
+    return 0
