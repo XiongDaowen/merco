@@ -25,11 +25,8 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
     from openmercury.core.config import OpenMercuryConfig
     from openmercury.core.agent import Agent
     import openmercury
-    from openmercury.tools.registry import ToolRegistry
-    from openmercury.tools.file_tools import ReadFile, WriteFile
-    from openmercury.tools.bash_tools import BashTool
-    from openmercury.tools.mcp_tools import MCPTool as _MCPTool
-    from openmercury.tools.web_tools import WebSearch as WebSearchTool, WebFetch as WebFetchTool
+    from openmercury.tools import discover_tools, tool_registry
+    discover_tools()
 
     if debug:
         logging.basicConfig(
@@ -62,19 +59,18 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
             ))
             raise typer.Exit(1)
 
-    tool_registry = ToolRegistry()
-    tool_registry.register(ReadFile())
-    tool_registry.register(WriteFile())
-    tool_registry.register(BashTool())
-    tool_registry.register(_MCPTool())
-    tool_registry.register(WebSearchTool())
-    tool_registry.register(WebFetchTool())
+    # tools auto-registered via discover_tools()
 
     # ── 技能注册 ──
     from openmercury.skills.registry import SkillRegistry
     skill_registry = SkillRegistry()
     if cfg.skills_paths:
         skill_registry.load_from_paths(cfg.skills_paths)
+
+    # 注入 skill_registry 给 SkillViewTool（动态描述 + 可用性检查）
+    sv = tool_registry.get("skill_view")
+    if sv and hasattr(sv, "set_skill_registry"):
+        sv.set_skill_registry(skill_registry)
 
     agent = Agent(config=cfg, tool_registry=tool_registry,
                   skill_registry=skill_registry)
