@@ -282,6 +282,11 @@ class Agent:
                 from .self_healing import llm_error
                 return llm_error(e)
 
+            # 记录 API 返回的实测 token
+            usage = response.get("usage")
+            if usage and usage.get("prompt_tokens"):
+                self.context.last_actual_tokens = usage["prompt_tokens"]
+
             tool_calls = response.get("tool_calls")
             if not tool_calls:
                 content = response.get("content", "") or ""
@@ -398,23 +403,26 @@ class Agent:
             logger.debug("  ◀ 工具 %s 返回: %s", tool_name, 
                         str(result)[:500])
 
+            # ── Pipeline 处理 ──
+            tool = self.tool_registry.get(tool_name) if self.tool_registry else None
+            pctx = ProcessContext(
+                tool_name=tool_name, arguments=arguments, result=result,
+                tool_schema=getattr(tool, 'parameters', None),
+                tool_call_id=tool_call_id)
+            await self.result_pipeline.process(pctx)
             tool_results.append({
                 "role": "tool",
                 "tool_call_id": tool_call_id,
-                "content": json.dumps(result, ensure_ascii=True) if not isinstance(result, str) else result,
-            })
-
+                "content": json.dumps(pctx.result, ensure_ascii=False)
+                if not isinstance(pctx.result, str) else pctx.result})
+            exec_contexts.append(pctx)
             self._tool_calls_count += 1
 
-        # 将工具结果添加到上下文
         for tr in tool_results:
-            # 截断过长结果，防止上下文爆炸触发 API 拒绝
-            content = tr["content"]
-            max_len = 4000
-            if isinstance(content, str) and len(content) > max_len:
-                # 保留前 3500 字 + 截断提示（500 字） = 4000 上限
-                tr["content"] = content[:3500] + f"\n... (结果过长，已截断 {len(content) - 3500} 字符)"
             self.context.add(tr)
+        for pctx in exec_contexts:
+            for msg in pctx.extra_messages:
+                self.context.add(msg)
 
     def _build_messages(self) -> list[dict]:
         """构建发送给 LLM 的消息列表"""
@@ -487,6 +495,20 @@ class Agent:
             return
         console.print(Panel(f"[dim]{text}[/dim]", border_style="dim",
                       title="🧠 Thinking", title_align="left", padding=(0, 1)))
+
+    def get_context_stats(self) -> dict:
+        """上下文窗口使用统计，供 REPL 进度条渲染"""
+        max_tokens = self.config.max_input_tokens
+        actual = getattr(self.context, "last_actual_tokens", 0)
+        current = actual if actual > 0 else self.context.total_tokens
+        ratio = min(current / max_tokens, 1.0) if max_tokens > 0 else 0
+        return {
+            "current": current, "max": max_tokens, "ratio": ratio,
+            "threshold": self.config.compression_threshold,
+            "is_estimate": actual == 0,
+            "tool_count": self._tool_calls_count,
+            "max_tool_calls": self._max_tool_calls,
+        }
 
     def reset(self):
         """重置会话"""

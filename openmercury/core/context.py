@@ -19,7 +19,11 @@ class ContextManager:
         self.max_tokens = max_tokens
         self.current_tokens = 0
         self.messages = []
+        self.max_tokens = max_tokens
+        self.current_tokens = 0
+        self.messages = []
         self._overhead_tokens = 0  # system prompt + tool defs 等固定开销
+        self.last_actual_tokens = 0  # API 返回的实测 prompt_tokens（流式时更新）
 
     def add(self, message: dict):
         """添加消息到上下文"""

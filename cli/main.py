@@ -103,6 +103,27 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
     return agent
 
 
+# ── 上下文进度条 ──────────────────────────────────────────────────────
+
+def _render_context_bar(stats: dict) -> str:
+    """渲染 token 用量进度条"""
+    max_w = 20
+    filled = int(stats["ratio"] * max_w)
+    if filled >= max_w:
+        filled = max_w - 1
+    bar = "░" * max_w
+    bar = bar[:filled] + "│" + bar[filled + 1:]
+    est = "~" if stats["is_estimate"] else ""
+    threshold_pct = int(stats["threshold"] * 100)
+    color = "dim"
+    if stats["ratio"] > stats["threshold"]:
+        color = "yellow"
+    if stats["ratio"] > 0.95:
+        color = "red"
+    tool_info = f"🔧 {stats['tool_count']}/{stats['max_tool_calls']}"
+    return f"  [{color}]{bar}[/{color}]  {est}{stats['current']//1024}K/{stats['max']//1024}K  {tool_info}"
+
+
 # ── REPL 交互循环 ────────────────────────────────────────────────────────
 
 def run_repl(agent):
@@ -164,7 +185,9 @@ def run_repl(agent):
         try:
             while True:
                 try:
-                    user_input = await asyncio.to_thread(input, "\n> ")
+                    stats = agent.get_context_stats()
+                    bar = _render_context_bar(stats)
+                    user_input = await asyncio.to_thread(input, f"\n{bar}\n> ")
                     user_input = user_input.strip()
                     exit_count = 0  # 正常输入，重置计数
 
@@ -310,6 +333,12 @@ async def handle_command(cmd: str, agent) -> bool:
 
     elif command == "/model":
         console.print(f"当前模型: {agent.config.model.provider}/{agent.config.model.model}")
+        return True
+
+    elif command == "/context":
+        stats = agent.get_context_stats()
+        console.print(_render_context_bar(stats))
+        console.print(f"  阈值: {int(stats['threshold']*100)}%  |  模型推算: {'是' if stats['is_estimate'] else '否（API 实测）'}")
         return True
 
     elif command == "/tools":
