@@ -1,5 +1,6 @@
 """上下文管理与压缩"""
 
+import json
 import re
 
 
@@ -34,7 +35,9 @@ class ContextManager:
 
     @property
     def total_tokens(self) -> int:
-        """实际发送给 LLM 的 token 估算（消息 + 固定开销）"""
+        """发送给 LLM 的 token 数（优先 API 实测值，回退估算）"""
+        if self.last_actual_tokens > 0:
+            return self.last_actual_tokens
         return self.current_tokens + self._overhead_tokens
 
     def needs_compression(self) -> bool:
@@ -50,8 +53,11 @@ class ContextManager:
 
 
 def msg_tokens(message: dict) -> int:
-    """单条消息 token 估算"""
+    """单条消息 token 估算（content + tool_calls JSON）"""
+    total = 0
     content = message.get("content", "")
     if isinstance(content, str):
-        return estimate_tokens(content)
-    return 0
+        total += estimate_tokens(content)
+    for tc in message.get("tool_calls", []) or []:
+        total += estimate_tokens(json.dumps(tc, ensure_ascii=False))
+    return total
