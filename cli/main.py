@@ -102,20 +102,26 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
 # ── 上下文进度条 ──────────────────────────────────────────────────────
 
 def _render_context_bar(stats: dict) -> str:
-    """渲染 token 用量进度条"""
-    max_w = 20
-    filled = int(stats["ratio"] * max_w)
-    if filled >= max_w:
-        filled = max_w - 1
-    bar = "░" * max_w
-    bar = bar[:filled] + "│" + bar[filled + 1:]
-    est = "~" if stats["is_estimate"] else ""
-    threshold_pct = int(stats["threshold"] * 100)
+    """渲染 token 用量进度条 — 阈值标记在中间"""
+    w = 10
+    thresh_p = int(stats["threshold"] * w)
+    filled_n = int(stats["ratio"] * w)
+    bar = "▕"
+    for i in range(w):
+        if i == thresh_p:
+            bar += "│"
+        elif i < filled_n:
+            bar += "█"
+        else:
+            bar += "░"
+    bar += "▏"
+
     color = "dim"
     if stats["ratio"] > stats["threshold"]:
         color = "yellow"
     if stats["ratio"] > 0.95:
         color = "red"
+    est = "~" if stats["is_estimate"] else ""
     tool_info = f"🔧 {stats['tool_count']}/{stats['max_tool_calls']}"
     return f"  [{color}]{bar}[/{color}]  {est}{stats['current']//1024}K/{stats['max']//1024}K  {tool_info}"
 
@@ -183,7 +189,8 @@ def run_repl(agent):
                 try:
                     stats = agent.get_context_stats()
                     bar = _render_context_bar(stats)
-                    user_input = await asyncio.to_thread(input, f"\n{bar}\n> ")
+                    console.print(f"\n{bar}")
+                    user_input = await asyncio.to_thread(input, "> ")
                     user_input = user_input.strip()
                     exit_count = 0  # 正常输入，重置计数
 
@@ -317,7 +324,9 @@ async def handle_command(cmd: str, agent) -> bool:
             "/exit     - 退出\n"
             "/new      - 新会话\n"
             "/model    - 显示当前模型\n"
-            "/tools    - 列出可用工具",
+            "/tools    - 列出可用工具\n"
+            "/context  - 上下文用量\n"
+            "/skills   - 列出已加载技能",
             title="帮助",
         ))
         return True

@@ -475,7 +475,7 @@ class Agent:
         )
         self.context.messages = compressed
         self.context.current_tokens = sum(
-            self.context._estimate_tokens(m) for m in compressed
+            self.context._msg_tokens(m) for m in compressed
         )
         console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
 
