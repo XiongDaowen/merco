@@ -124,3 +124,28 @@ Exception → {error: "TypeName: message"}                 # 通用兜底
 - LLM 是决策者而非执行机器
 - 预算扩展后 context 不残留决策对话（CONTINUE 回复仅用于控制流）
 - 可复用至任何资源限制场景
+
+### Wrap-Up Pattern (_wrap_up_messages + _wrap_up_call)
+
+工具预算耗尽收尾机制——历经 15+ 次迭代后的最终简洁方案。
+
+```
+循环顶部: if count >= max → _wrap_up_call(_wrap_up_messages(messages))
+批量截停: if count + batch > max → _wrap_up_call(_wrap_up_messages(build()))
+```
+
+**核心方法：**
+- `_wrap_up_messages(messages)` — 向消息列表末尾追加一条简短的 user 消息："已达到最大工具调用次数。请基于已有信息给出最终回复，不要再调用工具。"
+- `_wrap_up_call(messages)` — 收尾调用：`tools=[]`, `tool_choice="none"`，LLM 纯文字回答
+
+**提示词设计原则：** 放在最后（LLM 注意力最高）、简短（一条信息）、禁令优先（"不要再调用工具"放最后）、不解释（不列举选项）。
+
+**四层幻觉防线：**
+1. `tool_choice="none"` — API 层禁止
+2. `tools=[]` — 无工具可选
+3. `valid_names=set()` — 始终校验，不依赖 `if tools:`
+4. regex `<\w+:tool_call[^>]*>...</\w+:tool_call>` — 清文本残留
+
+**设计依据：** Hermes/Claude Code/Codex 都用大预算 + 简单收尾，不依赖 provider 特有能力。架构是通解，提示词是通解，但 provider 的 API 配合度是天花板——不要无限迭代 prompt，做好兜底。
+
+**废弃的方案：** Hermes grace call（MiniMax 不配合）、system prompt 注入（被历史消息淹没）、多段式结构提示（越长越容易被复述）、精简消息（丢失上下文）。

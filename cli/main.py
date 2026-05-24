@@ -28,6 +28,8 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
     from openmercury.tools.registry import ToolRegistry
     from openmercury.tools.file_tools import ReadFile, WriteFile
     from openmercury.tools.bash_tools import BashTool
+    from openmercury.tools.mcp_tools import MCPTool as _MCPTool
+    from openmercury.tools.web_tools import WebSearch as WebSearchTool, WebFetch as WebFetchTool
 
     if debug:
         logging.basicConfig(
@@ -64,8 +66,18 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
     tool_registry.register(ReadFile())
     tool_registry.register(WriteFile())
     tool_registry.register(BashTool())
+    tool_registry.register(_MCPTool())
+    tool_registry.register(WebSearchTool())
+    tool_registry.register(WebFetchTool())
 
-    agent = Agent(config=cfg, tool_registry=tool_registry)
+    # ── 技能注册 ──
+    from openmercury.skills.registry import SkillRegistry
+    skill_registry = SkillRegistry()
+    if cfg.skills_paths:
+        skill_registry.load_from_paths(cfg.skills_paths)
+
+    agent = Agent(config=cfg, tool_registry=tool_registry,
+                  skill_registry=skill_registry)
 
     # 显示加载的配置来源
     import os
@@ -76,10 +88,13 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
             config_source = candidate
             break
 
+    skills = skill_registry.list_skills() if skill_registry else []
+    skill_line = f"技能: {len(skills)} 个已加载" if skills else "技能: 无"
     console.print(Panel(
         f"[bold green]OpenMercury v{openmercury.__version__}[/bold green]\n"
         f"模型: {cfg.model.provider}/{cfg.model.model}\n"
-        f"工具: {', '.join(t.name for t in tool_registry.list_tools())}\n"
+        f"工具: {len(tool_registry.list_tools())} 个已注册\n"
+        f"{skill_line}\n"
         f"配置: [dim]{config_source}[/dim]\n\n"
         "[dim]输入消息开始对话，/help 查看命令，/exit 退出[/dim]",
         title="🚀 OpenMercury",

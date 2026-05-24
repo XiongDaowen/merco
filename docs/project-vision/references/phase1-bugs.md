@@ -86,3 +86,51 @@ for attempt in range(max_retries):
 
 - **Qwen3 (via SCNet)** enforces strict message ordering — `tool` messages MUST follow `assistant(tool_calls)`. Not all providers are this strict, but the OpenAI spec requires it.
 - **OpenAI Python SDK** doesn't filter surrogate characters from message content. Any provider using the OpenAI-compatible endpoint may reject messages with `\ud800-\udfff`.
+
+---
+
+## 附录: 2026-05-20 CLI 首次调试记录
+
+首次 CLI 实测记录，与上述 Bug 1-4 重叠，保留作为调试上下文参考。
+
+### Bug 清单
+
+**Bug 1: 工具调用 400 — tool 消息前无 tool_calls**
+
+*同 phase1 Bug 1。*
+
+**Bug 2: 终端输出 surrogates 导致 400**
+
+*同 phase1 Bug 2/3。*
+
+**Bug 3: 429 限流 + 请求放大 6 倍**
+
+根因: `AsyncOpenAI` 默认自带 2 次重试，Agent 层又加了 3 次。1 次原始请求 + SDK 重试 2 次 + Agent 重试 3 次 = 最多 6 次。scnet 免费额度迅速打满。
+
+*同 phase1 Bug 4，补充根因细节。*
+
+**Bug 4: Ctrl+C 退出卡顿**
+
+根因: `run_in_executor` 阻塞 `input()` 线程，Ctrl+C 信号先到主线程但 executor 线程仍在等输入。`agent.run()` 执行中无法中断。
+
+修复:
+- `cli/main.py` — 注册 `SIGINT`/`SIGTERM` 信号处理器，取消正在运行的 `asyncio.Task`
+- `cli/main.py` — `asyncio.to_thread` 替代 `run_in_executor`，Ctrl+C 响应更快
+- 两级退出：第一次取消当前操作，第二次直接退出
+
+### 技术模式
+
+**重试协调原则**: SDK 自带重试 + Agent 层重试 = 请求放大。关闭 SDK 重试 (`max_retries=0`)，由 Agent 层统一控制，且仅重试 429/5xx，不重试 4xx。
+
+**Surrogates 防御三层**:
+```
+源头: decode("utf-8", errors="replace")  ← bash_tools.py
+序列化: ensure_ascii=True               ← agent.py
+发送前: _clean_surrogates(messages)      ← llm.py
+```
+
+**Asyncio REPL 信号处理**:
+```python
+loop.add_signal_handler(signal.SIGINT, handle_interrupt)
+# handle_interrupt: task.cancel() + loop.stop()
+```

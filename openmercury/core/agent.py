@@ -16,9 +16,49 @@ from .llm import LLMClient
 from .session import Session
 from .message import Message, MessageRole
 from .context import ContextManager
+from .pipeline import ProcessContext
 
 console = Console()
 logger = logging.getLogger("openmercury.agent")
+
+# ── System Prompt 构建器 ─────────────────────────────
+
+class PromptChunk:
+    name: str = ""
+    def enabled(self, agent) -> bool: return True
+    def build(self, agent) -> str: raise NotImplementedError
+
+class PromptBuilder:
+    def __init__(self):
+        self._chunks: list[PromptChunk] = []
+        self._disabled: set[str] = set()
+    def use(self, chunk: PromptChunk) -> "PromptBuilder":
+        self._chunks.append(chunk); return self
+    def disable(self, name: str) -> None: self._disabled.add(name)
+    def enable(self, name: str) -> None: self._disabled.discard(name)
+    def build(self, agent) -> str:
+        return "\n\n".join(c.build(agent) for c in self._chunks
+                          if c.name not in self._disabled and c.enabled(agent))
+
+class BasePromptChunk(PromptChunk):
+    name = "base"
+    PROMPT = """You are OpenMercury, an AI coding assistant. You can help with:
+- Writing and editing code
+- Answering questions about the codebase
+- Executing shell commands
+- Searching and managing files
+
+When you need to perform actions, use the available tools.
+Always be concise and helpful."""
+    def build(self, agent) -> str: return self.PROMPT
+
+class SkillsHintChunk(PromptChunk):
+    name = "skills_hint"
+    def enabled(self, agent) -> bool:
+        return bool(agent.skill_registry and agent.skill_registry.list_skills())
+    def build(self, agent) -> str:
+        return "使用 skill_view 工具可以加载项目相关的技能说明文档。"
+
 
 class ResponseProvider(ABC):
     """响应策略基类 — 工厂模式，Agent 不感知流/非流"""
@@ -118,14 +158,6 @@ class StreamingProvider(ResponseProvider):
 class Agent:
     """AI Agent 核心类，负责对话循环与工具调度"""
 
-    SYSTEM_PROMPT = """You are OpenMercury, an AI coding assistant. You can help with:
-- Writing and editing code
-- Answering questions about the codebase
-- Executing shell commands
-- Searching and managing files
-
-When you need to perform actions, use the available tools.
-Always be concise and helpful."""
 
     def __init__(self, config: OpenMercuryConfig, tool_registry=None, skill_registry=None):
         self.config = config
@@ -149,11 +181,30 @@ Always be concise and helpful."""
         self._tool_calls_count = 0
         self._max_tool_calls = self.config.max_tool_calls
 
-        # 工厂：根据 config 选响应策略
+        # ── 工厂：根据 config 选响应策略 ──
         if self.config.streaming:
             self._provider: ResponseProvider = StreamingProvider()
         else:
             self._provider: ResponseProvider = NonStreamingProvider()
+
+        # ── Pipeline 初始化 ──
+        from .pipeline import (ResultPipeline, TruncationProcessor,
+                               SkillViewProcessor, RecoveryPipeline,
+                               WaitRecovery, ContextCompressRecovery,
+                               EmptyResponsePipeline, CallbackEmptyResponse)
+        self.result_pipeline = ResultPipeline()
+        self.result_pipeline.use(TruncationProcessor(max_bytes=4000))
+        self.result_pipeline.use(SkillViewProcessor())
+        self.recovery_pipeline = RecoveryPipeline()
+        self.recovery_pipeline.use(WaitRecovery(delay=3.0))
+        self.recovery_pipeline.use(ContextCompressRecovery())
+        self.empty_response_pipeline = EmptyResponsePipeline()
+        self.empty_response_pipeline.use(CallbackEmptyResponse())
+
+        # ── Prompt 构建器 ──
+        self.prompt_builder = PromptBuilder()
+        self.prompt_builder.use(BasePromptChunk())
+        self.prompt_builder.use(SkillsHintChunk())
 
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
@@ -161,7 +212,8 @@ Always be concise and helpful."""
         self.session.add_message("user", prompt)
         self.context.add({"role": "user", "content": prompt})
 
-        # 检查是否需要压缩上下文
+        tools = self.tool_registry.get_definitions() if self.tool_registry else []
+        self.context.set_overhead(self._build_system_prompt(), len(tools))
         if self.context.needs_compression():
             await self._compress_context()
 
@@ -191,30 +243,62 @@ Always be concise and helpful."""
         """Agent 主循环。工具预算耗尽时直接收尾。"""
         self._tool_calls_count = 0
         self._max_tool_calls = self.config.max_tool_calls
+        _empty_retries = 0
+        _recovery_attempts = 0
+        tools = []
 
         while True:
             messages = self._build_messages()
-            tools = self.tool_registry.get_definitions() if self.tool_registry else []
-            tools = list(tools)
+            tools = list(self.tool_registry.get_definitions() if self.tool_registry else [])
 
             if self._tool_calls_count >= self._max_tool_calls:
                 return await self._wrap_up_call(self._wrap_up_messages(messages))
 
-            logger.debug("→ Agent 循环 #%d: 发送 %d 条消息",
-                        self._tool_calls_count, len(messages))
+            logger.debug("→ Agent 循环 #%d: %d 条消息", self._tool_calls_count, len(messages))
             try:
                 response = await self._provider.get_response(
                     self, messages, tools or None)
             except Exception as e:
-                logger.error("✗ Agent 循环 #%d 失败: %s",
-                            self._tool_calls_count, str(e))
-                return f"模型调用失败：{e}"
+                _recovery_attempts += 1
+                if _recovery_attempts > 3:
+                    from .self_healing import llm_error
+                    return llm_error(e)
+                from openai import APIStatusError
+                from .pipeline import RecoveryContext
+                ctx = RecoveryContext(
+                    error=e,
+                    status_code=e.status_code if isinstance(e, APIStatusError) else 0,
+                    context_tokens=self.context.current_tokens,
+                    tool_count=len(tools), model=self.config.model.model)
+                if await self.recovery_pipeline.attempt(ctx):
+                    if ctx.extra_wait > 0:
+                        await asyncio.sleep(ctx.extra_wait)
+                    if ctx.compress:
+                        await self._compress_context()
+                    if ctx.switch_model:
+                        logger.info("→ 切换模型: %s", ctx.switch_model)
+                        self.llm.model = ctx.switch_model
+                    continue
+                from .self_healing import llm_error
+                return llm_error(e)
 
             tool_calls = response.get("tool_calls")
             if not tool_calls:
                 content = response.get("content", "") or ""
-                content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL)
-                content = content.strip()
+                content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL).strip()
+                reasoning = response.get("reasoning", "")
+                if not content:
+                    _empty_retries += 1
+                    if _empty_retries == 1 and reasoning:
+                        from .pipeline import EmptyResponseContext
+                        ectx = EmptyResponseContext(
+                            reasoning=reasoning, retry_count=_empty_retries)
+                        if await self.empty_response_pipeline.attempt(ectx):
+                            if ectx.inject_error:
+                                self.context.add({"role": "user", "content": ectx.inject_error})
+                            console.print("[dim]  \u21bb 空回复 \u2192 回调 LLM…[/dim]")
+                            continue
+                    content = reasoning or "\uff08\u65e0\u56de\u590d\uff09"
                 self.session.add_message("assistant", content)
                 self.context.add({"role": "assistant", "content": content})
                 return content
@@ -273,6 +357,7 @@ Always be concise and helpful."""
     async def _execute_tool_calls(self, tool_calls: list[dict]):
         """执行一组工具调用"""
         tool_results = []
+        exec_contexts = []
 
         for tc in tool_calls:
             tool_name = tc["name"]
@@ -343,19 +428,7 @@ Always be concise and helpful."""
         return messages
 
     def _build_system_prompt(self) -> str:
-        """构建系统提示"""
-        prompt = self.SYSTEM_PROMPT
-
-        # 注入技能（如果有）
-        if self.skill_registry:
-            skills = self.skill_registry.list_skills()
-            if skills:
-                prompt += "\n\n## Available Skills\n\n"
-                for skill in skills:
-                    prompt += f"### {skill['name']}\n{skill.get('description', '')}\n\n"
-                    prompt += f"{skill['content'][:500]}...\n\n"
-
-        return prompt
+        return self.prompt_builder.build(self)
 
     async def _compress_context(self):
         """压缩上下文"""

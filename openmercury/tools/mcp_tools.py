@@ -8,6 +8,7 @@ class MCPTool(BaseTool):
 
     name = "mcp_call"
     description = "调用已连接的 MCP 服务器工具"
+    toolset = "mcp"
     parameters = {
         "type": "object",
         "properties": {
@@ -18,6 +19,10 @@ class MCPTool(BaseTool):
         "required": ["server", "tool"],
     }
 
+    def check(self) -> bool:
+        """MCP 客户端未实现时隐藏此工具"""
+        return False  # TODO: 实现后改为 True
+
     async def execute(self, server: str, tool: str, arguments: dict = None) -> dict:
         # TODO: 实现 MCP 客户端
         return {
@@ -25,6 +30,10 @@ class MCPTool(BaseTool):
             "server": server,
             "tool": tool,
         }
+
+
+from .registry import tool_registry  # noqa: E402 — 模块末尾自注册
+tool_registry.register(MCPTool())
 
 
 class MCPManager:

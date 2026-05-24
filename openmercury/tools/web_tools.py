@@ -9,6 +9,7 @@ class WebFetch(BaseTool):
 
     name = "web_fetch"
     description = "获取指定 URL 的内容"
+    toolset = "web"
     parameters = {
         "type": "object",
         "properties": {
@@ -42,6 +43,7 @@ class WebSearch(BaseTool):
 
     name = "web_search"
     description = "搜索网络获取信息"
+    toolset = "web"
     parameters = {
         "type": "object",
         "properties": {
@@ -51,6 +53,15 @@ class WebSearch(BaseTool):
         "required": ["query"],
     }
 
+    def check(self) -> bool:
+        """搜索 API 未配置时隐藏此工具"""
+        return False  # TODO: 接入搜索 API 后改为 True
+
     async def execute(self, query: str, num_results: int = 5) -> dict:
         # TODO: 集成实际搜索 API（如 Firecrawl、SearXNG 等）
         return {"results": [], "note": "Web search not yet configured"}
+
+
+from .registry import tool_registry  # noqa: E402 — 模块末尾自注册
+tool_registry.register(WebFetch())
+tool_registry.register(WebSearch())
