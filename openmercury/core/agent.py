@@ -60,6 +60,18 @@ class SkillsHintChunk(PromptChunk):
         return "使用 skill_view 工具可以加载项目相关的技能说明文档。"
 
 
+class TimeContextChunk(PromptChunk):
+    name = "time_context"
+    def build(self, agent) -> str:
+        import datetime
+        now = datetime.datetime.now()
+        return (
+            f"当前时间: {now.strftime('%Y-%m-%d %H:%M:%S')} "
+            f"{now.astimezone().tzinfo or 'local'}  "
+            f"星期{['一','二','三','四','五','六','日'][now.weekday()]}"
+        )
+
+
 class ResponseProvider(ABC):
     """响应策略基类 — 工厂模式，Agent 不感知流/非流"""
 
@@ -204,6 +216,7 @@ class Agent:
         self.prompt_builder = PromptBuilder()
         self.prompt_builder.use(BasePromptChunk())
         self.prompt_builder.use(SkillsHintChunk())
+        self.prompt_builder.use(TimeContextChunk())
 
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
