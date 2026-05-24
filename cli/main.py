@@ -199,7 +199,75 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
     return agent
 
 
-# ── 上下文进度条 ──────────────────────────────────────────────────────
+# ── 输入区 PromptDecorator ─────────────────────────────────────
+
+class PromptDecorator(ABC):
+    """输入区装饰器基类。新增：继承 + 实现 render() + prompt_area.use()"""
+    name: str = ""
+
+    def render(self, agent) -> str | None:
+        """返回输入上方的展示文本，None 跳过"""
+        return None
+
+    def get_prompt(self) -> str:
+        """返回输入提示符"""
+        return "> "
+
+
+class ContextBar(PromptDecorator):
+    """上下文用量进度条 — 半高薄款"""
+    name = "context_bar"
+    _W = 16
+
+    def render(self, agent) -> str:
+        stats = agent.get_context_stats()
+        thresh_p = int(stats["threshold"] * self._W)
+        filled_n = int(stats["ratio"] * self._W)
+        bar = "▐"
+        for i in range(self._W):
+            if i == thresh_p:
+                bar += "│"
+            elif i < filled_n:
+                bar += "█"
+            else:
+                bar += "░"
+        bar += "▌"
+
+        color = "dim"
+        if stats["ratio"] > stats["threshold"]:
+            color = "yellow"
+        if stats["ratio"] > 0.95:
+            color = "red"
+        est = "~" if stats["is_estimate"] else ""
+        cur = stats["current"]; mx = stats["max"]
+        def _f(n): return str(n) if n < 1024 else f"{n/1024:.1f}K"
+        return f"  [{color}]{bar}[/{color}]  {est}{_f(cur)}/{_f(mx)}"
+
+    def get_prompt(self) -> str:
+        return "▸ "
+
+
+class PromptArea:
+    """输入区渲染器。按 use() 顺序渲染各装饰器。"""
+    def __init__(self):
+        self._decorators: list[PromptDecorator] = []
+
+    def use(self, d: PromptDecorator) -> "PromptArea":
+        self._decorators.append(d)
+        return self
+
+    def render(self, agent) -> tuple[str, str]:
+        pre_parts = []
+        prompt = "> "
+        for d in self._decorators:
+            try:
+                line = d.render(agent)
+                if line:
+                    pre_parts.append(line)
+                prompt = d.get_prompt()
+            except Exception:
+                pre_parts.append(f"[dim]({d.name}: render failed)[/dim]")
+        return "\n".join(pre_parts), prompt
 
 def _render_context_bar(stats: dict) -> str:
     """渲染 token 用量进度条 — 阈值标记在中间"""
@@ -289,10 +357,11 @@ def run_repl(agent):
         try:
             while True:
                 try:
-                    stats = agent.get_context_stats()
-                    bar = _render_context_bar(stats)
-                    console.print(f"\n{bar}")
-                    user_input = await asyncio.to_thread(input, "> ")
+                    prompt_area = (PromptArea()
+                        .use(ContextBar()))
+                    pre_text, prompt = prompt_area.render(agent)
+                    console.print(f"\n{pre_text}")
+                    user_input = await asyncio.to_thread(input, prompt)
                     user_input = user_input.strip()
                     exit_count = 0  # 正常输入，重置计数
 
@@ -444,7 +513,8 @@ async def handle_command(cmd: str, agent) -> bool:
 
     elif command == "/context":
         stats = agent.get_context_stats()
-        console.print(_render_context_bar(stats))
+        bar = ContextBar()
+        console.print(bar.render(agent))
         console.print(f"  阈值: {int(stats['threshold']*100)}%  |  模型推算: {'是' if stats['is_estimate'] else '否（API 实测）'}")
         return True
 
