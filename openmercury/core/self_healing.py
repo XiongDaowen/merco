@@ -159,7 +159,6 @@ def llm_error(exc: Exception) -> str:
             msg = "(包含敏感信息，已脱敏)"
             break
 
-    logger.warning("LLM 调用失败: %s", exc)
     return f"模型调用失败，请检查 API key 和网络连接。（{msg}）"
 
 
