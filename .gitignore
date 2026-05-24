@@ -47,3 +47,8 @@ references/
 
 # Local working config (template at config/)
 /openmercury.json
+
+# IDE & runtime
+.reasonix/
+.openmercury/
+.pytest_cache/
