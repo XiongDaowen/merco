@@ -19,6 +19,102 @@ app = typer.Typer(
 )
 
 
+# ── 启动首页 Dashboard ──────────────────────────────────────────────
+
+from abc import ABC, abstractmethod
+import openmercury
+
+class DashboardSection(ABC):
+    """首页展示区块基类。新增条目：继承 + 实现 render() + dashboard.use()"""
+    name: str = ""
+
+    @abstractmethod
+    def render(self, agent, **ctx) -> str | None:
+        """返回一行 Rich 标记文本，None 则跳过"""
+        ...
+
+
+class WelcomeSection(DashboardSection):
+    name = "welcome"
+    def render(self, agent, **ctx) -> str:
+        return f"[bold green]OpenMercury v{openmercury.__version__}[/bold green]"
+
+
+class ModelSection(DashboardSection):
+    name = "model"
+    def render(self, agent, **ctx) -> str:
+        return f"模型: {agent.config.model.provider}/{agent.config.model.model}"
+
+
+class ToolsSection(DashboardSection):
+    name = "tools"
+    max_display: int = 5
+
+    def render(self, agent, **ctx) -> str:
+        tools = agent.tool_registry.list_tools() if agent.tool_registry else []
+        active = [t.name for t in tools if t.check()]
+        if not active:
+            return "工具: [dim]无[/dim]"
+        shown = active[:self.max_display]
+        line = f"工具: [bold]{', '.join(shown)}[/bold]"
+        if len(active) > self.max_display:
+            line += f" [dim]等 {len(active)} 个[/dim]"
+        return line
+
+
+class SkillsSection(DashboardSection):
+    name = "skills"
+    max_display: int = 3
+
+    def render(self, agent, **ctx) -> str:
+        registry = getattr(agent, "skill_registry", None)
+        if not registry:
+            return "技能: [dim]无[/dim]"
+        skills = registry.list_skills()
+        if not skills:
+            return "技能: [dim]无[/dim]"
+        names = [s["name"] for s in skills[:self.max_display]]
+        line = f"技能: [bold]{', '.join(names)}[/bold]"
+        if len(skills) > self.max_display:
+            line += f" [dim]等 {len(skills)} 个[/dim]"
+        return line
+
+
+class ConfigSection(DashboardSection):
+    name = "config"
+
+    def render(self, agent, **ctx) -> str:
+        return f"配置: [dim]{ctx.get('config_source', '默认值')}[/dim]"
+
+
+class HintSection(DashboardSection):
+    name = "hint"
+
+    def render(self, agent, **ctx) -> str:
+        return "[dim]输入消息开始对话，/help 查看命令，/exit 退出[/dim]"
+
+
+class Dashboard:
+    """首页渲染器。按 use() 顺序渲染各区块。"""
+    def __init__(self):
+        self._sections: list[DashboardSection] = []
+
+    def use(self, section: DashboardSection) -> "Dashboard":
+        self._sections.append(section)
+        return self
+
+    def render(self, agent, **ctx) -> str:
+        parts = []
+        for s in self._sections:
+            try:
+                line = s.render(agent, **ctx)
+                if line:
+                    parts.append(line)
+            except Exception:
+                parts.append(f"[dim]({s.name}: 渲染失败)[/dim]")
+        return "\n".join(parts)
+
+
 # ── 共享的 Agent 启动逻辑 ────────────────────────────────────────────────
 
 def _setup_agent(config_path: str | None, model: str | None, api_key: str | None, debug: bool):
@@ -84,18 +180,18 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
             config_source = candidate
             break
 
-    skills = skill_registry.list_skills() if skill_registry else []
-    skill_line = f"技能: {len(skills)} 个已加载" if skills else "技能: 无"
+    dashboard = (Dashboard()
+        .use(WelcomeSection())
+        .use(ModelSection())
+        .use(ToolsSection(max_display=5))
+        .use(SkillsSection(max_display=3))
+        .use(ConfigSection())
+        .use(HintSection()))
+
     console.print(Panel(
-        f"[bold green]OpenMercury v{openmercury.__version__}[/bold green]\n"
-        f"模型: {cfg.model.provider}/{cfg.model.model}\n"
-        f"工具: {len(tool_registry.list_tools())} 个已注册\n"
-        f"{skill_line}\n"
-        f"配置: [dim]{config_source}[/dim]\n\n"
-        "[dim]输入消息开始对话，/help 查看命令，/exit 退出[/dim]",
+        dashboard.render(agent, config_source=config_source),
         title="🚀 OpenMercury",
     ))
-
     return agent
 
 
