@@ -111,7 +111,7 @@ class StreamingProvider(ResponseProvider):
             "\u280b\u2819\u2818\u281c\u2814\u2826\u2827\u2807\u280f")
         stream_think = agent.config.stream_thinking
 
-        panel = Panel("", border_style="dim", title="🧠 Thinking",
+        panel = Panel(next(spinner), border_style="dim", title="🧠 Thinking",
                       title_align="left", padding=(0, 1))
         live = Live(panel, console=console, refresh_per_second=10,
                     transient=False)
