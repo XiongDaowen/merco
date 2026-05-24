@@ -38,7 +38,7 @@ openmercury skills -l        # 列出技能
 
 ## 当前状态
 
-**Phase 1 完成 → Phase 2 起步** | 20 REAL + 7 PARTIAL + 12 SKELETON + 6 NOT WIRED | 收尾方案定型：_wrap_up_messages + _wrap_up_call | 幻觉校验始终执行 + 四层防线 | 压缩重写（token 滑动窗口 + 链完整 + LLM 语义摘要） | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-23
+**Phase 1 完成 → Phase 2 起步** | 20 REAL + 7 PARTIAL + 12 SKELETON + 6 NOT WIRED | 收尾方案定型：_wrap_up_messages + _wrap_up_call | 幻觉校验始终执行 + 四层防线 | 压缩重写（token 滑动窗口 + 链完整 + LLM 语义摘要） | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-23：_wrap_up_messages + _wrap_up_call | 幻觉校验始终执行 + 四层防线 | 压缩重写（token 滑动窗口 + 链完整 + LLM 语义摘要） | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-23
 
 ## 详细文档
 
