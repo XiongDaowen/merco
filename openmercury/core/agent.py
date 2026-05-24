@@ -333,31 +333,23 @@ class Agent:
                 console.print("[dim]  已截停，达到调用上限[/dim]")
                 return await self._wrap_up_call(self._wrap_up_messages(self._build_messages()))
 
-            # 执行工具调用
-            assistant_content = (response.get("content", "") or "").strip()
-            if assistant_content:
-                console.print(Panel(Markdown(assistant_content), border_style="dim"))
-
-            api_tool_calls = [
-                {
-                    "id": tc["id"],
-                    "type": "function",
-                    "function": {
-                        "name": tc["name"],
-                        "arguments": json.dumps(tc["arguments"], ensure_ascii=True),
-                    },
-                }
-                for tc in tool_calls
-            ]
-            assistant_msg = {"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls}
-            self.context.add(assistant_msg)
-
-            logger.debug("⚙ 执行 %d 个工具调用: %s",
-                        len(tool_calls),
-                        [tc["name"] for tc in tool_calls])
-
-            await self._execute_tool_calls(tool_calls)
+            await self._dispatch_tool_calls(tool_calls, response)
             await asyncio.sleep(0.5)
+
+
+    async def _dispatch_tool_calls(self, tool_calls: list[dict], response: dict) -> None:
+        """工具调度：渲染内容 → 写上下文 → 执行工具"""
+        assistant_content = (response.get("content", "") or "").strip()
+        if assistant_content:
+            console.print(Panel(Markdown(assistant_content), border_style="dim"))
+        api_tool_calls = [
+            {"id": tc["id"], "type": "function",
+             "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=True)}}
+            for tc in tool_calls
+        ]
+        self.context.add({"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls})
+        logger.debug("⚙ 执行 %d 个工具调用: %s", len(tool_calls), [tc["name"] for tc in tool_calls])
+        await self._execute_tool_calls(tool_calls)
 
     async def _execute_tool_calls(self, tool_calls: list[dict]):
         """执行一组工具调用"""
