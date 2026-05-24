@@ -401,11 +401,17 @@ class Agent:
                 tool_schema=getattr(tool, 'parameters', None),
                 tool_call_id=tool_call_id)
             await self.result_pipeline.process(pctx)
+            if isinstance(pctx.result, str):
+                content = pctx.result
+            else:
+                try:
+                    content = json.dumps(pctx.result, ensure_ascii=False)
+                except (TypeError, ValueError):
+                    content = str(pctx.result)
             tool_results.append({
                 "role": "tool",
                 "tool_call_id": tool_call_id,
-                "content": json.dumps(pctx.result, ensure_ascii=False)
-                if not isinstance(pctx.result, str) else pctx.result})
+                "content": content})
             exec_contexts.append(pctx)
             self._tool_calls_count += 1
 
