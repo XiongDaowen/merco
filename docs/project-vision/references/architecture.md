@@ -25,7 +25,7 @@
 ## 项目目录结构
 
 ```
-openmercury/
+merco/
 ├── core/           # 核心引擎 (agent, session, message, context, config)
 ├── tools/          # 工具系统 (registry, file, bash, web, task, mcp)
 ├── skills/         # 技能系统 (loader, registry, builtin/)

@@ -1,4 +1,4 @@
-# OpenMercury 架构文档
+# Mercury Code (merco) 架构文档
 
 ## 目录结构
 

@@ -1,4 +1,4 @@
-# OpenMercury 项目愿景
+# Mercury Code (merco) 项目愿景
 
 混合型 AI Agent 框架，融合两家主流 Agent 框架的核心优势，构建一个**轻量、高效、可落地**的 Python 智能开发助手。
 
@@ -13,7 +13,7 @@
 
 ```bash
 # 首次安装依赖
-cd /home/xiowen/code/OpenMercury
+cd /home/xiowen/code/merco
 uv sync
 
 # 全局安装（之后任意目录直接敲 merco）

@@ -39,7 +39,7 @@
 
 ## 模块逐项审计
 
-### openmercury/core/ — Core Engine
+### merco/core/ — Core Engine
 
 | File | Status | Details |
 |------|--------|---------|
@@ -50,7 +50,7 @@
 | `message.py` | 🟢 REAL | `Message` dataclass + `to_dict()` + `MessageProcessor`。|
 | `context.py` | 🟢 REAL | `ContextManager` + `estimate_tokens()`/`msg_tokens()`（含 tool_calls 计数）+ `total_tokens` 优先 API 实测。死壳已删。|
 
-### openmercury/tools/ — Tool System
+### merco/tools/ — Tool System
 
 | File | Status | Details |
 |------|--------|---------|
@@ -62,7 +62,7 @@
 | `task_tools.py` | 🔴 SKELETON | `"not yet implemented"`。|
 | `mcp_tools.py` | 🔴 SKELETON | `"not yet configured"`。|
 
-### openmercury/skills/ — Skills System
+### merco/skills/ — Skills System
 
 | File | Status | Details |
 |------|--------|---------|
@@ -70,7 +70,7 @@
 | `registry.py` | 🟢 REAL | register/get/list/get_relevant/load_from_paths。|
 | `builtin/` | 🔴 SKELETON | 空目录。|
 
-### openmercury/memory/ — Memory System
+### merco/memory/ — Memory System
 
 | File | Status | Details |
 |------|--------|---------|
