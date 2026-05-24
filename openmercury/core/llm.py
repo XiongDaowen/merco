@@ -5,7 +5,7 @@ import re
 import time
 import asyncio
 from typing import Any, Optional, AsyncIterator
-from openai import AsyncOpenAI, APIStatusError
+from openai import AsyncOpenAI
 
 
 logger = logging.getLogger("openmercury.llm")
@@ -40,7 +40,7 @@ def _extract_reasoning(message) -> str:
 
 
 class LLMClient:
-    """OpenAI 兼容的 LLM 客户端"""
+    """OpenAI 兼容的 LLM 客户端 — 纯传输层，重试/恢复由 Agent RecoveryPipeline 统一处理"""
 
     def __init__(
         self,
@@ -49,24 +49,24 @@ class LLMClient:
         base_url: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        retry_delays: tuple = (2, 4),  # 429/5xx 退避间隔（秒），空元组禁用重试
-        cooldown: float = 0,  # 请求最小间隔（秒），0=不禁用；频控严格的网关设为 5-10
+        cooldown: float = 0,  # 请求最小间隔（秒），0=不禁用
     ):
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self.retry_delays = retry_delays
         self.cooldown = cooldown
         self._last_request_time = 0.0
 
         client_kwargs = {
             "api_key": api_key,
-            "max_retries": 0,  # 关闭 SDK 自动重试，改用统一退避策略
+            "max_retries": 0,
         }
         if base_url:
             client_kwargs["base_url"] = base_url
 
         self.client = AsyncOpenAI(**client_kwargs)
+
+    # ── 公共方法 ─────────────────────────────────────────────────
 
     async def chat(
         self,
@@ -74,53 +74,9 @@ class LLMClient:
         tools: list[dict] = None,
         tool_choice: str | dict[str, Any] = "auto",
     ) -> dict:
-        """发送聊天请求并获取响应"""
-
-        params = {
-            "model": self.model,
-            "messages": _clean_surrogates(messages),
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-        }
-
-        if tools:
-            params["tools"] = tools
-            params["tool_choice"] = tool_choice
-
-        logger.debug("→ API 请求: model=%s messages=%d tools=%d", 
-                     self.model, len(params["messages"]), len(tools or []))
-
-        # 请求间隔冷却：防止频繁请求触发网关频控
-        if self.cooldown > 0:
-            elapsed = time.monotonic() - self._last_request_time
-            if elapsed < self.cooldown:
-                wait = self.cooldown - elapsed
-                logger.debug("⏳ 冷却 %.1fs（距上次请求 %.1fs）", wait, elapsed)
-                await asyncio.sleep(wait)
-
-        # 统一重试策略：429 和 5xx 均可重试，4xx 不重试
-        max_retries = len(self.retry_delays)
-        for attempt in range(max_retries + 1):
-            try:
-                response = await self.client.chat.completions.create(**params)
-                self._last_request_time = time.monotonic()
-                break
-            except APIStatusError as e:
-                status = e.status_code
-                retryable = status == 429 or status >= 500
-                if retryable and attempt < max_retries:
-                    delay = self.retry_delays[attempt]
-                    logger.warning("⚠ HTTP %d，%ds 后重试 (%d/%d)", status, delay, attempt + 1, max_retries)
-                    await asyncio.sleep(delay)
-                else:
-                    logger.error("✗ API 错误: HTTP %d - %s", status, str(e))
-                    logger.error("  请求体大小: %d 字符", len(json.dumps(params, ensure_ascii=True)))
-                    raise
-            except Exception as e:
-                # 非 HTTP 错误（网络/序列化等），不重试
-                logger.error("✗ 请求失败: %s - %s", type(e).__name__, str(e))
-                raise
-
+        """非流式聊天"""
+        params = self._build_params(messages, tools, tool_choice)
+        response = await self._request(params)
         result = self._parse_response(response)
         logger.debug("← API 响应: finish=%s content_len=%d tool_calls=%d",
                      result.get("finish_reason"), len(result.get("content", "")),
@@ -134,50 +90,49 @@ class LLMClient:
         tool_choice: str | dict[str, Any] = "auto",
     ) -> AsyncIterator[dict]:
         """流式聊天"""
+        params = self._build_params(messages, tools, tool_choice, stream=True)
+        stream = await self._request(params)
+        assert stream is not None
+        async for chunk in stream:
+            if parsed := self._parse_chunk(chunk):
+                yield parsed
 
+    # ── 私有方法 ─────────────────────────────────────────────────
+
+    def _build_params(
+        self, messages: list[dict], tools: list[dict] | None,
+        tool_choice: str | dict[str, Any], stream: bool = False,
+    ) -> dict:
+        """构造 API 请求参数"""
         params = {
             "model": self.model,
             "messages": _clean_surrogates(messages),
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
-            "stream": True,
         }
-
+        if stream:
+            params["stream"] = True
         if tools:
             params["tools"] = tools
             params["tool_choice"] = tool_choice
+        return params
 
-        # 请求间隔冷却
+    async def _request(self, params: dict):
+        """发送请求（含 cooldown），不重试。错误原样上抛交 Agent RecoveryPipeline。"""
+        logger.debug("→ API 请求: model=%s messages=%d tools=%d",
+                     self.model, len(params.get("messages", [])),
+                     len(params.get("tools", [])))
+
         if self.cooldown > 0:
             elapsed = time.monotonic() - self._last_request_time
             if elapsed < self.cooldown:
                 wait = self.cooldown - elapsed
+                logger.debug("⏳ 冷却 %.1fs（距上次请求 %.1fs）", wait, elapsed)
                 await asyncio.sleep(wait)
 
-        # 统一重试策略：429 和 5xx 均可重试，4xx 不重试
-        stream = None
-        max_retries = len(self.retry_delays)
-        for attempt in range(max_retries + 1):
-            try:
-                stream = await self.client.chat.completions.create(**params)
-                break
-            except APIStatusError as e:
-                status = e.status_code
-                retryable = status == 429 or status >= 500
-                if retryable and attempt < max_retries:
-                    delay = self.retry_delays[attempt]
-                    logger.warning("⚠ HTTP %d(stream)，%ds 后重试 (%d/%d)", status, delay, attempt + 1, max_retries)
-                    await asyncio.sleep(delay)
-                else:
-                    raise
-            except Exception:
-                raise
-
-        assert stream is not None
-        async for chunk in stream:
-            parsed = self._parse_chunk(chunk)
-            if parsed:
-                yield parsed
+        response = await self.client.chat.completions.create(**params)
+        self._last_request_time = time.monotonic()
+        return response
 
     @staticmethod
     def _parse_response(response) -> dict:

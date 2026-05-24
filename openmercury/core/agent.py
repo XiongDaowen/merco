@@ -174,7 +174,6 @@ class Agent:
             base_url=config.model.base_url,
             temperature=config.model.temperature,
             max_tokens=config.model.max_tokens,
-            retry_delays=(2, 4),
             cooldown=0.3,  # 请求冷却（秒），0=禁用；共享网关可调大
         )
 
