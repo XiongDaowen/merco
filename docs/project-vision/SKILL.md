@@ -1,8 +1,3 @@
----
-name: project-vision
-description: "OpenMercury project vision, architecture, design decisions, development guidelines, coding standards, milestones, tech stack, and project conventions. 项目愿景、架构设计、开发指南、编码规范、技术决策、里程碑、技术栈。Use when working on OpenMercury: planning features, making architecture decisions, understanding project direction, or implementing code."
----
-
 # OpenMercury 项目愿景
 
 混合型 AI Agent 框架，融合两家主流 Agent 框架的核心优势，构建一个**轻量、高效、可落地**的 Python 智能开发助手。
@@ -38,7 +33,7 @@ openmercury skills -l        # 列出技能
 
 ## 当前状态
 
-**Phase 1 完成 → Phase 2 起步** | 20 REAL + 7 PARTIAL + 12 SKELETON + 6 NOT WIRED | 收尾方案定型：_wrap_up_messages + _wrap_up_call | 幻觉校验始终执行 + 四层防线 | 压缩重写（token 滑动窗口 + 链完整 + LLM 语义摘要） | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-23
+**Phase 2 深入** | 18 REAL + 7 PARTIAL + 10 SKELETON + 4 NOT WIRED | 架构清理：LLM去重、retry统一、token账本修复、Dashboard/PromptDecorator可组合 | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-26
 
 ## 详细文档
 
@@ -62,11 +57,10 @@ openmercury skills -l        # 列出技能
 3. **渐进式实现** — 先跑起来，再优化，最后重构
 4. **测试驱动** — 核心逻辑必须有单元测试覆盖
 5. **根因优先** — 修改 bug 必须先找到根因，再根据根因修复。禁止只修表面症状（如加 `except: pass`、在调用方 try/catch 掩盖源头问题）。修复前必须评估对总体架构的影响和副作用。
-6. **同类全检** — 修一个方法/文件时，必须搜索并同步修复所有同类代码。例如改 `chat()` 必须看 `chat_stream()`，改工具执行必须看所有工具。禁止"就这一个方法改"。
-7. **核心无关 provider** — `core/` 层代码（llm.py, agent.py 等）的注释、变量名、逻辑中禁止出现任何具体 provider 名。Provider 特定行为通过参数化暴露（如 `retry_delays`、`cooldown`），由配置层或 Agent 初始化时传入。
-8. **小 patch 优于大替换** — patch 工具只改 3-10 行，不要替换整个方法。patch 前必须用 `read_file(path)` 无参完整读取整个文件，禁止 offset/limit 分页读取后直接 patch。
-9. **注释写为什么，不写怎么做** — 代码注释描述设计意图和边界条件（"防死循环"），不描述变更历史（"上次 10 不够"）和操作步骤（"写入文件"）。"上次""昨天"等相对时间词禁止出现在注释中——那是 git commit 的事。硬编码的魔法数字必须可配置或附清晰的语义常量名。改动原因和教训写入 `docs/project-vision/references/` 对应文档。禁止 `write_file` 覆盖整文件——用 `patch`。
-10. **input() + 信号整数计数器 = 简洁可靠的两段退出** — 用户按 Ctrl+C 时信号 handler 递增 `exit_count`（0→1→2=退出）。`input()` 阻塞期间连续 Ctrl+C 可累加计数，正常输入后自动复位（手工 `exit_count = 0`）。不要手搓替代方案。\n11. **通解不补丁，可拓展不硬编码** — 用户纠正 bug 时必须问：这是当前场景的补丁还是所有同类问题的通解？通解必须可被其他功能复用、可拓展到新场景。每个\"智能\"功能必须配一个\"我不认识这个\"的 fallback——收录的自动补、未收录的警告不崩溃。新增配置项优先、方法参数化优先、provider 注册表优先。
+6. **同类全检** — 修一个方法/文件时，必须搜索并同步修复所有同类代码。
+7. **核心无关 provider** — `core/` 层代码的注释、变量名、逻辑中禁止出现任何具体 provider 名。
+8. **通解不补丁，可拓展不硬编码** — 纠正 bug 时必须问：这是当前场景的补丁还是所有同类问题的通解？通解必须可被其他功能复用、可拓展到新场景。每个"智能"功能必须配一个"我不认识这个"的 fallback。
+9. **注释写为什么，不写怎么做** — 代码注释描述设计意图和边界条件，不描述变更历史和操作步骤。
 
 ## Bug 修复流程
 
@@ -75,28 +69,17 @@ openmercury skills -l        # 列出技能
 3. **最小修复** — 只改根因涉及的代码行，不顺手改别的
 4. **副作用检查** — 会不会让其他地方炸？要不要加 guard/fallback？
 5. **验证** — 复现 → 确认修好，不能只靠推测
-6. **记录** — 修复后必须立即更新 `bugs.md`（含根因 + 修复方案），并同步到 skill 目录。用户对此零容忍。
+6. **记录** — 修复后必须立即更新 `bugs.md`（含根因 + 修复方案）
 
 ## 同步机制
 
 修改 `docs/project-vision/` 下任何文件后，需同步到 agent 的 skill 目录:
 
 ```bash
-# 同步整个目录到当前 agent 的 skill 目录（根据你的 agent 类型选择路径）
-cp -r docs/project-vision <你的agent-skill目录>/
-# 示例: opencode → ~/.config/opencode/skills/project-vision/
+cp -r docs/project-vision .openmercury/skills/
 ```
 
 **更新纪律**：每次重大提交后，必须根据提交内容更新 `progress.md`（模块状态变更）、`decisions.md`（新决策）、`architecture.md`（架构变更），然后同步到所有位置。不要在代码变更后留下过期的 skill 文档。
-
-**提交后检查清单**：
-- [ ] `progress.md` — 模块状态有无变更？里程碑推进了？
-- [ ] `decisions.md` — 有新的架构/技术决策？
-- [ ] `lessons.md` — 有值得记录的教训？
-- [ ] `bugs.md` — 有新 bug 或修复？
-- [ ] `architecture.md` — 目录结构/模块设计有变化？
-- [ ] `SKILL.md` 状态行 — 计数是否准确？
-- [ ] 同步到 `.opencode/skills/project-vision/` 和 `~/.config/opencode/skills/project-vision/`
 
 ## 注意事项
 
