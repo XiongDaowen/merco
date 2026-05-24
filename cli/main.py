@@ -150,11 +150,14 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
         if env_key:
             cfg.model.api_key = env_key
         else:
+            candidates = ["./merco.json", "../merco.json", "~/.config/merco/config.json"]
+            searched = "\n".join(f"  • {c}" for c in candidates)
             console.print(Panel(
-                "[red]未找到 API Key。请设置：\n"
-                "1. 配置文件中设置 model.api_key\n"
-                "2. 或设置环境变量 OPENAI_API_KEY / OPENROUTER_API_KEY\n"
-                "3. 或使用 --api-key 参数[/red]",
+                f"[red]未找到 API Key。请设置：\n"
+                f"1. 在 merco.json 中设置 model.api_key\n"
+                f"2. 或设置环境变量（OPENAI_API_KEY / OPENROUTER_API_KEY 等）\n"
+                f"3. 或使用 merco -k sk-... 启动\n\n"
+                f"[dim]已搜索配置文件：[/dim]\n{searched}[/red]",
                 title="配置错误",
             ))
             raise typer.Exit(1)

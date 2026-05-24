@@ -143,6 +143,7 @@ class MercoConfig:
     def _find_config() -> str | None:
         candidates = [
             "./merco.json",
+            "../merco.json",
             "./.merco/merco.json",
             os.path.expanduser("~/.config/merco/config.json"),
         ]
