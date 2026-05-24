@@ -48,7 +48,9 @@ class ModelSection(DashboardSection):
 
 class ToolsSection(DashboardSection):
     name = "tools"
-    max_display: int = 5
+
+    def __init__(self, max_display: int = 5):
+        self.max_display = max_display
 
     def render(self, agent, **ctx) -> str:
         tools = agent.tool_registry.list_tools() if agent.tool_registry else []
@@ -64,7 +66,9 @@ class ToolsSection(DashboardSection):
 
 class SkillsSection(DashboardSection):
     name = "skills"
-    max_display: int = 3
+
+    def __init__(self, max_display: int = 3):
+        self.max_display = max_display
 
     def render(self, agent, **ctx) -> str:
         registry = getattr(agent, "skill_registry", None)
