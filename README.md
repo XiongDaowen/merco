@@ -1,6 +1,6 @@
-# Mercury Code (merco)
+# 🧠 merco — Mercury Code
 
-> 混合型 AI Agent 框架 — 轻量、高效、可落地的 Python 智能开发助手
+> Mer(cury) + Co(de) = **默客** — 默默写代码的 AI 伙伴。轻量、高效、可落地的 Python 智能开发助手。
 
 **Phase 1 完成** — Agent 核心循环 + 工具系统 + CLI 交互已可用。Phase 2 起步。
 
