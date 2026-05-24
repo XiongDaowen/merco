@@ -50,3 +50,23 @@
 | 2026-05-22 | cooldown 硬编码在 agent.py | 应走配置层 | 中 |
 | 2026-05-22 | 工具调用日志过多刷屏 | 15+ 调用占满终端 | 低 |
 | 2026-05-22 | Ctrl+C 提示打断输入流 | 警告在当前行上方遮住 input() | 低 |
+
+
+---
+
+## Phase 1 首次 CLI 调试记录 (2026-05-20)
+
+### 工具调用 400 — tool 消息前无 tool_calls
+根因: `agent.py._agent_loop()` 执行工具后追加 tool 消息，但从未追加含 tool_calls 的 assistant 消息。API 收到 system → user → tool 而非 system → user → assistant(tool_calls) → tool。
+修复: `_execute_tool_calls()` 前补 `context.add({"role": "assistant", "content": "", "tool_calls": api_tool_calls})`。
+
+### Surrogates 防御三层
+- 源头: `decode("utf-8", errors="replace")` — bash_tools.py
+- 序列化: `ensure_ascii=True` — agent.py  
+- 发送前: `_clean_surrogates(messages)` — llm.py
+
+### 请求放大 6 倍
+SDK 自带 2 次重试 + Agent 层 3 次重试 = 1 次原始请求可能放大为 6 次。修复: SDK `max_retries=0`，由 Agent 统一控制。
+
+### Ctrl+C 退出卡顿
+`run_in_executor` 阻塞 input() 线程，Ctrl+C 信号到主线程但 executor 线程仍在等输入。改用 `asyncio.to_thread` + SIGINT handler。

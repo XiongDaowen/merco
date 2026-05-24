@@ -374,3 +374,48 @@ _wrap_up_call(messages):
 两条路径（预算到顶 + 批量截停）各一行。tool_choice="none" + 幻觉校验 + regex 三重兜底。
 
 **教训：** Hermes 的 `_budget_grace_call` 依赖 provider 遵守 tool_choice——MiniMax 不遵守，照搬无用。provider 能力边界决定了方案上限。简单 + 兜底 > 复杂 + 依赖特定 API 行为。
+
+
+---
+
+## 2026-05-26: CLI 输出规范沉淀
+
+以下从 `cli-patterns.md` 合并而来。
+
+### 输出架构
+
+```
+> 用户输入
+─── Agent ──────────────  ← console.rule(style="dim")
+  ⠋ bash (1/15) cmd=...   ← Live spinner, bright_black
+  ✓ bash (1/15) cmd=... 2.3s
+╭────────────────────────╮
+│ 中间文字 / 最终回复      │  ← Panel(Markdown)
+╰────────────────────────╯
+──────────────────────────  ← console.rule(style="dim")
+```
+
+### 工具调用显示
+
+- 格式: key=value 拼接，不用 json.dumps（避免 " 和 \uXXXX 转义）
+- 终端宽度动态截断：计算含最终状态 `✓ ... 99.9s` 的完整行，超宽截断
+- Live spinner 原地更新：执行中 `⠋` 循环，完成后同位置 `✓ 2.3s`
+- 颜色: `Text.from_markup("[bright_black]...[/bright_black]")`
+- 无折叠——每条工具调用独立显示
+
+### 终端恢复
+
+- `termios.ECHOCTL` 关闭控制字符回显（禁止 ^C 显示）
+- 退出钩子 `_on_exit` / `_run_exit_hooks` LIFO 模式
+- `os._exit(0)` 前必须先手动恢复终端
+
+### ANSI prompt
+
+- ``/`` 包裹 ANSI 码 → readline 正确计宽
+- 不用 Rich console.print 做 prompt（光标位置计算错乱）
+
+### 常见坑
+
+- `write_file` 覆盖整文件 → 局部改动用 patch
+- Rich status spinner 与 console.print 同一 stdout 会冲突 → 工具日志走 stderr
+- stderr/stdout 交叉输出破坏 Rich 光标管理
