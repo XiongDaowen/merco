@@ -1,46 +1,89 @@
 """会话管理"""
 
+import uuid
+from datetime import datetime
+
 
 class Session:
-    """管理单次对话会话"""
+    """单次对话会话 — 数据容器，对接 SessionStore 持久化"""
 
-    def __init__(self, session_id: str = None):
-        self.id = session_id or self._generate_id()
-        self.messages = []
-        self.metadata = {}
+    def __init__(self, session_id: str = None, title: str = "", store=None):
+        self.id = session_id or _new_id()
+        self.title = title
+        self.messages: list[dict] = []
+        self.metadata: dict = {}
+        self._store = store
+        self._dirty = False  # 有未持久化的消息
 
-    def add_message(self, role: str, content: str):
-        """添加消息到会话"""
-        self.messages.append({"role": role, "content": content})
+    # ── 消息 ──────────────────────────────────────────────
 
-    def get_history(self) -> list:
-        """获取会话历史"""
+    def add_message(self, role: str, content: str, **kwargs):
+        """添加消息。不立即写磁盘（由 agent 循环结束时统一 save）"""
+        msg = {"role": role, "content": content}
+        msg.update(kwargs)
+        self.messages.append(msg)
+        self._dirty = True
+
+    def get_history(self) -> list[dict]:
         return self.messages.copy()
 
-    def compact(self, strategy: str = "summary"):
-        """压缩会话上下文"""
-        raise NotImplementedError
+    # ── 持久化 ────────────────────────────────────────────
 
-    @staticmethod
-    def _generate_id() -> str:
-        import uuid
-        return str(uuid.uuid4())[:8]
+    def save(self):
+        """将未持久化的消息写入 SQLite。增量：DB 已有 N 条，只写 messages[N:]"""
+        if not self._store or not self._dirty:
+            return
+
+        self._store.create_session(self.id, self.title)
+
+        existing = self._store.count_messages(self.id)
+        for msg in self.messages[existing:]:
+            self._store.save_message(
+                session_id=self.id,
+                role=msg.get("role", ""),
+                content=msg.get("content", ""),
+                tool_call_id=msg.get("tool_call_id", ""),
+                tool_calls=msg.get("tool_calls"),
+                reasoning=msg.get("reasoning", ""),
+            )
+        self._dirty = False
+
+    def delete(self):
+        if self._store:
+            self._store.delete_session(self.id)
+
+    # ── 工厂 ──────────────────────────────────────────────
+
+    @classmethod
+    def load(cls, session_id: str, store) -> "Session | None":
+        """从 store 加载完整会话（含历史消息）"""
+        data = store.load_session(session_id)
+        if not data:
+            return None
+
+        s = cls(session_id=data["id"], title=data["title"], store=store)
+        s.messages = data["messages"]
+        s._dirty = False
+        return s
+
+    @classmethod
+    def resume_or_create(cls, store, session_id: str = None) -> "Session":
+        """恢复指定会话，或自动恢复上次，或新建"""
+        if session_id:
+            s = cls.load(session_id, store)
+            if s:
+                return s
+        # 自动恢复上次会话
+        recent = store.list_sessions(limit=1)
+        if recent:
+            s = cls.load(recent[0]["id"], store)
+            if s:
+                return s
+        # 新建
+        s = cls(store=store)
+        store.create_session(s.id)
+        return s
 
 
-class SessionStore:
-    """会话持久化存储"""
-
-    def __init__(self, db_path: str = None):
-        self.db_path = db_path or "~/.merco/sessions.db"
-
-    def save(self, session: Session):
-        """保存会话"""
-        raise NotImplementedError
-
-    def load(self, session_id: str) -> Session:
-        """加载会话"""
-        raise NotImplementedError
-
-    def list_sessions(self) -> list:
-        """列出所有会话"""
-        raise NotImplementedError
+def _new_id() -> str:
+    return str(uuid.uuid4())[:8]

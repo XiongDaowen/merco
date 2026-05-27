@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-05-26
+> 最后更新: 2026-05-28
 
 ## 目标对标
 
@@ -9,9 +9,25 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: 架构清理、消除重复、修复根基 bug、UI 可组合化
+**阶段**: Phase 2 深入 | **焦点**: 交互体验、配置向导、diff 视图、Provider 可扩展架构
 
-### 本次会话更新 (2026-05-26)
+### 本次会话更新 (2026-05-28)
+
+- **edit diff split view 重写**: `SequenceMatcher` 对齐 → 上下文裁剪(±3行) → 仅变色变更行 → 行号 + Table 渲染。替代旧的全量并排+全量染色。`sandbox_mode: "show"` 展示 diff 自动应用不询问。
+- **edit_file spinner 修复**: 交互式工具跳过 Live spinner（会覆盖 confirm_edit 提示），其他工具保留。
+- **MultiEdit 删除**: 无引用、事务语义对 LLM 无意义、150行代码。
+- **read_file 流式化**: `f.readlines()` → 逐行迭代，读到 limit 即停。默认 500 行，支持 head/tail，返回 has_more/mtime/hint。砍掉 char 模式，截断阈值 8KB→16KB。
+- **write_file 语义明确**: 描述标注"仅用于新建文件"，edit_file 标注"修改已有文件首选"。
+- **ProviderInfo 架构升级**: `PROVIDER_REGISTRY` dict→dataclass，含 name/models/key_help/description。新增平台只需一条记录，setup 向导自动适配。
+- **merco setup 交互向导（新模块）**: 5 步流程（选平台→填key→选模型→确认base_url→保存）。`merco setup` CLI 命令。启动无 API key 时友好提示并可直接进入向导。
+- **think tag 泄漏修复**: `_strip_think_tags` 兜底清理，防 DirectFieldStrategy 命中后 ThinkTagStrategy 没跑导致 content 残留 `<thinking>` 标签。
+- **流式思考简化**: 删除 `_split_sentences`，每个 API chunk 直接刷 Live panel，不依赖标点切分。
+- **PromptArea 扩展**: ContextBar 显示模型名+sandbox模式，`extra()` 链式追加状态信息。
+
+- **ToolGuard 敏感命令守卫（新模块）**: 30 条默认 ask 规则，细粒度 `pattern + action` 匹配。用户可在 `merco.json` 追加规则或改为 deny。Bash 工具执行前拦截，确认后放行。agent 零负担。
+- **Session SQLite 持久化**: `sessions` + `messages` 两张表，WAL 模式。启动自动恢复 + 灌入上下文，每轮增量存盘，`/sessions` 列表+切换，`/new` 创建新会话，Ctrl+C 退出自动 save。tool call/result 完整链路持久化。
+
+### 上次会话更新 (2026-05-26)
 
 - **启动首页 Dashboard**: 可组合架构（`DashboardSection` ABC + `WelcomeSection`/`ModelSection`/`ToolsSection`/`SkillsSection`/`ConfigSection`/`HintSection`），新增条目只需继承 + `dashboard.use()`。工具/技能列出名字而非计数。
 - **输入区 PromptDecorator**: `PromptArea` + `ContextBar`（16格半高薄款）、删工具计数、`▸` 提示符。新增装饰器只需继承 + `prompt_area.use()`。
@@ -44,9 +60,10 @@
 | File | Status | Details |
 |------|--------|---------|
 | `agent.py` | 🟢 POLISHED | Full agent loop。LLM retry 归零（交 RecoveryPipeline）。_wrap_up 收尾。`_execute_tool_calls` json.dumps 兜底。`PromptBuilder` + 3 chunks。 |
-| `config.py` | 🟢 REAL | `OpenMercuryConfig` + `ModelConfig`，JSON load/save，multi-path discovery。|
-| `llm.py` | 🟢 REAL | 纯传输层：`_build_params()` + `_request()`（cooldown 不含 retry）。`chat()` 4行，`chat_stream()` 5行。200行。 |
-| `session.py` | 🟡 PARTIAL | `SessionStore` 全部 `NotImplementedError`（Phase 3 持久化）。|
+| `config.py` | 🟢 POLISHED | `ProviderInfo` dataclass 含 name/models/key_help。5 个预置平台，一条记录驱动 setup 向导。 |
+| `setup.py` | 🟢 NEW | 交互式 API 配置向导，5步流程。`merco setup` 命令。 |
+| `llm.py` | 🟢 POLISHED | 纯传输层 + `_strip_think_tags` 防标签泄漏。 |
+| `session.py` | 🟢 POLISHED | Session 数据类 + save/load/resume_or_create，增量写 SQLite，tool call 完整链路持久化。 |
 | `message.py` | 🟢 REAL | `Message` dataclass + `to_dict()` + `MessageProcessor`。|
 | `context.py` | 🟢 REAL | `ContextManager` + `estimate_tokens()`/`msg_tokens()`（含 tool_calls 计数）+ `total_tokens` 优先 API 实测。死壳已删。|
 
@@ -56,7 +73,8 @@
 |------|--------|---------|
 | `base.py` | 🟢 REAL | `BaseTool` ABC，definition property OpenAPI schema。|
 | `registry.py` | 🟢 REAL | `ToolRegistry`：register/unregister/execute（try/except 转结构化错误）。 |
-| `file_tools.py` | 🟢 REAL | `ReadFile`/`WriteFile`。**未接入 Sandbox。** |
+| `file_tools.py` | 🟢 POLISHED | 流式行读 + head/tail + has_more + 500行默认。`write_file` 语义明确。**未接入 Sandbox。** |
+| `edit.py` | 🟢 POLISHED | SEARCH/REPLACE + diff 预览 + 确认。MultiEdit 已删。 |
 | `bash_tools.py` | 🟢 REAL | `BashTool` asyncio subprocess。**未调 SecurityChecker。** |
 | `web_tools.py` | 🟡 PARTIAL | `WebFetch` 可用。`WebSearch` 骨架。|
 | `task_tools.py` | 🔴 SKELETON | `"not yet implemented"`。|
@@ -78,13 +96,14 @@
 | `recall.py` | 🟢 REAL | 关键词召回。|
 | `compressor.py` | 🟢 REAL | Token 滑动窗口 + 链完整 + LLM 摘要。Token 函数统一从 `core/context` 导入。 |
 | `search.py` | 🟢 REAL | SQLite FTS5。|
+| `session_store.py` | 🟢 NEW | SQLite 会话持久化，sessions + messages 表，WAL 模式。 |
 
 ### Other Modules
 
 | Module | Status |
 |--------|--------|
 | `hooks/` | 🔴 SKELETON — 未集成 |
-| `sandbox/` | 🟢 REAL — 未集成到 Tools |
+| `sandbox/` | 🟢 POLISHED — diff split view + show mode + ToolGuard guard。未集成到 Tools |
 | `scheduler/` | 🟢 REAL — CLI 未启动 |
 | `observability/` | 🟢 REAL — 未集成到 Agent |
 | `gateway/` | 🔴 SKELETON |
@@ -115,7 +134,9 @@
 
 | Status | Count |
 |--------|-------|
-| 🟢 REAL | 18 |
+| 🟢 POLISHED | 7 |
+| 🟢 NEW | 1 |
+| 🟢 REAL | 12 |
 | 🟡 PARTIAL | 7 |
 | 🔴 SKELETON | 10 |
 | ❌ NOT WIRED | 4 |

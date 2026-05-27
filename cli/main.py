@@ -91,6 +91,18 @@ class ConfigSection(DashboardSection):
         return f"配置: [dim]{ctx.get('config_source', '默认值')}[/dim]"
 
 
+class SessionSection(DashboardSection):
+    name = "session"
+
+    def render(self, agent, **ctx) -> str:
+        s = agent.session
+        title = s.title or f"会话 {s.id}"
+        msgs = len(s.messages)
+        if msgs:
+            return f"会话: [bold]{title}[/bold] [dim]({msgs} 条消息)[/dim]"
+        return "会话: [dim]新会话[/dim]"
+
+
 class HintSection(DashboardSection):
     name = "hint"
 
@@ -150,17 +162,27 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
         if env_key:
             cfg.model.api_key = env_key
         else:
-            candidates = ["./merco.json", "~/.config/merco/config.json"]
-            searched = "\n".join(f"  • {c}" for c in candidates)
             console.print(Panel(
-                f"[red]未找到 API Key。请设置：\n"
-                f"1. 在 merco.json 中设置 model.api_key\n"
-                f"2. 或设置环境变量（OPENAI_API_KEY / OPENROUTER_API_KEY 等）\n"
-                f"3. 或使用 merco -k sk-... 启动\n\n"
-                f"[dim]已搜索配置文件：[/dim]\n{searched}[/red]",
-                title="配置错误",
+                "[yellow]未配置 API Key。[/yellow]\n\n"
+                "首次使用？运行 [bold]merco setup[/bold] 交互式配置，一分钟搞定。\n\n"
+                "也可以手动——选一种就行：\n"
+                "  [bold]• OpenAI：[/bold] export [dim]OPENAI_API_KEY=sk-...[/dim] 然后 [dim]merco run[/dim]\n"
+                "  [bold]• 其他平台：[/bold] [dim]merco.json[/dim] 写 [dim]\"model\": {\"provider\": \"deepseek\", \"api_key\": \"sk-...\"}[/dim]\n"
+                "  [bold]• 临时启动：[/bold] [dim]merco run -k sk-...[/dim]",
+                title="⚙️ 需要配置",
+                border_style="yellow",
             ))
-            raise typer.Exit(1)
+            resp = input("\n现在配置？按 Enter 进入向导，输入 n 退出: ").strip().lower()
+            if resp != "n":
+                from merco.setup import run_setup_wizard
+                run_setup_wizard()
+                # 重新加载配置
+                cfg = MercoConfig.load(config_path)
+                if not cfg.model.api_key:
+                    console.print("[yellow]配置未完成，退出[/yellow]")
+                    raise typer.Exit(1)
+            else:
+                raise typer.Exit(1)
 
     # tools auto-registered via discover_tools()
 
@@ -188,6 +210,7 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
 
     dashboard = (Dashboard()
         .use(WelcomeSection())
+        .use(SessionSection())
         .use(ModelSection())
         .use(ToolsSection(max_display=5))
         .use(SkillsSection(max_display=3))
@@ -221,6 +244,14 @@ class ContextBar(PromptDecorator):
     name = "context_bar"
     _W = 16
 
+    def __init__(self):
+        self._extras: list[str] = []  # 扩展点：追加任意状态信息
+
+    def extra(self, text: str) -> "ContextBar":
+        """追加一段状态信息（模型名、模式等）"""
+        self._extras.append(text)
+        return self
+
     def render(self, agent) -> str:
         stats = agent.get_context_stats()
         thresh_p = int(stats["threshold"] * self._W)
@@ -240,17 +271,36 @@ class ContextBar(PromptDecorator):
             color = "yellow"
         if stats["ratio"] > 0.95:
             color = "red"
-        est = "~" if stats["is_estimate"] else ""
-        cur = stats["current"]; mx = stats["max"]
-        def _f(n): return str(n) if n < 1024 else f"{n/1024:.1f}K"
-        return f"  [{color}]{bar}[/{color}]  {est}{_f(cur)}/{_f(mx)}"
+
+        cur, mx = stats["current"], stats["max"]
+
+        # left: 进度条 + token 数（bar 本身已含 ▐▌）
+        left = f"  [{color}]{bar}[/{color}]  [dim]{_fmt(cur)}/{_fmt(mx)}[/dim]"
+
+        # 当前会话标题
+        session_title = agent.session.title or f"会话 {agent.session.id}"
+        session = f"[bold]{session_title}[/bold]"
+
+        # right: 扩展信息 + 默认显示模型 & 模式
+        default_info = f"[dim]{agent.config.model.model}[/dim]  [dim]{agent.config.sandbox_mode}[/dim]"
+        extra = "  ".join(self._extras)
+        if extra:
+            default_info = extra + "  " + default_info
+
+        return f"{session}  {left}  {default_info}"
 
     def get_prompt(self) -> str:
         return "▸ "
 
 
+def _fmt(n: int) -> str:
+    if n < 1000:
+        return str(n)
+    return f"{n / 1024:.1f}K"
+
+
 class PromptArea:
-    """输入区渲染器。按 use() 顺序渲染各装饰器。"""
+    """输入区渲染器。按 use() 顺序渲染各装饰器，Panel 包裹输出。"""
     def __init__(self):
         self._decorators: list[PromptDecorator] = []
 
@@ -271,31 +321,6 @@ class PromptArea:
                 pre_parts.append(f"[dim]({d.name}: render failed)[/dim]")
         return "\n".join(pre_parts), prompt
 
-def _render_context_bar(stats: dict) -> str:
-    """渲染 token 用量进度条 — 阈值标记在中间"""
-    w = 10
-    thresh_p = int(stats["threshold"] * w)
-    filled_n = int(stats["ratio"] * w)
-    bar = "▕"
-    for i in range(w):
-        if i == thresh_p:
-            bar += "│"
-        elif i < filled_n:
-            bar += "█"
-        else:
-            bar += "░"
-    bar += "▏"
-
-    color = "dim"
-    if stats["ratio"] > stats["threshold"]:
-        color = "yellow"
-    if stats["ratio"] > 0.95:
-        color = "red"
-    est = "~" if stats["is_estimate"] else ""
-    tool_info = f"🔧 {stats['tool_count']}/{stats['max_tool_calls']}"
-    cur = stats["current"]; mx = stats["max"]
-    def _f(n): return str(n) if n < 1024 else f"{n/1024:.1f}K"
-    return f"  [{color}]{bar}[/{color}]  {est}{_f(cur)}/{_f(mx)}  {tool_info}"
 
 
 # ── REPL 交互循环 ────────────────────────────────────────────────────────
@@ -330,6 +355,8 @@ def run_repl(agent):
 
     if old_tc is not None:
         _on_exit(lambda: termios.tcsetattr(0, termios.TCSADRAIN, old_tc))
+
+    _on_exit(lambda: agent.session.save())
 
     async def repl():
         loop = asyncio.get_running_loop()
@@ -480,6 +507,13 @@ def skills_cmd(
             console.print("未加载任何技能")
 
 
+@app.command("setup")
+def setup_cmd():
+    """交互式配置 API — 引导选择平台、填写 Key 和模型"""
+    from merco.setup import run_setup_wizard
+    run_setup_wizard()
+
+
 # ── 命令处理 ──────────────────────────────────────────────────────────────
 
 async def handle_command(cmd: str, agent) -> bool:
@@ -496,16 +530,22 @@ async def handle_command(cmd: str, agent) -> bool:
             "/help     - 显示此帮助\n"
             "/exit     - 退出\n"
             "/new      - 新会话\n"
+            "/sessions - 历史会话列表\n"
             "/model    - 显示当前模型\n"
             "/tools    - 列出可用工具\n"
             "/context  - 上下文用量\n"
-            "/skills   - 列出已加载技能",
+            "/skills   - 列出已加载技能\n"
+            "/history  - 查看本会话的文件修改历史\n"
+            "/revert   - 撤销本会话的文件修改",
             title="帮助",
         ))
         return True
 
     elif command == "/new":
+        agent.session.save()  # 存当前会话
         agent.reset()
+        from merco.sandbox import snapshot
+        snapshot.set_current_session(agent.session.id)
         console.print("[dim]已开启新会话[/dim]")
         return True
 
@@ -518,6 +558,94 @@ async def handle_command(cmd: str, agent) -> bool:
         bar = ContextBar()
         console.print(bar.render(agent))
         console.print(f"  阈值: {int(stats['threshold']*100)}%  |  模型推算: {'是' if stats['is_estimate'] else '否（API 实测）'}")
+        return True
+
+    elif command == "/history":
+        from merco.sandbox import snapshot
+        session_id = snapshot.get_current_session()
+        if not session_id:
+            console.print("[red]未找到当前会话[/red]")
+            return True
+        records = snapshot.history(session_id)
+        if not records:
+            console.print("[dim]当前会话无文件修改记录[/dim]")
+            return True
+        console.print(f"[bold]📋 会话 {session_id[:8]} 的文件修改:[/bold]")
+        for i, rec in enumerate(records):
+            from datetime import datetime
+            ts = rec.get("timestamp", "")[:19].replace("T", " ")
+            console.print(f"  {i}. [yellow]{rec['path']}[/yellow]  {ts}")
+        return True
+
+    elif command == "/revert":
+        from merco.sandbox import snapshot
+        session_id = snapshot.get_current_session()
+        if not session_id:
+            console.print("[red]未找到当前会话[/red]")
+            return True
+        records = snapshot.history(session_id)
+        if not records:
+            console.print("[dim]当前会话无文件修改记录[/dim]")
+            return True
+        resp = await asyncio.to_thread(
+            input, f"将撤销 {len(records)} 处修改，确认？[y/N] ")
+        if resp.strip().lower() not in ("y", "yes"):
+            console.print("[dim]已取消[/dim]")
+            return True
+        results = snapshot.revert(session_id)
+        ok = sum(1 for r in results if r["reverted"])
+        fail = sum(1 for r in results if not r["reverted"])
+        console.print(f"[green]已恢复 {ok} 个文件[/green]"
+                      + (f"，{fail} 个失败" if fail else ""))
+        return True
+
+    elif command == "/sessions":
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if arg:
+            # 切换会话：支持序号 (1,2,3) 或 session id
+            sessions = agent._session_store.list_sessions(limit=20)
+            target_id = None
+
+            if arg.isdigit():
+                idx = int(arg) - 1
+                if 0 <= idx < len(sessions):
+                    target_id = sessions[idx]["id"]
+            else:
+                target_id = arg  # 直接传 session id
+
+            if target_id and target_id != agent.session.id:
+                from merco.core.session import Session
+                agent.session.save()  # 存当前会话
+                s = Session.load(target_id, agent._session_store)
+                if s:
+                    agent.session = s
+                    agent._restore_context()
+                    from merco.sandbox import snapshot
+                    snapshot.set_current_session(agent.session.id)
+                    console.print(f"[green]已切换到: {s.title or s.id}[/green]")
+                else:
+                    console.print(f"[red]会话 {target_id} 不存在[/red]")
+            elif target_id == agent.session.id:
+                console.print("[dim]已经是当前会话[/dim]")
+            else:
+                console.print("[red]无效的会话序号[/red]")
+            return True
+
+        # 列出
+        sessions = agent._session_store.list_sessions(limit=20)
+        if not sessions:
+            console.print("[dim]无历史会话[/dim]")
+            return True
+        console.print("[bold]📋 历史会话:[/bold]")
+        for i, s in enumerate(sessions):
+            marker = " ← 当前" if s["id"] == agent.session.id else ""
+            title = s["title"] or f"会话 {s['id']}"
+            console.print(
+                f"  {i+1}. [bold]{title}[/bold]{marker}"
+                f"  [dim]{s['message_count']} 条消息  {s['updated_at'][:10]}"
+                f"  [/dim][bright_black]{s['id']}[/bright_black]")
+        console.print("[dim]用 /sessions <序号> 切换会话[/dim]")
         return True
 
     elif command == "/tools":

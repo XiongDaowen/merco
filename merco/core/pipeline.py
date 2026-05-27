@@ -102,10 +102,14 @@ def _walk_truncate(obj, max_per_value: int, filepath: str, pagination: dict | No
         preview = obj[:max_per_value]
         page_info = ""
         if pagination:
+            # 用 offset/limit 翻页（不再用已删除的 char_offset/char_limit）
+            # page_size 是字符数，按 ~60 字符/行估算行数
+            lines_per_page = max(1, pagination["page_size"] // 60)
+            next_offset = lines_per_page + 1
             page_info = (
                 f"\n📄 第 1/{pagination['total_pages']} 页"
-                f"（共 {pagination['total_chars']:,} 字符，每页 ~{pagination['page_size']:,} 字符）\n"
-                f"➡️ 下一页: read_file {filepath} char_offset={pagination['page_size']} char_limit={pagination['page_size']}"
+                f"（共 {pagination['total_chars']:,} 字符）\n"
+                f"➡️ 下一页: read_file {filepath} offset={next_offset} limit={lines_per_page}"
             )
         return f"{preview}\n\n⚠️ 已截断{page_info}"
     if isinstance(obj, dict):
@@ -234,10 +238,11 @@ class TruncationProcessor(Processor):
         ctx.result["_truncated"] = True
         ctx.result["_full_output_path"] = filepath
         ctx.result["_pagination"] = pagination
+        lines_per_page = max(1, per_value // 60)
         ctx.result["_hint"] = (
-            f"结果过长（{total_chars:,} 字符，共 {total_pages} 页，每页 ~{per_value:,} 字符）。"
+            f"结果过长（{total_chars:,} 字符，共 {total_pages} 页）。"
             f"当前第 1 页。"
-            f"➡️ 下一页: read_file {filepath} char_offset={per_value} char_limit={per_value}"
+            f"➡️ 下一页: read_file {filepath} offset={lines_per_page + 1} limit={lines_per_page}"
             f" 或 bash grep 搜索关键信息。"
         )
         ctx.result = _walk_truncate(ctx.result, per_value, filepath, pagination)

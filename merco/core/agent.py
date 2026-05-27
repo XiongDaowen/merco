@@ -97,7 +97,7 @@ class StreamingProvider(ResponseProvider):
 
     async def get_response(self, agent: "Agent", messages: list,
                            tools: list | None) -> dict:
-        import itertools, sys, json as _json
+        import sys, json as _json
         from rich.live import Live
 
         assembled: dict = {
@@ -107,12 +107,11 @@ class StreamingProvider(ResponseProvider):
         content_buf = ""
         tc_buf: dict[int, dict] = {}
 
-        spinner = itertools.cycle(
-            "\u280b\u2819\u2818\u281c\u2814\u2826\u2827\u2807\u280f")
         stream_think = agent.config.stream_thinking
 
-        panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim", title="🧠 Thinking",
-                      title_align="left", padding=(0, 1))
+        # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
+        panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
+                      title="🧠 Thinking", title_align="left", padding=(0, 1))
         live = Live(panel, console=console, refresh_per_second=10,
                     transient=False)
         live.start()
@@ -124,16 +123,10 @@ class StreamingProvider(ResponseProvider):
                 if r:
                     reasoning_buf += r
                     if stream_think:
-                        panel = Panel(
+                        live.update(Panel(
                             f"[dim]{reasoning_buf.rstrip()}[/dim]",
                             border_style="dim", title="🧠 Thinking",
-                            title_align="left", padding=(0, 1))
-                        live.update(panel)
-                elif not reasoning_buf and stream_think:
-                    live.update(Panel(
-                        next(spinner), border_style="dim",
-                        title="🧠 Thinking", title_align="left",
-                        padding=(0, 1)))
+                            title_align="left", padding=(0, 1)))
                 content_buf += chunk.get("content", "")
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
@@ -150,7 +143,8 @@ class StreamingProvider(ResponseProvider):
                 if chunk.get("usage"):
                     assembled["usage"] = chunk["usage"]
         finally:
-            live.stop()
+            if live:
+                live.stop()  # transient=False → 面板留在原位
 
         assembled["reasoning"] = reasoning_buf
         assembled["content"] = content_buf
@@ -174,6 +168,8 @@ class Agent:
     def __init__(self, config: MercoConfig, tool_registry=None, skill_registry=None):
         self.config = config
         self.session = Session()
+        from merco.sandbox import snapshot
+        snapshot.set_current_session(self.session.id)
         self.context = ContextManager(max_tokens=config.max_input_tokens)
         self.tool_registry = tool_registry
         self.skill_registry = skill_registry
@@ -192,6 +188,19 @@ class Agent:
         self._tool_calls_count = 0
         self._max_tool_calls = self.config.max_tool_calls
 
+        # ── 守卫：敏感命令执行前确认 ──
+        from merco.sandbox.guard import ToolGuard
+        self.guard = ToolGuard(
+            mode=config.sandbox_mode,
+            user_rules=config.sandbox_rules,
+        )
+
+        # ── 会话持久化 ──
+        from merco.memory.session_store import SessionStore
+        self._session_store = SessionStore(_get_db_path())
+        self.session = Session.resume_or_create(self._session_store)
+        self._restore_context()
+
         # ── 工厂：根据 config 选响应策略 ──
         if self.config.streaming:
             self._provider: ResponseProvider = StreamingProvider()
@@ -204,7 +213,7 @@ class Agent:
                                WaitRecovery, ContextCompressRecovery,
                                EmptyResponsePipeline, CallbackEmptyResponse)
         self.result_pipeline = ResultPipeline()
-        self.result_pipeline.use(TruncationProcessor(max_bytes=8000))
+        self.result_pipeline.use(TruncationProcessor(max_bytes=16000))
         self.result_pipeline.use(SkillViewProcessor())
         self.recovery_pipeline = RecoveryPipeline()
         self.recovery_pipeline.use(WaitRecovery(delay=3.0))
@@ -230,7 +239,29 @@ class Agent:
             await self._compress_context()
 
         # 执行 Agent 循环
-        return await self._agent_loop()
+        result = await self._agent_loop()
+        self._auto_title(prompt)
+        self.session.save()
+        return result
+
+    def _restore_context(self):
+        """清空上下文，然后从持久化会话恢复消息"""
+        self.context = ContextManager(max_tokens=self.config.max_input_tokens)
+        for msg in self.session.messages:
+            entry = {"role": msg["role"], "content": msg.get("content", "")}
+            if msg.get("tool_call_id"):
+                entry["tool_call_id"] = msg["tool_call_id"]
+            if msg.get("tool_calls"):
+                entry["tool_calls"] = msg["tool_calls"]
+            self.context.add(entry)
+
+    def _auto_title(self, user_input: str):
+        """用首条用户消息的前 40 字作为会话标题"""
+        if self.session.title or not user_input:
+            return
+        title = user_input.strip()[:40]
+        self.session.title = title
+        self._session_store.update_title(self.session.id, title)
 
     def _wrap_up_messages(self, messages):
         """构造收尾消息列表：追加总结请求。"""
@@ -360,6 +391,7 @@ class Agent:
             for tc in tool_calls
         ]
         self.context.add({"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls})
+        self.session.add_message("assistant", assistant_content, tool_calls=api_tool_calls)
         logger.debug("⚙ 执行 %d 个工具调用: %s", len(tool_calls), [tc["name"] for tc in tool_calls])
         await self._execute_tool_calls(tool_calls)
 
@@ -384,23 +416,36 @@ class Agent:
                 avail = term_w - len(f"  ✓ {tool_name} ({progress}) ") - 3 - 7
                 arg_str = arg_str[:max(0, avail)] + "..."
 
-            if self.tool_registry:
+            # ── 守卫检查 ──
+            approved = await self.guard.check(tool_name, arguments)
+            if not approved:
+                result = {"error": "操作已被拦截或取消"}
+
+            elif self.tool_registry:
                 import time
                 t0 = time.monotonic()
-                from rich.live import Live
-                from rich.text import Text
-                with Live(Text.from_markup(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]"), refresh_per_second=8, transient=False) as live:
-                    import itertools
-                    spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-                    async def _run_with_spinner():
-                        task = asyncio.create_task(self.tool_registry.execute(tool_name, **arguments))
-                        while not task.done():
-                            live.update(Text.from_markup(f"[bright_black]  {next(spinner)} {tool_name} ({progress}) {arg_str}[/bright_black]"))
-                            await asyncio.sleep(0.1)
-                        return await task
-                    result = await _run_with_spinner()
+
+                _INTERACTIVE_TOOLS = {"edit_file"}  # 会弹确认提示的工具，不能用 spinner（会覆盖终端）
+                if tool_name in _INTERACTIVE_TOOLS:
+                    console.print(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]")
+                    result = await self.tool_registry.execute(tool_name, **arguments)
                     elapsed = time.monotonic() - t0
-                    live.update(Text.from_markup(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]"))
+                    console.print(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]")
+                else:
+                    from rich.live import Live
+                    from rich.text import Text
+                    import itertools
+                    with Live(Text.from_markup(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]"), refresh_per_second=8, transient=False) as live:
+                        spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+                        async def _run_with_spinner():
+                            task = asyncio.create_task(self.tool_registry.execute(tool_name, **arguments))
+                            while not task.done():
+                                live.update(Text.from_markup(f"[bright_black]  {next(spinner)} {tool_name} ({progress}) {arg_str}[/bright_black]"))
+                                await asyncio.sleep(0.1)
+                            return await task
+                        result = await _run_with_spinner()
+                        elapsed = time.monotonic() - t0
+                        live.update(Text.from_markup(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]"))
             else:
                 result = {"error": f"Tool '{tool_name}' not available"}
 
@@ -430,6 +475,8 @@ class Agent:
 
         for tr in tool_results:
             self.context.add(tr)
+            self.session.add_message("tool", tr["content"],
+                                     tool_call_id=tr.get("tool_call_id", ""))
         for pctx in exec_contexts:
             for msg in pctx.extra_messages:
                 self.context.add(msg)
@@ -521,9 +568,10 @@ class Agent:
         }
 
     def reset(self):
-        """重置会话"""
-        self.session = Session()
-        self.context = ContextManager(max_tokens=self.config.model.max_tokens * 2)
+        """重置会话：新建 session + 清空上下文"""
+        self.session = Session(store=self._session_store)
+        self._session_store.create_session(self.session.id)
+        self.context = ContextManager(max_tokens=self.config.max_input_tokens)
         self._tool_calls_count = 0
 
     @staticmethod
@@ -531,9 +579,25 @@ class Agent:
         """从环境变量获取 API Key——由 PROVIDER_REGISTRY 驱动"""
         import os
         from .config import PROVIDER_REGISTRY
-        entry = PROVIDER_REGISTRY.get(provider, {})
-        key_env = entry.get("key_env", "")
-        return os.environ.get(key_env, "") if key_env else ""
+        entry = PROVIDER_REGISTRY.get(provider)
+        if entry:
+            return os.environ.get(entry.key_env, "")
+        return ""
+
+def _get_db_path() -> str:
+    """跟随配置路径确定 sessions.db 位置"""
+    import os
+    from pathlib import Path
+
+    for candidate in [Path("./.merco"), Path(os.path.expanduser("~/.merco"))]:
+        if candidate.exists() or candidate.parent.exists():
+            candidate.mkdir(parents=True, exist_ok=True)
+            return str(candidate / "sessions.db")
+
+    path = Path(os.path.expanduser("~/.merco"))
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path / "sessions.db")
+
 
 class AgentLoop:
     """Agent 循环控制器 - 管理多轮对话"""

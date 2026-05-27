@@ -18,6 +18,7 @@ _BUILTIN_MODULES = [
     "merco.tools.task_tools",
     "merco.tools.mcp_tools",
     "merco.tools.skill_tools",
+    "merco.tools.edit",
 ]
 
 

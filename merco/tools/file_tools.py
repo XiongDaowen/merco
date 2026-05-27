@@ -1,22 +1,25 @@
-"""文件操作工具 - 读写搜索"""
+"""文件操作工具 — 流式行读，支持 head/tail/翻页"""
 
+import logging
+from collections import deque
 from pathlib import Path
 from .base import BaseTool
 
+logger = logging.getLogger("merco.tools.file")
+
+_DEFAULT_LIMIT = 500  # 默认读取上限（行），覆盖大多数源文件，大文件用 offset 翻页
+
 
 class ReadFile(BaseTool):
-    """读取文件内容，支持行/字符两种翻页模式
-
-    对标 OpenCode read.ts：大文件用 offset+limit 翻页，不一次性加载。
-    offset/limit 默认按行（配合代码/日志浏览）；如需字符级翻页使用 char_offset/char_limit。
-    """
+    """流式行读取 — 大文件不爆内存，默认上限防上下文溢出"""
 
     name = "read_file"
     description = (
-        "读取文件内容。大文件请用 offset/limit 翻页读取：\n"
+        "读取文件内容，默认返回前 500 行。大文件请用 offset/limit 翻页。\n"
         "- offset: 起始行号（1-indexed），默认第 1 行\n"
-        "- limit:  读取行数，默认全读\n"
-        "- char_offset / char_limit: 字符级翻页，配合截断缓存文件使用"
+        "- limit:  读取行数，默认 500，设 0 表示不设上限（慎用）\n"
+        "- head:   读前 N 行，等价 offset=1, limit=N\n"
+        "- tail:   读最后 N 行"
     )
     toolset = "file"
     parameters = {
@@ -32,81 +35,110 @@ class ReadFile(BaseTool):
             },
             "limit": {
                 "type": "integer",
-                "description": "读取行数，默认全部",
+                "description": "读取行数，默认 500。设 0 取消上限（仅小文件）",
             },
-            "char_offset": {
+            "head": {
                 "type": "integer",
-                "description": "字符级起始偏移（0-indexed），配合截断缓存时使用",
+                "description": "读前 N 行，等价 offset=1, limit=N",
             },
-            "char_limit": {
+            "tail": {
                 "type": "integer",
-                "description": "字符级读取上限",
+                "description": "读最后 N 行",
             },
         },
         "required": ["path"],
     }
 
     async def execute(self, path: str, limit: int = None, offset: int = None,
-                      char_offset: int = None, char_limit: int = None) -> dict:
+                      head: int = None, tail: int = None) -> dict:
         file_path = Path(path)
         if not file_path.exists():
             return {"error": f"文件 '{path}' 不存在"}
+        if not file_path.is_file():
+            return {"error": f"'{path}' 不是文件"}
 
-        # 字符级翻页：只读需要的字节范围（大文件友好）
-        if char_offset is not None or char_limit is not None:
-            return self._read_by_chars(file_path, char_offset or 0, char_limit)
+        # ── 参数解析 ──
+        if tail is not None:
+            return self._read_tail(file_path, tail)
 
-        # 行级翻页：默认模式
-        return self._read_by_lines(file_path, offset or 1, limit)
+        if head is not None:
+            offset = 1
+            limit = head
 
-    def _read_by_chars(self, file_path: Path, start: int, limit: int | None) -> dict:
-        """字符级读取——分段读文件，不全部加载到内存"""
-        file_size = file_path.stat().st_size
-        if start >= file_size:
-            return {"content": "", "file_size": file_size, "hint": "offset 超出文件范围"}
+        start_line = offset or 1
+        if start_line < 1:
+            start_line = 1
 
-        read_limit = min(limit, file_size - start) if limit else file_size - start
-        # 读略多一点以便在字符边界截断（UTF-8 多字节安全）
-        read_end = min(start + read_limit + 256, file_size)
-        with open(file_path, "rb") as f:
-            f.seek(start)
-            raw = f.read(read_end - start)
+        if limit is None:
+            limit = _DEFAULT_LIMIT
+        elif limit == 0:
+            limit = None  # 0 = 不设上限
+        elif limit < 0:
+            limit = _DEFAULT_LIMIT
 
-        text = raw.decode("utf-8", errors="replace")
-        # 截到请求的字符数
-        if limit and len(text) > limit:
-            text = text[:limit]
+        return self._read_by_lines(file_path, start_line, limit)
 
-        return {
-            "content": text,
-            "file_size": file_size,
-            "char_offset": start,
-            "char_limit": limit,
-            "next_char_offset": start + len(text) if len(text) > 0 else start,
-        }
+    # ── 流式行读（不一次性加载全文件） ──
 
     def _read_by_lines(self, file_path: Path, start_line: int, limit: int | None) -> dict:
-        """行级读取，返回行号范围"""
-        # 对于很大的文件，逐行流式读
+        """从 start_line 开始逐行读取，读到 limit 行或 EOF 即停"""
         try:
             with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                all_lines = f.readlines()
+                # 跳过 start_line - 1 行
+                for _ in range(start_line - 1):
+                    if not f.readline():
+                        return {
+                            "content": "",
+                            "hint": f"offset {start_line} 超出文件范围",
+                        }
+
+                lines: list[str] = []
+                for line in f:
+                    lines.append(line)
+                    if limit is not None and len(lines) >= limit:
+                        break
+
+                # 探测是否还有更多内容
+                has_more = bool(f.readline()) if limit is not None else False
         except OSError as e:
             return {"error": f"读取失败: {e}"}
 
-        total_lines = len(all_lines)
-        if start_line > total_lines:
-            return {"content": "", "total_lines": total_lines, "hint": "offset 超出文件行数"}
+        content = "".join(lines)
+        end_line = start_line + len(lines) - 1
+        mtime = file_path.stat().st_mtime
 
-        idx = start_line - 1
-        end = idx + limit if limit else total_lines
-        selected = all_lines[idx:end]
+        hint = "" if not has_more else (
+            f"已返回 {start_line}-{end_line} 行，文件未完。"
+            f"用 offset={end_line + 1} 继续翻页。"
+        )
 
         return {
-            "content": "".join(selected),
-            "total_lines": total_lines,
+            "content": content,
             "start_line": start_line,
-            "end_line": start_line + len(selected) - 1,
+            "end_line": end_line,
+            "has_more": has_more,
+            "hint": hint,
+            "mtime": mtime,
+        }
+
+    # ── 读尾部 N 行 ──
+
+    def _read_tail(self, file_path: Path, n: int) -> dict:
+        """读取文件最后 N 行 — 用固定大小的双端队列，内存 O(n)"""
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                last_n = deque(f, maxlen=n)
+        except OSError as e:
+            return {"error": f"读取失败: {e}"}
+
+        content = "".join(last_n)
+        mtime = file_path.stat().st_mtime
+
+        return {
+            "content": content,
+            "lines": len(last_n),
+            "hint": f"文件最后 {len(last_n)} 行",
+            "mtime": mtime,
         }
 
 
@@ -114,7 +146,11 @@ class WriteFile(BaseTool):
     """写入文件内容"""
 
     name = "write_file"
-    description = "写入内容到指定文件"
+    description = (
+        "创建新文件或完全覆盖已有文件。\n"
+        "⚠️ 仅用于新建文件。修改已有文件请用 edit_file（SEARCH/REPLACE），"
+        "它会展示 diff 并等待确认。"
+    )
     toolset = "file"
     parameters = {
         "type": "object",

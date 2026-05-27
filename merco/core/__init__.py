@@ -2,7 +2,7 @@
 
 from .agent import Agent, AgentLoop
 from .config import MercoConfig, ModelConfig
-from .session import Session, SessionStore
+from .session import Session
 from .message import Message, MessageRole
 from .context import ContextManager
 from .llm import LLMClient
@@ -13,7 +13,6 @@ __all__ = [
     "MercoConfig",
     "ModelConfig",
     "Session",
-    "SessionStore",
     "Message",
     "MessageRole",
     "ContextManager",

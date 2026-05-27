@@ -8,15 +8,83 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger("merco.config")
 
-# ── Provider 注册表：内置平台的默认配置 ──
-# 用户只需写 provider: "minimax"，自动补 base_url。
-# 新平台只需加一条记录即可扩展。
-PROVIDER_REGISTRY = {
-    "openai":     {"base_url": "https://api.openai.com/v1",       "key_env": "OPENAI_API_KEY"},
-    "minimax":    {"base_url": "https://api.minimaxi.com/v1",     "key_env": "MINIMAX_API_KEY"},
-    "anthropic":  {"base_url": "https://api.anthropic.com",       "key_env": "ANTHROPIC_API_KEY"},
-    "openrouter": {"base_url": "https://openrouter.ai/api/v1",    "key_env": "OPENROUTER_API_KEY"},
-    "deepseek":   {"base_url": "https://api.deepseek.com/v1",     "key_env": "DEEPSEEK_API_KEY"},
+# ── Provider 注册表：内置平台的完整元数据 ──
+# 新增平台只需加一条 ProviderInfo，setup 向导自动适配。
+
+
+@dataclass
+class ProviderInfo:
+    """平台元数据 — 一条记录即可驱动配置向导和自动补全"""
+    key: str              # provider id: "openai", "minimax", ...
+    name: str             # 显示名: "OpenAI", "MiniMax"
+    base_url: str         # 默认 API 端点
+    key_env: str          # 环境变量名
+    default_model: str    # 推荐模型
+    models: list[str]     # 已知模型列表（空 = 用户自行输入）
+    key_help: str         # 获取 API key 的链接
+    description: str      # 一句话介绍
+
+    # 向后兼容：支持 dict-style 访问（旧代码用 PROVIDER_REGISTRY["openai"]["base_url"]）
+    def __getitem__(self, key: str):
+        if key == "base_url":
+            return self.base_url
+        if key == "key_env":
+            return self.key_env
+        raise KeyError(key)
+
+
+PROVIDER_REGISTRY: dict[str, ProviderInfo] = {
+    "openai": ProviderInfo(
+        key="openai",
+        name="OpenAI",
+        base_url="https://api.openai.com/v1",
+        key_env="OPENAI_API_KEY",
+        default_model="gpt-4o",
+        models=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini", "o1"],
+        key_help="https://platform.openai.com/api-keys",
+        description="最通用的平台，GPT-4o / o3 系列",
+    ),
+    "minimax": ProviderInfo(
+        key="minimax",
+        name="MiniMax",
+        base_url="https://api.minimaxi.com/v1",
+        key_env="MINIMAX_API_KEY",
+        default_model="MiniMax-M2.7",
+        models=["MiniMax-M2.7", "MiniMax-Text-01", "abab7-chat"],
+        key_help="https://platform.minimaxi.com/user-center/basic-information",
+        description="国产平台，MiniMax-M2.7 性价比高",
+    ),
+    "anthropic": ProviderInfo(
+        key="anthropic",
+        name="Anthropic",
+        base_url="https://api.anthropic.com",
+        key_env="ANTHROPIC_API_KEY",
+        default_model="claude-sonnet-4-20250514",
+        models=["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022",
+                "claude-3-opus-20240229", "claude-3-5-sonnet-20241022"],
+        key_help="https://console.anthropic.com/settings/keys",
+        description="Claude 系列，代码能力优秀",
+    ),
+    "openrouter": ProviderInfo(
+        key="openrouter",
+        name="OpenRouter",
+        base_url="https://openrouter.ai/api/v1",
+        key_env="OPENROUTER_API_KEY",
+        default_model="anthropic/claude-sonnet-4",
+        models=[],  # 模型太多，用户自行输入
+        key_help="https://openrouter.ai/keys",
+        description="模型聚合平台，一个 key 调用上百种模型",
+    ),
+    "deepseek": ProviderInfo(
+        key="deepseek",
+        name="DeepSeek",
+        base_url="https://api.deepseek.com/v1",
+        key_env="DEEPSEEK_API_KEY",
+        default_model="deepseek-chat",
+        models=["deepseek-chat", "deepseek-reasoner"],
+        key_help="https://platform.deepseek.com/api_keys",
+        description="国产平台，deepseek-reasoner 推理能力强",
+    ),
 }
 
 
@@ -35,9 +103,9 @@ class ModelConfig:
         entry = PROVIDER_REGISTRY.get(self.provider)
         if entry:
             if not self.base_url:
-                self.base_url = entry["base_url"]
+                self.base_url = entry.base_url
             if not self.api_key:
-                self.api_key = os.environ.get(entry["key_env"], "")
+                self.api_key = os.environ.get(entry.key_env, "")
         elif not self.base_url:
             # 未收录的 provider —— 用户必须显式写 base_url
             logger.warning(
@@ -59,9 +127,11 @@ class MercoConfig:
     memory_path: str = "~/.merco/memory"
     log_level: str = "INFO"
     sandbox_mode: str = "ask"
+    sandbox_rules: list = field(default_factory=list)
     streaming: bool = False
     stream_thinking: bool = True
     stream_content: bool = False
+    diff_view: str = "unified"
 
     @classmethod
     def load(cls, config_path: str | None = None) -> "MercoConfig":
@@ -107,9 +177,11 @@ class MercoConfig:
             "memory_path": self.memory_path,
             "log_level": self.log_level,
             "sandbox_mode": self.sandbox_mode,
+            "sandbox_rules": self.sandbox_rules,
             "streaming": self.streaming,
             "stream_thinking": self.stream_thinking,
             "stream_content": self.stream_content,
+            "diff_view": self.diff_view,
         }
 
     @classmethod
@@ -134,9 +206,11 @@ class MercoConfig:
             memory_path=data.get("memory_path", "~/.merco/memory"),
             log_level=data.get("log_level", "INFO"),
             sandbox_mode=data.get("sandbox_mode", "ask"),
+            sandbox_rules=data.get("sandbox_rules", []),
             streaming=data.get("streaming", False),
             stream_thinking=data.get("stream_thinking", True),
             stream_content=data.get("stream_content", False),
+            diff_view=data.get("diff_view", "unified"),
         )
 
     @staticmethod
