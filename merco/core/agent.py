@@ -5,6 +5,7 @@ import re
 import asyncio
 import logging
 import shutil
+import time
 from typing import Optional
 from abc import ABC, abstractmethod
 from rich.console import Console
@@ -15,7 +16,7 @@ from .config import MercoConfig
 from .llm import LLMClient
 from .session import Session
 from .message import Message, MessageRole
-from .context import ContextManager, msg_tokens
+from .context import ContextManager, msg_tokens, estimate_tokens as est_tk
 from .pipeline import ProcessContext
 
 console = Console()
@@ -53,11 +54,32 @@ Always be concise and helpful."""
     def build(self, agent) -> str: return self.PROMPT
 
 class SkillsHintChunk(PromptChunk):
+    """skill 自动注入：根据当前对话内容匹配相关 skill，注入提示到 system prompt"""
     name = "skills_hint"
+
     def enabled(self, agent) -> bool:
         return bool(agent.skill_registry and agent.skill_registry.list_skills())
+
     def build(self, agent) -> str:
-        return "使用 skill_view 工具可以加载项目相关的技能说明文档。"
+        registry = agent.skill_registry
+        if not registry:
+            return ""
+        prompt = getattr(agent, "_current_prompt", "")
+        if not prompt:
+            return "使用 skill_view 工具可以加载项目相关的技能说明文档。"
+
+        relevant = registry.get_relevant(prompt)
+        if not relevant:
+            return ""
+
+        parts = []
+        for skill in relevant:
+            parts.append(
+                f"## 相关技能: {skill['name']}\n"
+                f"{skill['content']}\n"
+                f"（已自动加载。更多技能用 skill_view 查看。）"
+            )
+        return "\n\n".join(parts)
 
 
 class TimeContextChunk(PromptChunk):
@@ -113,7 +135,7 @@ class StreamingProvider(ResponseProvider):
         panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
                       title="🧠 Thinking", title_align="left", padding=(0, 1))
         live = Live(panel, console=console, refresh_per_second=10,
-                    transient=False)
+                    transient=True)
         live.start()
 
         try:
@@ -144,7 +166,13 @@ class StreamingProvider(ResponseProvider):
                     assembled["usage"] = chunk["usage"]
         finally:
             if live:
-                live.stop()  # transient=False → 面板留在原位
+                live.stop()
+            # 用普通 console.print 留最后面板，避免 Live 残留干扰键盘输入
+            if reasoning_buf:
+                console.print(Panel(
+                    f"[dim]{reasoning_buf.rstrip()}[/dim]",
+                    border_style="dim", title="🧠 Thinking",
+                    title_align="left", padding=(0, 1)))
 
         assembled["reasoning"] = reasoning_buf
         assembled["content"] = content_buf
@@ -187,6 +215,13 @@ class Agent:
 
         self._tool_calls_count = 0
         self._max_tool_calls = self.config.max_tool_calls
+        self._current_prompt = ""
+
+        # ── 可观察性 ──
+        from merco.hooks.registry import HookRegistry
+        from merco.observability.observer import Observer
+        self.hooks = HookRegistry()
+        self.observer = Observer(self.hooks)
 
         # ── 守卫：敏感命令执行前确认 ──
         from merco.sandbox.guard import ToolGuard
@@ -229,6 +264,7 @@ class Agent:
 
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
+        self._current_prompt = prompt
         # 添加用户消息
         self.session.add_message("user", prompt)
         self.context.add({"role": "user", "content": prompt})
@@ -241,12 +277,18 @@ class Agent:
         # 执行 Agent 循环
         result = await self._agent_loop()
         self._auto_title(prompt)
+        self.session.metadata["observer"] = self.observer.snapshot()
         self.session.save()
+        self._session_store.save_metadata(self.session.id, self.session.metadata)
+        await self.hooks.emit("conversation.turn")
         return result
 
     def _restore_context(self):
         """清空上下文，然后从持久化会话恢复消息"""
         self.context = ContextManager(max_tokens=self.config.max_input_tokens)
+        snap = self.session.metadata.get("observer")
+        if snap:
+            self.observer.restore(snap)
         for msg in self.session.messages:
             entry = {"role": msg["role"], "content": msg.get("content", "")}
             if msg.get("tool_call_id"):
@@ -298,6 +340,7 @@ class Agent:
                 return await self._wrap_up_call(self._wrap_up_messages(messages))
 
             logger.debug("→ Agent 循环 #%d: %d 条消息", self._tool_calls_count, len(messages))
+            t0 = time.monotonic()
             try:
                 response = await self._provider.get_response(
                     self, messages, tools or None)
@@ -325,10 +368,21 @@ class Agent:
                 from .self_healing import llm_error
                 return llm_error(e)
 
-            # 记录 API 返回的实测 token
+            # 记录 API 返回的实测 token（流式可能无 usage，fallback 到估算值）
             usage = response.get("usage")
             if usage and usage.get("prompt_tokens"):
                 self.context.last_actual_tokens = usage["prompt_tokens"]
+
+            tokens_in = usage.get("prompt_tokens") if usage else self.context.total_tokens
+            tokens_out = usage.get("completion_tokens") if usage else est_tk(
+                (response.get("content") or "") + (response.get("reasoning") or ""))
+
+            await self.hooks.emit("llm.chat",
+                                   duration=time.monotonic() - t0,
+                                   tokens_in=tokens_in,
+                                   tokens_out=tokens_out,
+                                   cached_tokens=usage.get("cached_tokens", 0) if usage else 0,
+                                   cache_read_tokens=usage.get("cache_read_tokens", 0) if usage else 0)
 
             tool_calls = response.get("tool_calls")
             if not tool_calls:
@@ -422,7 +476,6 @@ class Agent:
                 result = {"error": "操作已被拦截或取消"}
 
             elif self.tool_registry:
-                import time
                 t0 = time.monotonic()
 
                 _INTERACTIVE_TOOLS = {"edit_file"}  # 会弹确认提示的工具，不能用 spinner（会覆盖终端）
@@ -451,6 +504,15 @@ class Agent:
 
             logger.debug("  ◀ 工具 %s 返回: %s", tool_name, 
                         str(result)[:500])
+
+            # ── 可观察性 ──
+            elapsed = time.monotonic() - t0
+            if "error" in result:
+                await self.hooks.emit("tool.error", tool_name=tool_name,
+                                      error=result.get("error", ""))
+            else:
+                await self.hooks.emit("tool.after_execute", tool_name=tool_name,
+                                      duration=elapsed)
 
             # ── Pipeline 处理 ──
             tool = self.tool_registry.get(tool_name) if self.tool_registry else None
@@ -573,6 +635,7 @@ class Agent:
         self._session_store.create_session(self.session.id)
         self.context = ContextManager(max_tokens=self.config.max_input_tokens)
         self._tool_calls_count = 0
+        self._current_prompt = ""
 
     @staticmethod
     def _get_api_key(provider: str) -> str:

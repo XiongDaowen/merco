@@ -44,6 +44,10 @@ class MetricsCollector:
             events = [e for e in events if e["type"] == event_type]
         return events[-limit:]
 
+    def get_counters(self) -> dict[str, int]:
+        """获取所有计数器（只读）"""
+        return dict(self._counters)
+
     def get_summary(self) -> dict:
         """获取指标摘要"""
         return {

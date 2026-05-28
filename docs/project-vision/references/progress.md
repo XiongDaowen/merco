@@ -27,6 +27,13 @@
 - **ToolGuard 敏感命令守卫（新模块）**: 30 条默认 ask 规则，细粒度 `pattern + action` 匹配。用户可在 `merco.json` 追加规则或改为 deny。Bash 工具执行前拦截，确认后放行。agent 零负担。
 - **Session SQLite 持久化**: `sessions` + `messages` 两张表，WAL 模式。启动自动恢复 + 灌入上下文，每轮增量存盘，`/sessions` 列表+切换，`/new` 创建新会话，Ctrl+C 退出自动 save。tool call/result 完整链路持久化。
 
+- **Observability hooks 驱动**: `Observer` 门面 + 4 个 hooks 事件（`llm.chat`/`tool.after_execute`/`tool.error`/`conversation.turn`）。Agent emit 事件，Observer 订阅计数。`/report` 命令显示本次+累计统计。两套计数器（live + acc_map）分别追踪当前运行和跨运行累计。退出/切会话/`/new` 时合并 live→acc 持久化到 SQLite，重启恢复。缓存命中率、token 入/出、工具分布完整采集。
+- **Token 兼容 fallback**: 流式模式下 MiniMax 等 provider 不返回 usage → `total_tokens` 估算入 token，`est_tk(content+reasoning)` 估算出 token。非流式或返回 usage 的 provider 直接采信真实值。永不为 0。
+- **Skill 全局目录修复**: `SkillLoader.load_from_directory` 加 `.expanduser()`，`~/.config/merco/skills/` 不再因 tilde 未展开而加载失败。
+- **Thinking panel UI bug**: `Live(transient=True)` 清终端残留，普通 `console.print` 留最终面板，键盘输入不再干扰渲染。
+- **openai import 延迟加载**: `LLMClient.__init__` 内 import openai，测试环境无 openai 也能 import 其他模块。
+- **集成测试框架**: `conftest.py` MockLLMClient + test_agent fixture，10 个集成测试覆盖对话/工具/会话/guard/上下文恢复，2 秒全过。
+
 ### 上次会话更新 (2026-05-26)
 
 - **启动首页 Dashboard**: 可组合架构（`DashboardSection` ABC + `WelcomeSection`/`ModelSection`/`ToolsSection`/`SkillsSection`/`ConfigSection`/`HintSection`），新增条目只需继承 + `dashboard.use()`。工具/技能列出名字而非计数。
@@ -62,7 +69,8 @@
 | `agent.py` | 🟢 POLISHED | Full agent loop。LLM retry 归零（交 RecoveryPipeline）。_wrap_up 收尾。`_execute_tool_calls` json.dumps 兜底。`PromptBuilder` + 3 chunks。 |
 | `config.py` | 🟢 POLISHED | `ProviderInfo` dataclass 含 name/models/key_help。5 个预置平台，一条记录驱动 setup 向导。 |
 | `setup.py` | 🟢 NEW | 交互式 API 配置向导，5步流程。`merco setup` 命令。 |
-| `llm.py` | 🟢 POLISHED | 纯传输层 + `_strip_think_tags` 防标签泄漏。 |
+| `observer.py` | 🟢 NEW | hooks 驱动可观察性门面，`/report` 命令，live+acc 双计数器。 |
+| `llm.py` | 🟢 POLISHED | 纯传输层 + `_strip_think_tags` + `_extract_usage` 多 provider 缓存采集。 |
 | `session.py` | 🟢 POLISHED | Session 数据类 + save/load/resume_or_create，增量写 SQLite，tool call 完整链路持久化。 |
 | `message.py` | 🟢 REAL | `Message` dataclass + `to_dict()` + `MessageProcessor`。|
 | `context.py` | 🟢 REAL | `ContextManager` + `estimate_tokens()`/`msg_tokens()`（含 tool_calls 计数）+ `total_tokens` 优先 API 实测。死壳已删。|

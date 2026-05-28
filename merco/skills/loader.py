@@ -13,7 +13,7 @@ class SkillLoader:
     @classmethod
     def load_from_path(cls, path: str) -> Optional[dict]:
         """从路径加载单个技能"""
-        skill_path = Path(path) / cls.SKILL_FILE
+        skill_path = Path(path).expanduser() / cls.SKILL_FILE
         if not skill_path.exists():
             return None
 
@@ -24,7 +24,7 @@ class SkillLoader:
     def load_from_directory(cls, directory: str) -> list[dict]:
         """从目录递归加载所有技能"""
         skills = []
-        base = Path(directory)
+        base = Path(directory).expanduser()
 
         if not base.exists():
             return skills

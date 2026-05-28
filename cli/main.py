@@ -356,7 +356,13 @@ def run_repl(agent):
     if old_tc is not None:
         _on_exit(lambda: termios.tcsetattr(0, termios.TCSADRAIN, old_tc))
 
-    _on_exit(lambda: agent.session.save())
+    def _save_on_exit():
+        agent.observer.save()
+        agent.session.metadata["observer"] = agent.observer.snapshot()
+        agent.session.save()
+        agent._session_store.save_metadata(agent.session.id, agent.session.metadata)
+
+    _on_exit(_save_on_exit)
 
     async def repl():
         loop = asyncio.get_running_loop()
@@ -531,6 +537,7 @@ async def handle_command(cmd: str, agent) -> bool:
             "/exit     - 退出\n"
             "/new      - 新会话\n"
             "/sessions - 历史会话列表\n"
+            "/report   - 会话统计报告\n"
             "/model    - 显示当前模型\n"
             "/tools    - 列出可用工具\n"
             "/context  - 上下文用量\n"
@@ -542,11 +549,24 @@ async def handle_command(cmd: str, agent) -> bool:
         return True
 
     elif command == "/new":
-        agent.session.save()  # 存当前会话
+        agent.observer.save()
+        agent.session.metadata["observer"] = agent.observer.snapshot()
+        agent.session.save()
+        agent._session_store.save_metadata(agent.session.id, agent.session.metadata)
         agent.reset()
+        agent.observer.reset(full=True)
         from merco.sandbox import snapshot
         snapshot.set_current_session(agent.session.id)
         console.print("[dim]已开启新会话[/dim]")
+        return True
+
+    elif command == "/report":
+        arg = parts[1] if len(parts) > 1 else ""
+        if arg == "reset":
+            agent.observer.reset()
+            console.print("[dim]统计数据已清零[/dim]")
+        else:
+            console.print(Panel(agent.observer.report(), title="📊 Session Report"))
         return True
 
     elif command == "/model":
@@ -616,10 +636,14 @@ async def handle_command(cmd: str, agent) -> bool:
 
             if target_id and target_id != agent.session.id:
                 from merco.core.session import Session
-                agent.session.save()  # 存当前会话
+                agent.observer.save()
+                agent.session.metadata["observer"] = agent.observer.snapshot()
+                agent.session.save()
+                agent._session_store.save_metadata(agent.session.id, agent.session.metadata)
                 s = Session.load(target_id, agent._session_store)
                 if s:
                     agent.session = s
+                    agent.observer.reset()
                     agent._restore_context()
                     from merco.sandbox import snapshot
                     snapshot.set_current_session(agent.session.id)

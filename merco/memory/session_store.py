@@ -30,7 +30,8 @@ class SessionStore:
                     created_at    TEXT NOT NULL,
                     updated_at    TEXT NOT NULL,
                     message_count INTEGER DEFAULT 0,
-                    parent_id     TEXT
+                    parent_id     TEXT,
+                    metadata      TEXT DEFAULT '{}'
                 );
 
                 CREATE TABLE IF NOT EXISTS messages (
@@ -48,6 +49,11 @@ class SessionStore:
                 CREATE INDEX IF NOT EXISTS idx_msg_session
                     ON messages(session_id, id);
             """)
+            # 兼容已有数据库：加 metadata 列
+            try:
+                conn.execute("ALTER TABLE sessions ADD COLUMN metadata TEXT DEFAULT '{}'")
+            except Exception:
+                pass  # 列已存在
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -110,6 +116,7 @@ class SessionStore:
             "updated_at": row["updated_at"],
             "message_count": row["message_count"],
             "parent_id": row["parent_id"],
+            "metadata": json.loads(row["metadata"] or "{}"),
             "messages": [
                 {
                     "role": m["role"],
@@ -139,6 +146,15 @@ class SessionStore:
                 (session_id,),
             ).fetchone()
             return row["cnt"] if row else 0
+
+    def save_metadata(self, session_id: str, metadata: dict):
+        import json
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE sessions SET metadata = ? WHERE id = ?",
+                (json.dumps(metadata, ensure_ascii=False), session_id),
+            )
+            conn.commit()
 
     def update_title(self, session_id: str, title: str):
         with self._conn() as conn:

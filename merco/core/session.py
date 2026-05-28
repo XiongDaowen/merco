@@ -63,6 +63,7 @@ class Session:
 
         s = cls(session_id=data["id"], title=data["title"], store=store)
         s.messages = data["messages"]
+        s.metadata = data.get("metadata", {})
         s._dirty = False
         return s
 

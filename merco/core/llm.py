@@ -6,8 +6,6 @@ import time
 import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, Optional, AsyncIterator
-from openai import AsyncOpenAI
-
 
 logger = logging.getLogger("merco.llm")
 
@@ -36,6 +34,35 @@ _THINK_BLOCK_RE = re.compile(r"<think(?:ing)?>.*?</think(?:ing)?>", re.DOTALL | 
 def _strip_think_tags(text: str) -> str:
     """移除 content 中残留的 <thinking>...</thinking> 块及其标签"""
     return _THINK_BLOCK_RE.sub("", text).strip()
+
+
+def _extract_usage(response) -> dict:
+    """从 API 响应中提取 token 用量，包括缓存命中"""
+    usage = response.usage
+    if not usage:
+        return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+    result = {
+        "prompt_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+        "completion_tokens": getattr(usage, "completion_tokens", 0) or 0,
+        "total_tokens": getattr(usage, "total_tokens", 0) or 0,
+    }
+
+    # 缓存命中 — 多 provider 兼容采集
+    # Anthropic: usage.cache_read_input_tokens / cache_creation_input_tokens
+    cached = getattr(usage, "cache_read_input_tokens", None)
+    if cached is not None:
+        result["cache_read_tokens"] = cached
+        result["cache_write_tokens"] = getattr(usage, "cache_creation_input_tokens", 0) or 0
+
+    # OpenAI: usage.prompt_tokens_details.cached_tokens
+    details = getattr(usage, "prompt_tokens_details", None)
+    if details is not None:
+        cd = getattr(details, "cached_tokens", None)
+        if cd is not None:
+            result["cached_tokens"] = cd
+
+    return result
 
 
 class ThinkingStrategy(ABC):
@@ -229,6 +256,8 @@ class LLMClient:
         self.cooldown = cooldown
         self._last_request_time = 0.0
 
+        from openai import AsyncOpenAI
+
         client_kwargs = {
             "api_key": api_key,
             "max_retries": 0,
@@ -313,16 +342,13 @@ class LLMClient:
         message = choice.message
 
         content = message.content or ""
+        usage_data = _extract_usage(response)
         result = {
             "role": message.role,
             "content": content,
             "reasoning": "",
             "finish_reason": choice.finish_reason,
-            "usage": {
-                "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-                "completion_tokens": response.usage.completion_tokens if response.usage else 0,
-                "total_tokens": response.usage.total_tokens if response.usage else 0,
-            },
+            "usage": usage_data,
         }
 
         extracted = ThinkingExtractor().extract_from_message(message)
