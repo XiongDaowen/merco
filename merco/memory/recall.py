@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -68,7 +69,7 @@ class MemoryRecaller(BaseRecaller):
         self._store = memory_store
 
     async def recall(self, query: str, limit: int = 10) -> list[RecallResult]:
-        raw = self._store.search(query)
+        raw = self._store.search(query)[:limit]
         total = len(raw)
         results: list[RecallResult] = []
         for i, item in enumerate(raw):
@@ -127,6 +128,8 @@ class HybridRecaller(BaseRecaller):
             except Exception:
                 # Swallow individual recaller errors so one failure
                 # doesn't break the whole hybrid pipeline.
+                logger = logging.getLogger(__name__)
+                logger.warning("Recaller %s failed for query %r", rec.name, query, exc_info=True)
                 continue
 
         # Sort by score descending
@@ -150,8 +153,8 @@ class HybridRecaller(BaseRecaller):
                 break
             truncated.append(r)
 
-        # Apply top-level limit
-        final = truncated[: max(limit, self._limit)]
+        # Apply top-level limit (use _limit as a cap, not a floor)
+        final = truncated[: min(limit, self._limit)]
 
         self._cache[cache_key] = final
         return final
@@ -193,6 +196,6 @@ class MemoryRecall:
 
         context_parts = []
         for m in memories:
-            context_parts.append(f"[{m['key']}]: {m['value']}")
+            context_parts.append(f"[{m.get('key', '?')}]: {m.get('value', '')}")
 
         return "\n".join(context_parts)
