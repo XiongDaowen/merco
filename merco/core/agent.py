@@ -232,7 +232,9 @@ class Agent:
 
         # ── 会话持久化 ──
         from merco.memory.session_store import SessionStore
+        from merco.memory.session_search import SessionSearch
         self._session_store = SessionStore(_get_db_path())
+        self._search = SessionSearch(self._session_store)
         self.session = Session.resume_or_create(self._session_store)
         self._restore_context()
 
@@ -262,6 +264,18 @@ class Agent:
         self.prompt_builder.use(SkillsHintChunk())
         self.prompt_builder.use(TimeContextChunk())
 
+        # ── Memory 召回 ──
+        from merco.memory.recall import HybridRecaller, FTS5Recaller, MemoryRecaller
+        from merco.memory.store import MemoryStore
+
+        _fts5 = FTS5Recaller(self._search)
+        _mem = MemoryRecaller(MemoryStore(config.memory_path))
+        self.recaller = (
+            HybridRecaller(limit=config.memory_recall_limit, max_chars=config.memory_recall_max_chars)
+            .add(_fts5)
+            .add(_mem)
+        )
+
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
         self._current_prompt = prompt
@@ -270,7 +284,7 @@ class Agent:
         self.context.add({"role": "user", "content": prompt})
 
         tools = self.tool_registry.get_definitions() if self.tool_registry else []
-        self.context.set_overhead(self._build_system_prompt(), len(tools))
+        self.context.set_overhead(await self._build_system_prompt(), len(tools))
         if self.context.needs_compression():
             await self._compress_context()
 
@@ -333,7 +347,7 @@ class Agent:
         tools = []
 
         while True:
-            messages = self._build_messages()
+            messages = await self._build_messages()
             tools = list(self.tool_registry.get_definitions() if self.tool_registry else [])
 
             if self._tool_calls_count >= self._max_tool_calls:
@@ -428,7 +442,7 @@ class Agent:
             # 批量超上限 → 不执行工具，直接收尾
             if self._tool_calls_count + len(tool_calls) > self._max_tool_calls:
                 console.print("[dim]  已截停，达到调用上限[/dim]")
-                return await self._wrap_up_call(self._wrap_up_messages(self._build_messages()))
+                return await self._wrap_up_call(self._wrap_up_messages(await self._build_messages()))
 
             await self._dispatch_tool_calls(tool_calls, response)
             await asyncio.sleep(0.5)
@@ -471,12 +485,12 @@ class Agent:
                 arg_str = arg_str[:max(0, avail)] + "..."
 
             # ── 守卫检查 ──
+            t0 = time.monotonic()
             approved = await self.guard.check(tool_name, arguments)
             if not approved:
                 result = {"error": "操作已被拦截或取消"}
 
             elif self.tool_registry:
-                t0 = time.monotonic()
 
                 _INTERACTIVE_TOOLS = {"edit_file"}  # 会弹确认提示的工具，不能用 spinner（会覆盖终端）
                 if tool_name in _INTERACTIVE_TOOLS:
@@ -543,10 +557,10 @@ class Agent:
             for msg in pctx.extra_messages:
                 self.context.add(msg)
 
-    def _build_messages(self) -> list[dict]:
+    async def _build_messages(self) -> list[dict]:
         """构建发送给 LLM 的消息列表"""
         messages = [
-            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "system", "content": await self._build_system_prompt()},
         ]
 
         # 添加上下文窗口中的消息
@@ -554,8 +568,21 @@ class Agent:
 
         return messages
 
-    def _build_system_prompt(self) -> str:
-        return self.prompt_builder.build(self)
+    async def _build_system_prompt(self) -> str:
+        base = self.prompt_builder.build(self)
+
+        if self.config.memory_recall_enabled and self._current_prompt:
+            try:
+                recalled = await self.recaller.recall(self._current_prompt)
+                if recalled:
+                    lines = ["\n## 相关历史对话（仅供参考）"]
+                    for i, r in enumerate(recalled, 1):
+                        lines.append(f"{i}. [{r.session_title}] {r.snippet}")
+                    base += "\n".join(lines)
+            except Exception:
+                logging.getLogger("merco.agent").debug("Memory recall failed", exc_info=True)
+
+        return base
 
     async def _compress_context(self):
         """压缩上下文"""
@@ -604,6 +631,8 @@ class Agent:
         self.context.current_tokens = sum(
             msg_tokens(m) for m in compressed
         )
+        # 持久化压缩摘要到 session，重启后恢复
+        self.session.metadata["compressed_at"] = self.context.current_tokens
         console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
 
     @staticmethod
