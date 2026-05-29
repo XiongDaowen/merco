@@ -537,6 +537,8 @@ async def handle_command(cmd: str, agent) -> bool:
             "/exit     - 退出\n"
             "/new      - 新会话\n"
             "/sessions - 历史会话列表\n"
+            "/search   - 搜索历史消息\n"
+            "/recall   - 从历史会话中搜索相关内容\n"
             "/report   - 会话统计报告\n"
             "/model    - 显示当前模型\n"
             "/tools    - 列出可用工具\n"
@@ -567,6 +569,26 @@ async def handle_command(cmd: str, agent) -> bool:
             console.print("[dim]统计数据已清零[/dim]")
         else:
             console.print(Panel(agent.observer.report(), title="📊 Session Report"))
+        return True
+
+    elif command == "/search":
+        query = parts[1] if len(parts) > 1 else ""
+        if not query:
+            console.print("[dim]用法: /search <关键词>[/dim]")
+            return True
+        from merco.memory.session_search import SessionSearch
+        searcher = SessionSearch(agent._session_store)
+        results = searcher.search(query, limit=10)
+        if not results:
+            console.print(f"[dim]未找到 '{query}' 相关结果[/dim]")
+            return True
+        console.print(f"[bold]🔍 '{query}' 搜索结果:[/bold]")
+        for i, r in enumerate(results):
+            sid = r["session_id"][:8]
+            marker = " ← 当前" if r["session_id"] == agent.session.id else ""
+            console.print(f"  {i+1}. [bold]{r['session_title'] or sid}[/bold]{marker}")
+            console.print(f"     [dim]{r['snippet']}[/dim]")
+            console.print(f"     [bright_black]{r['role'][:8]:8s}  {r['timestamp'][:16]}[/bright_black]")
         return True
 
     elif command == "/model":
@@ -680,6 +702,21 @@ async def handle_command(cmd: str, agent) -> bool:
                 console.print(f"  - {tool.name}: {tool.description}")
         else:
             console.print("无可用工具")
+        return True
+
+    elif command == "/recall":
+        query = parts[1] if len(parts) > 1 else ""
+        if not query:
+            console.print("[dim]用法: /recall <关键词>[/dim]")
+            return True
+        recalled = await agent.recaller.recall(query)
+        if not recalled:
+            console.print("[dim]未找到相关历史[/dim]")
+        else:
+            console.print(f"[bold]🔍 '{query}' 召回结果:[/bold]")
+            for i, r in enumerate(recalled, 1):
+                console.print(f"  {i}. [{r.session_title}] [dim]({r.source}, {r.score:.1f})[/dim]")
+                console.print(f"     [bright_black]{r.snippet}[/bright_black]")
         return True
 
     else:

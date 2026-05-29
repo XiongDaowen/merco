@@ -39,27 +39,36 @@ class WebFetch(BaseTool):
 
 
 class WebSearch(BaseTool):
-    """网络搜索"""
+    """网络搜索 — DuckDuckGo (免费，无需 API key)"""
 
     name = "web_search"
-    description = "搜索网络获取信息"
+    description = "搜索网络获取信息。返回标题、URL 和摘要。"
     toolset = "web"
     parameters = {
         "type": "object",
         "properties": {
             "query": {"type": "string", "description": "搜索关键词"},
-            "num_results": {"type": "integer", "description": "结果数量"},
+            "n": {"type": "integer", "description": "结果数量，默认 5"},
         },
         "required": ["query"],
     }
 
-    def check(self) -> bool:
-        """搜索 API 未配置时隐藏此工具"""
-        return False  # TODO: 接入搜索 API 后改为 True
-
-    async def execute(self, query: str, num_results: int = 5) -> dict:
-        # TODO: 集成实际搜索 API（如 Firecrawl、SearXNG 等）
-        return {"results": [], "note": "Web search not yet configured"}
+    async def execute(self, query: str, n: int = 5) -> dict:
+        try:
+            from ddgs import DDGS
+            results = []
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, max_results=n):
+                    results.append({
+                        "title": r["title"],
+                        "url": r["href"],
+                        "snippet": r["body"],
+                    })
+            return {"results": results, "query": query}
+        except ImportError:
+            return {"error": "ddgs 未安装。运行 pip install ddgs", "results": []}
+        except Exception as e:
+            return {"error": str(e), "results": []}
 
 
 from .registry import tool_registry  # noqa: E402 — 模块末尾自注册

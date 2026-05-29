@@ -9,6 +9,8 @@
 | 2026-05-26 | Token 估算统一到 `core/context.py` | `compressor.py` 和 `context.py` 各有一份。合并到 `core/context.py`。 |
 | 2026-05-26 | PromptBuilder 新增 TimeContextChunk | LLM 不知道当前时间，注入日期时间帮助判断文件时效。~25 token。 |
 | 2026-05-26 | 删除 `context.py` 死壳 `ContextCompressor` | 真身在 `memory/compressor.py`，stub 是早期死代码。 |
+| 2026-05-28 | WebSearch 接入 DuckDuckGo（免费/无 key）| `check()` 返回 False 导致工具隐藏。接入 API 实现真正搜索。保留 `source` 参数扩展口，后续 Google/SearXNG 按 Provider 注册表模式接入。 |
+| 2026-05-28 | openai 导入延迟到 `LLMClient.__init__` | 测试环境无 openai 时 import agent 模块失败。延迟到类实例化时导入。 |
 | 2026-05-23 | 收尾架构定稿：`_wrap_up_messages` + `_wrap_up_call` | 删 grace call（MiniMax 不配合）。提示词收敛为一条 user 消息。tool_choice="none" + 幻觉校验 + regex 兜底。 |
 | 2026-05-22 | 工具异常喂回 LLM 自愈 | `ToolRegistry.execute()` try/except：TypeError 返回结构化 error，通用异常返回 {error}。 |
 | 2026-05-22 | CLI 输出分区架构：rule 分隔 + Markdown 渲染 | `console.rule()` 框响应区，`Markdown()` 渲染。 |

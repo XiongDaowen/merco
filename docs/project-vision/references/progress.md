@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-05-28
+> 最后更新: 2026-05-29
 
 ## 目标对标
 
@@ -9,7 +9,12 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: 交互体验、配置向导、diff 视图、Provider 可扩展架构
+**阶段**: Phase 2 深入 | **焦点**: Memory 召回已完成 | **对标差距**: hermes 10 / openclaw 10 / merco → 8
+
+### 本次会话更新 (2026-05-29)
+
+- **Memory 召回（新功能）**: `Recaller` 协议 (`BaseRecaller` ABC) → `FTS5Recaller`（调 SessionSearch）+ `MemoryRecaller`（调 MemoryStore）→ `HybridRecaller` 聚合/排序/去重/截断/缓存。`Agent._build_system_prompt()` 末尾自动注入召回（3条×300字≈600 tokens）。`/recall` CLI 命令手动搜索。配置项：`memory.recall_enabled/limit/max_chars/threshold`。测试 23+7+16=46 个。
+- **memory config 重构**: `memory_enabled/memory_path` 移入 `memory` 嵌套对象，与 recall 配置统一。`_from_dict` 加 isinstance 守卫防非 dict 值 crash。
 
 ### 本次会话更新 (2026-05-28)
 
@@ -101,7 +106,7 @@
 | File | Status | Details |
 |------|--------|---------|
 | `store.py` | 🟢 REAL | JSON 文件 CRUD。|
-| `recall.py` | 🟢 REAL | 关键词召回。|
+| `recall.py` | 🟢 POLISHED | `BaseRecaller` ABC + `FTS5Recaller` + `MemoryRecaller` + `HybridRecaller`（聚合/去重/截断/缓存）+ 旧版 `MemoryRecall` 兼容。已接入 Agent。 |
 | `compressor.py` | 🟢 REAL | Token 滑动窗口 + 链完整 + LLM 摘要。Token 函数统一从 `core/context` 导入。 |
 | `search.py` | 🟢 REAL | SQLite FTS5。|
 | `session_store.py` | 🟢 NEW | SQLite 会话持久化，sessions + messages 表，WAL 模式。 |
@@ -133,8 +138,8 @@
 | Retry → RecoveryPipeline | ✅ WIRED | LLM 不重试，错误上抛 → RecoveryPipeline。 |
 | Hooks → Agent | ❌ NOT WIRED | 无 import，无 emit。 |
 | Sandbox → Tools | ❌ NOT WIRED | Tools 未调 SecurityChecker。 |
-| Observability → Agent | ❌ NOT WIRED | 无 metrics/tracing。 |
-| Memory → Sessions | ❌ NOT WIRED | Session 不存 MemoryStore。 |
+| Observability → Agent | ✅ WIRED | Observer hooks 驱动，llm.chat/tool/conversation.turn 事件完整。 |
+| Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
 
 ---
 
@@ -142,20 +147,38 @@
 
 | Status | Count |
 |--------|-------|
-| 🟢 POLISHED | 7 |
-| 🟢 NEW | 1 |
-| 🟢 REAL | 12 |
+| 🟢 POLISHED | 11 |
+| 🟢 NEW | 4 |
+| 🟢 REAL | 7 |
 | 🟡 PARTIAL | 7 |
 | 🔴 SKELETON | 10 |
-| ❌ NOT WIRED | 4 |
+| ✅ WIRED | 3 |
+
+## 三家对标 (2026-05-29)
+
+| 特性 | hermes | opencode | openclaw | merco |
+|------|--------|----------|----------|-------|
+| Session CRUD | ✓ | ✓ | ✓ | ✓ |
+| FTS5 全文搜索 | ✓✓ 双tokenizer | ✗ | ✓ | ✓ |
+| Fork/分支 | ✓ | ✓ | ✓ | ✗ |
+| Revert/Undo | ✗ | ✓ | ✗ | ✗ |
+| 压缩保留尾轮 | ✓ | ✓ | ✓ | ✓ |
+| 压缩 checkpoint | ✗ | ✗ | ✓ | ✓ |
+| 消息原文件持久化 | ✓ | ✓ | ✓ | ✓ |
+| Memory 召回 | ✓ | ✗ | ✓ | **✓ (新增)** |
+| 成本追踪 | ✓ | ✓ | ✓ | ✗ |
+| 会话清理/归档 | ✓ | ✓ | ✓ | ✗ |
+| 跨会话搜索 | ✓ | ✗ | ✓ | ✓ |
+| 观察性报告 | ✗ | ✗ | ✗ | ✓ 独有 |
+
+**总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 8**
 
 ## 下一步（按优先级）
 
-1. **打通 Sandbox → Tools** — Bash/File 工具调用 SecurityChecker + SandboxIsolation
-2. **打通 Hooks → Agent** — Agent Loop 关键节点 emit 事件
-3. **打通 Observability → Agent** — LLM 调用/Tool 执行处埋点
-4. **实现 Session 持久化** — SQLite 替换 `NotImplementedError`
-5. **自动注入相关 Skill** — `get_relevant()` 接线到 PromptBuilder
-6. **实现 WebSearch** — 对接搜索 API
-7. **实现 MCP 客户端协议**
-8. **补充集成测试** — mock LLM 的 Agent-Loop 全覆盖测试
+1. **成本追踪** — token 用量自动折算为费用，多 provider 定价表
+2. **Fork/分支** — parent_id 链，压缩自动 fork
+3. **MCP 客户端协议** — 接入外部 MCP server
+3. **streaming 重构** — 拆开 streaming 参数和渲染逻辑，接 `stream_content` 打字机效果，统一 Provider
+4. **Session FTS5 搜索** — SQLite FTS5 全文搜索历史会话
+5. **TUI 升级** — Textual 分栏界面，替代纯 CLI REPL
+6. **多 agent 协作** — scheduler 启动 + 子 agent 委托

@@ -256,11 +256,13 @@ class LLMClient:
         self.cooldown = cooldown
         self._last_request_time = 0.0
 
+        import httpx
         from openai import AsyncOpenAI
 
         client_kwargs = {
             "api_key": api_key,
             "max_retries": 0,
+            "timeout": httpx.Timeout(connect=10.0, read=None, write=None, pool=10.0),
         }
         if base_url:
             client_kwargs["base_url"] = base_url
