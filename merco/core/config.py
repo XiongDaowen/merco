@@ -132,6 +132,10 @@ class MercoConfig:
     stream_thinking: bool = True
     stream_content: bool = False
     diff_view: str = "unified"
+    memory_recall_enabled: bool = True
+    memory_recall_limit: int = 3
+    memory_recall_max_chars: int = 300
+    memory_recall_threshold: float = 0.0
 
     @classmethod
     def load(cls, config_path: str | None = None) -> "MercoConfig":
@@ -182,6 +186,12 @@ class MercoConfig:
             "stream_thinking": self.stream_thinking,
             "stream_content": self.stream_content,
             "diff_view": self.diff_view,
+            "memory": {
+                "recall_enabled": self.memory_recall_enabled,
+                "recall_limit": self.memory_recall_limit,
+                "recall_max_chars": self.memory_recall_max_chars,
+                "recall_threshold": self.memory_recall_threshold,
+            },
         }
 
     @classmethod
@@ -195,6 +205,7 @@ class MercoConfig:
             temperature=model_data.get("temperature", 0.7),
             max_tokens=model_data.get("max_tokens", 4096),
         )
+        memory_data = data.get("memory", {})
         return cls(
             username=data.get("username", "user"),
             model=model,
@@ -211,6 +222,10 @@ class MercoConfig:
             stream_thinking=data.get("stream_thinking", True),
             stream_content=data.get("stream_content", False),
             diff_view=data.get("diff_view", "unified"),
+            memory_recall_enabled=memory_data.get("recall_enabled", True),
+            memory_recall_limit=memory_data.get("recall_limit", 3),
+            memory_recall_max_chars=memory_data.get("recall_max_chars", 300),
+            memory_recall_threshold=memory_data.get("recall_threshold", 0.0),
         )
 
     @staticmethod
