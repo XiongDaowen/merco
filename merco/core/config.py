@@ -177,8 +177,6 @@ class MercoConfig:
             "max_input_tokens": self.max_input_tokens,
             "compression_threshold": self.compression_threshold,
             "skills_paths": self.skills_paths,
-            "memory_enabled": self.memory_enabled,
-            "memory_path": self.memory_path,
             "log_level": self.log_level,
             "sandbox_mode": self.sandbox_mode,
             "sandbox_rules": self.sandbox_rules,
@@ -187,6 +185,8 @@ class MercoConfig:
             "stream_content": self.stream_content,
             "diff_view": self.diff_view,
             "memory": {
+                "enabled": self.memory_enabled,
+                "path": self.memory_path,
                 "recall_enabled": self.memory_recall_enabled,
                 "recall_limit": self.memory_recall_limit,
                 "recall_max_chars": self.memory_recall_max_chars,
@@ -197,6 +197,8 @@ class MercoConfig:
     @classmethod
     def _from_dict(cls, data: dict) -> "MercoConfig":
         model_data = data.get("model", {})
+        if not isinstance(model_data, dict):
+            model_data = {}
         model = ModelConfig(
             provider=model_data.get("provider", "openai"),
             model=model_data.get("model", "gpt-4"),
@@ -206,6 +208,8 @@ class MercoConfig:
             max_tokens=model_data.get("max_tokens", 4096),
         )
         memory_data = data.get("memory", {})
+        if not isinstance(memory_data, dict):
+            memory_data = {}
         return cls(
             username=data.get("username", "user"),
             model=model,
@@ -213,8 +217,8 @@ class MercoConfig:
             max_input_tokens=data.get("max_input_tokens", 64000),
             compression_threshold=data.get("compression_threshold", 0.75),
             skills_paths=data.get("skills_paths", ["./.merco/skills", "~/.config/merco/skills"]),
-            memory_enabled=data.get("memory_enabled", True),
-            memory_path=data.get("memory_path", "~/.merco/memory"),
+            memory_enabled=memory_data.get("enabled", data.get("memory_enabled", True)),
+            memory_path=memory_data.get("path", data.get("memory_path", "~/.merco/memory")),
             log_level=data.get("log_level", "INFO"),
             sandbox_mode=data.get("sandbox_mode", "ask"),
             sandbox_rules=data.get("sandbox_rules", []),
