@@ -41,10 +41,14 @@ async def cmd_tools(agent, args):
         console.print("无可用工具")
         return True
 
-    # Group by toolset
+    # Group by toolset: MCP tools use their mcp: prefix, everything else is "builtin"
     groups: dict[str, list] = {}
     for t in tools:
-        groups.setdefault(t.toolset or "builtin", []).append(t)
+        if t.toolset and t.toolset.startswith("mcp:"):
+            key = t.toolset
+        else:
+            key = "builtin"
+        groups.setdefault(key, []).append(t)
 
     console.print("[bold]可用工具:[/bold]")
     for toolset, group_tools in sorted(groups.items()):
@@ -54,7 +58,8 @@ async def cmd_tools(agent, args):
             label = "[内置]"
         console.print(f"\n  [bold yellow]{label}[/bold yellow]")
         for t in group_tools:
-            desc = (t.description or "")[:60]
+            raw = t.description or ""
+            desc = raw[:57] + "..." if len(raw) > 60 else raw
             console.print(f"    [bold]{t.name}[/bold]  [dim]{desc}[/dim]")
     return True
 
