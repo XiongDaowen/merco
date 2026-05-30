@@ -43,15 +43,6 @@ class PromptToolkitInput(InputDriver):
             """Alt+Enter: insert newline for multiline input"""
             event.current_buffer.insert_text("\n")
 
-        @bindings.add(Keys.ControlC)
-        def _(event):
-            """Ctrl+C: clear text if present, else raise KeyboardInterrupt"""
-            buff = event.current_buffer
-            if buff.text:
-                buff.text = ""
-            else:
-                event.app.exit(exception=KeyboardInterrupt())
-
         self._session = PromptSession(
             history=FileHistory(hist_path),
             completer=completer,
@@ -86,10 +77,7 @@ class PromptToolkitInput(InputDriver):
         self._session.default_buffer.accept_handler = _on_buffer_accept
 
     async def get_input(self, prompt: str) -> str:
-        try:
-            text = await self._session.prompt_async(prompt)
-        except KeyboardInterrupt:
-            return ""  # Ctrl+C with empty buffer → exit signal
+        text = await self._session.prompt_async(prompt)
 
         # If paste was stashed but accept_handler didn't fire (edge case),
         # return the original stashed text instead of the marker.
