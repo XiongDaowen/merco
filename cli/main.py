@@ -732,7 +732,8 @@ async def handle_command(cmd: str, agent) -> bool:
 
     elif command == "/tree":
         children = agent._session_store.get_children(agent.session.id)
-        parent = agent.session.metadata.get("parent_id")
+        session_data = agent._session_store.load_session(agent.session.id)
+        parent = session_data.get("parent_id") if session_data else None
         if not children and not parent:
             console.print("[dim]单会话，无分支[/dim]")
             return True
