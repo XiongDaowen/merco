@@ -409,7 +409,7 @@ def run_repl(agent, dashboard=None, config_source=""):
                     prompt_area = (PromptArea()
                         .use(ContextBar()))
                     pre_text, prompt = prompt_area.render(agent)
-                    console.print(f"\n{pre_text}")
+                    console.print(pre_text)
                     user_input = (await driver.get_input(prompt)).strip()
                     exit_count = 0  # 正常输入，重置计数
 
