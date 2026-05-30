@@ -49,7 +49,7 @@ async def cmd_tools(agent, args):
     console.print("[bold]可用工具:[/bold]")
     for toolset, group_tools in sorted(groups.items()):
         if toolset.startswith("mcp:"):
-            label = f"[mcp:{toolset[4:]}][/mcp]"
+            label = f"mcp:{toolset[4:]}"  # plain text, Rich brackets only for known tags
         else:
             label = "[内置]"
         console.print(f"\n  [bold yellow]{label}[/bold yellow]")
