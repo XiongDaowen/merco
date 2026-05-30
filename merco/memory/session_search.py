@@ -99,7 +99,7 @@ class SessionSearch:
         # 去掉 FTS5 危险字符：引号、运算符、路径分隔符、括号
         q = re.sub(r'["\'*()\-\./\[\]~]', ' ', q)
         # 合并多余空格，提取有效词
-        terms = [t for t in q.split() if len(t) >= 2]  # 跳过单字母（FTS5 无意义）
+        terms = [t for t in q.split() if t]  # 只去空串，保留所有有效词（FTS5 自行处理 min token）
         if not terms:
             return "*"
         return " ".join(t + "*" for t in terms)
