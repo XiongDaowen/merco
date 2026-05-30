@@ -34,15 +34,28 @@ async def cmd_context(agent, args):
     return True
 
 
-@cmd_registry.register("/tools", "列出可用工具", group="info")
+@cmd_registry.register("/tools", description="列出可用工具", group="info")
 async def cmd_tools(agent, args):
     tools = agent.tool_registry.list_tools() if agent.tool_registry else []
-    if tools:
-        console.print("[bold]可用工具:[/bold]")
-        for tool in tools:
-            console.print(f"  - {tool.name}: {tool.description}")
-    else:
+    if not tools:
         console.print("无可用工具")
+        return True
+
+    # Group by toolset
+    groups: dict[str, list] = {}
+    for t in tools:
+        groups.setdefault(t.toolset or "builtin", []).append(t)
+
+    console.print("[bold]可用工具:[/bold]")
+    for toolset, group_tools in sorted(groups.items()):
+        if toolset.startswith("mcp:"):
+            label = f"[mcp:{toolset[4:]}][/mcp]"
+        else:
+            label = "[内置]"
+        console.print(f"\n  [bold yellow]{label}[/bold yellow]")
+        for t in group_tools:
+            desc = (t.description or "")[:60]
+            console.print(f"    [bold]{t.name}[/bold]  [dim]{desc}[/dim]")
     return True
 
 
