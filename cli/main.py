@@ -441,13 +441,13 @@ def run_repl(agent):
         _check_panel = _setup_readline_completer()
         _panel_shown = False
 
+        # Show command panel once at startup
+        _render_command_panel()
+        _panel_shown = True
+
         try:
             while True:
                 try:
-                    # Show command panel once, between turns, in clean terminal state
-                    if not _panel_shown and _check_panel():
-                        _panel_shown = True
-                        _render_command_panel()
                     prompt_area = (PromptArea()
                         .use(ContextBar()))
                     pre_text, prompt = prompt_area.render(agent)
