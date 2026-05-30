@@ -2,6 +2,7 @@
 
 import pytest
 from merco.core.config import MercoConfig, ModelConfig
+from merco.mcp.config import MCPServerConfig
 
 
 class TestConfig:
@@ -212,3 +213,67 @@ class TestConfig:
         data = cfg._to_dict()
         assert "session" in data
         assert data["session"]["fork_reset_observer"] is True
+
+    # ── MCP servers config tests ──
+
+    def test_mcp_servers_default(self):
+        """mcp_servers defaults to an empty dict."""
+        cfg = MercoConfig()
+        assert cfg.mcp_servers == {}
+
+    def test_mcp_servers_from_dict(self):
+        """mcp_servers dict is preserved on round-trip through _from_dict / _to_dict."""
+        data = {
+            "mcp_servers": {
+                "filesystem": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                    "enabled": True,
+                },
+                "github": {
+                    "url": "https://api.github.com/mcp",
+                    "headers": {"Authorization": "Bearer xxx"},
+                },
+            }
+        }
+        cfg = MercoConfig._from_dict(data)
+        assert "filesystem" in cfg.mcp_servers
+        assert "github" in cfg.mcp_servers
+        assert cfg.mcp_servers["filesystem"]["command"] == "npx"
+        assert cfg.mcp_servers["github"]["url"] == "https://api.github.com/mcp"
+
+        # round-trip
+        out = cfg._to_dict()
+        assert out["mcp_servers"] == data["mcp_servers"]
+
+    def test_mcp_server_config_from_dict(self):
+        """MCPServerConfig.from_dict() works with command transport."""
+        data = {
+            "command": "python",
+            "args": ["-m", "my_mcp_server"],
+            "timeout": 60,
+            "sandbox": "allow",
+        }
+        cfg = MCPServerConfig.from_dict("my_server", data)
+        assert cfg.name == "my_server"
+        assert cfg.command == "python"
+        assert cfg.args == ["-m", "my_mcp_server"]
+        assert cfg.url is None
+        assert cfg.timeout == 60
+        assert cfg.sandbox == "allow"
+        assert cfg.enabled is True  # default
+
+    def test_mcp_server_config_url(self):
+        """MCPServerConfig.from_dict() works with url transport."""
+        data = {
+            "url": "http://localhost:8080/mcp",
+            "headers": {"X-API-Key": "secret"},
+            "connect_timeout": 5,
+        }
+        cfg = MCPServerConfig.from_dict("remote_server", data)
+        assert cfg.name == "remote_server"
+        assert cfg.url == "http://localhost:8080/mcp"
+        assert cfg.command is None
+        assert cfg.headers == {"X-API-Key": "secret"}
+        assert cfg.connect_timeout == 5
+        assert cfg.env == {}  # default
