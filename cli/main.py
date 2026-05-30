@@ -368,14 +368,13 @@ def run_repl(agent):
     import cli.commands  # triggers all @cmd_registry.register decorators
 
     def _setup_readline_completer():
-        _shown_panel = False
+        _panel_requested = False
 
         def completer(text, state):
-            nonlocal _shown_panel
-            # Show panel on first "/" + Tab
-            if text == "/" and state == 0 and not _shown_panel:
-                _shown_panel = True
-                _render_command_panel()
+            nonlocal _panel_requested
+            # Request panel when user is at "/"
+            if text == "/" and state == 0:
+                _panel_requested = True
 
             matches = cmd_registry.match(text)
             if text == "/":
@@ -387,6 +386,7 @@ def run_repl(agent):
         readline.set_completer(completer)
         readline.parse_and_bind("tab: complete")
         readline.set_completer_delims(" \t\n")
+        return lambda: _panel_requested  # expose flag to REPL loop
 
 
     def _render_command_panel():
@@ -438,11 +438,16 @@ def run_repl(agent):
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, handle_interrupt)
 
-        _setup_readline_completer()
+        _check_panel = _setup_readline_completer()
+        _panel_shown = False
 
         try:
             while True:
                 try:
+                    # Show command panel once, between turns, in clean terminal state
+                    if not _panel_shown and _check_panel():
+                        _panel_shown = True
+                        _render_command_panel()
                     prompt_area = (PromptArea()
                         .use(ContextBar()))
                     pre_text, prompt = prompt_area.render(agent)
