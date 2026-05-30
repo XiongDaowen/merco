@@ -413,6 +413,14 @@ def run_repl(agent, dashboard=None, config_source=""):
                     user_input = (await driver.get_input(prompt)).strip()
                     exit_count = 0  # 正常输入，重置计数
 
+                    # Re-register signal handlers (prompt_toolkit may have cleared them)
+                    for sig in (signal.SIGINT, signal.SIGTERM):
+                        try:
+                            loop.remove_signal_handler(sig)
+                        except (NotImplementedError, RuntimeError):
+                            pass
+                        loop.add_signal_handler(sig, handle_interrupt)
+
                     if not user_input:
                         continue
 
