@@ -96,8 +96,8 @@ class SessionSearch:
     def _sanitize(query: str) -> str:
         """清洗 FTS5 查询——去特殊字符，加前缀匹配。FTS5 中 `-` 开头表示 NOT/列约束，`.` 和 `/` 破坏分词。"""
         q = query.strip()
-        # 去掉 FTS5 危险字符：引号、运算符、路径分隔符、括号
-        q = re.sub(r'["\'*()\-\./\[\]~]', ' ', q)
+        # 去掉 FTS5 危险字符：引号、运算符、路径分隔符、括号等。只保留字母/数字/下划线/中文。
+        q = re.sub(r'[^\w\s\u4e00-\u9fff]', ' ', q, flags=re.UNICODE)
         # 合并多余空格，提取有效词
         terms = [t for t in q.split() if t]  # 只去空串，保留所有有效词（FTS5 自行处理 min token）
         if not terms:
