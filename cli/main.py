@@ -218,9 +218,7 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
         .use(ConfigSection())
         .use(HintSection()))
 
-    dashboard_text = dashboard.render(agent, config_source=config_source)
-
-    return agent, dashboard_text
+    return agent, dashboard, config_source
 
 
 # ── 输入区 PromptDecorator ─────────────────────────────────────
@@ -324,7 +322,7 @@ class PromptArea:
 
 # ── REPL 交互循环 ────────────────────────────────────────────────────────
 
-def run_repl(agent, dashboard_text=None):
+def run_repl(agent, dashboard=None, config_source=""):
     import termios
 
     try:
@@ -408,8 +406,9 @@ def run_repl(agent, dashboard_text=None):
         if agent.mcp_manager and agent.config.mcp_servers:
             await agent.mcp_manager.load_config(agent.config.mcp_servers)
 
-        # Render dashboard (now after MCP loaded, so MCP tools counted in ToolsSection)
-        if dashboard_text:
+        # Render dashboard after MCP loaded
+        if dashboard:
+            dashboard_text = dashboard.render(agent, config_source=config_source)
             console.print(Panel(
                 dashboard_text,
                 title="🚀 Mercury Code",
@@ -483,8 +482,8 @@ def main_callback(
 ):
     if ctx.invoked_subcommand is not None:
         return
-    agent, dashboard_text = _setup_agent(config, model, api_key, debug)
-    run_repl(agent, dashboard_text)
+    agent, dashboard, config_source = _setup_agent(config, model, api_key, debug)
+    run_repl(agent, dashboard, config_source)
 
 
 # ── 子命令 ────────────────────────────────────────────────────────────────
@@ -496,8 +495,8 @@ def run_cmd(
     api_key: str = typer.Option(None, "--api-key", "-k", help="API Key"),
     debug: bool = typer.Option(False, "--debug", "-d", help="开启调试日志"),
 ):
-    agent, dashboard_text = _setup_agent(config, model, api_key, debug)
-    run_repl(agent, dashboard_text)
+    agent, dashboard, config_source = _setup_agent(config, model, api_key, debug)
+    run_repl(agent, dashboard, config_source)
 
 
 @app.command("init")
