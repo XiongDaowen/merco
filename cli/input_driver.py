@@ -34,7 +34,7 @@ class PromptToolkitInput(InputDriver):
         hist_path = os.path.expanduser("~/.merco/input_history")
         os.makedirs(os.path.dirname(hist_path), exist_ok=True)
 
-        completer = WordCompleter(commands or [], sentence=False)
+        completer = WordCompleter(commands or [], sentence=True)
 
         bindings = KeyBindings()
 
@@ -47,7 +47,7 @@ class PromptToolkitInput(InputDriver):
             history=FileHistory(hist_path),
             completer=completer,
             key_bindings=bindings,
-            reserve_space_for_menu=0,
+            reserve_space_for_menu=4,
             style=Style.from_dict({
                 "prompt": "bold",
                 "completion-menu.completion": "bg:#444 #fff",
@@ -100,4 +100,4 @@ class PromptToolkitInput(InputDriver):
 
     def update_commands(self, commands: list[str]) -> None:
         """Dynamically update completion word list."""
-        self._session.completer = WordCompleter(commands, sentence=False)
+        self._session.completer = WordCompleter(commands, sentence=True)
