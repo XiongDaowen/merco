@@ -361,7 +361,7 @@ def run_repl(agent, dashboard=None, config_source=""):
     _on_exit(_save_on_exit)
 
     import cli.commands  # triggers all @cmd_registry.register decorators
-    from cli.input_driver import PromptToolkitInput
+    from cli.input_driver import PromptToolkitInput, InputInterrupt
     driver = PromptToolkitInput([c.name for c in cmd_registry.get_all()])
 
 
@@ -430,6 +430,14 @@ def run_repl(agent, dashboard=None, config_source=""):
                     console.print(Panel(Markdown(response), border_style="dim"))
                     console.rule(style="dim")
 
+                except InputInterrupt:
+                    # Ctrl+C with empty buffer → exit logic
+                    exit_count += 1
+                    if exit_count == 1:
+                        console.print("\n[yellow]再按 Ctrl+C 退出，或输入 /exit。[/yellow]")
+                    else:
+                        console.print("\n[dim]再见！[/dim]")
+                        break
                 except asyncio.CancelledError:
                     console.rule(style="dim")
                     console.print("\n[dim]操作已取消。再按一次 Ctrl+C 退出。[/dim]")

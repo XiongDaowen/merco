@@ -27,6 +27,10 @@ from prompt_toolkit.styles import Style
 _PASTE_THRESHOLD = 500  # chars threshold for paste archive
 
 
+class InputInterrupt(Exception):
+    """Raised by PromptToolkitInput when Ctrl+C pressed with empty buffer."""
+
+
 class PromptToolkitInput(InputDriver):
     """prompt_toolkit: paste protection, multiline, command completion, history."""
 
@@ -42,6 +46,15 @@ class PromptToolkitInput(InputDriver):
         def _(event):
             """Alt+Enter: insert newline for multiline input"""
             event.current_buffer.insert_text("\n")
+
+        @bindings.add(Keys.ControlC)
+        def _(event):
+            """Ctrl+C: clear text if present, signal interrupt if empty"""
+            buff = event.current_buffer
+            if buff.text:
+                buff.text = ""
+            else:
+                event.app.exit(exception=InputInterrupt())
 
         self._session = PromptSession(
             history=FileHistory(hist_path),
@@ -65,7 +78,10 @@ class PromptToolkitInput(InputDriver):
         self._session.default_buffer.on_text_changed += _on_text_changed
 
     async def get_input(self, prompt: str) -> str:
-        text = await self._session.prompt_async(prompt)
+        try:
+            text = await self._session.prompt_async(prompt)
+        except InputInterrupt:
+            raise  # propagate to REPL for exit handling
 
         # Swap paste marker back to original text before returning
         if self._paste_stash and text.startswith("[已粘贴"):
