@@ -19,7 +19,13 @@ class MCPServerTool(BaseTool):
         return self._input_schema
 
     async def execute(self, **kwargs) -> dict:
-        """Execute via handler. Guard checked by MCPServerManager before this."""
+        # ToolGuard check — sandbox integration
+        if self._guard:
+            approved = await self._guard.check(
+                self.name, kwargs, source=f"mcp:{self.server}"
+            )
+            if not approved:
+                return {"error": "操作已被拦截或取消"}
         try:
             return await self._handler(self.name, kwargs)
         except Exception as e:

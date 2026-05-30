@@ -99,3 +99,37 @@ class TestMCPServerTool:
         )
         definition = tool.get_definition(context={"skills": ["a", "b"]})
         assert definition["type"] == "function"
+
+    @pytest.mark.asyncio
+    async def test_guard_blocks_execution(self):
+        """Mock guard returns False, verify execute returns error, handler NOT called."""
+        handler_called = False
+
+        async def handler(tool_name, arguments):
+            nonlocal handler_called
+            handler_called = True
+            return {"result": "should not reach"}
+
+        class MockGuard:
+            async def check(self, tool_name, kwargs, source=""):
+                return False
+
+        guard = MockGuard()
+        spec = {"name": "guarded_tool", "description": "blocked", "inputSchema": {}}
+        tool = MCPServerTool(spec, server_name="test", handler=handler, guard=guard)
+
+        result = await tool.execute(arg="value")
+        assert result == {"error": "操作已被拦截或取消"}
+        assert handler_called is False
+
+    @pytest.mark.asyncio
+    async def test_no_guard_allows_execution(self):
+        """Guard is None, handler called normally."""
+        async def handler(tool_name, arguments):
+            return {"result": f"ok: {tool_name}"}
+
+        spec = {"name": "free_tool", "description": "not guarded", "inputSchema": {}}
+        tool = MCPServerTool(spec, server_name="test", handler=handler, guard=None)
+
+        result = await tool.execute(x=42)
+        assert result == {"result": "ok: free_tool"}

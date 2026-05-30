@@ -264,3 +264,9 @@ class TestRestoreWithCheckpoint:
         assistant_msg = [m for m in msgs if m.get("role") == "assistant"]
         assert len(assistant_msg) >= 1
         assert "tool_calls" in assistant_msg[0]
+
+
+def test_agent_has_mcp_manager(test_agent):
+    assert hasattr(test_agent, 'mcp_manager')
+    from merco.mcp.manager import MCPServerManager
+    assert isinstance(test_agent.mcp_manager, MCPServerManager)

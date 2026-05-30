@@ -1,6 +1,7 @@
 """MCP Server lifecycle manager — connect, discover tools, register."""
 import asyncio
 import logging
+import time
 from .config import MCPServerConfig
 from .tool import MCPServerTool
 
@@ -110,10 +111,20 @@ class MCPServerManager:
         for name, state in self._servers.items():
             for tool in state["tools"]:
                 if tool.name == tool_name:
-                    if state["config"].command:
-                        return await self._call_stdio_tool(state["config"], tool_name, arguments)
-                    else:
-                        return await self._call_http_tool(state["config"], tool_name, arguments)
+                    t0 = time.monotonic()
+                    try:
+                        if state["config"].command:
+                            result = await self._call_stdio_tool(state["config"], tool_name, arguments)
+                        else:
+                            result = await self._call_http_tool(state["config"], tool_name, arguments)
+                        if self._observer:
+                            self._observer.emit("mcp.tool_call", server=name, tool=tool_name,
+                                                duration=time.monotonic()-t0)
+                        return result
+                    except Exception as e:
+                        if self._observer:
+                            self._observer.emit("mcp.error", server=name, tool=tool_name, error=str(e))
+                        raise
         return {"error": f"Tool '{tool_name}' not found in any MCP server", "isError": True}
 
     async def _call_stdio_tool(self, config: MCPServerConfig, tool_name: str, arguments: dict) -> dict:

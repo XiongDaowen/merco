@@ -276,6 +276,13 @@ class Agent:
             .add(_mem)
         )
 
+        # ── MCP 客户端 ──
+        from merco.mcp.manager import MCPServerManager
+        self.mcp_manager = MCPServerManager(
+            tool_registry=self.tool_registry,
+            observer=self.observer,
+        )
+
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
         self._current_prompt = prompt
@@ -287,6 +294,10 @@ class Agent:
         self.context.set_overhead(await self._build_system_prompt(), len(tools))
         if self.context.needs_compression():
             await self._compress_context()
+
+        # Lazy MCP init on first run
+        if self.config.mcp_servers and not self.mcp_manager.status():
+            await self.mcp_manager.load_config(self.config.mcp_servers)
 
         # 执行 Agent 循环
         result = await self._agent_loop()

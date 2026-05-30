@@ -56,6 +56,35 @@ async def cmd_report(agent, args):
     return True
 
 
+@cmd_registry.register("/reload-mcp", description="重新加载 MCP 服务器", group="info")
+async def cmd_reload_mcp(agent, args):
+    if not hasattr(agent, 'mcp_manager'):
+        console.print("[dim]MCP 尚未初始化[/dim]")
+        return True
+    await agent.mcp_manager.reload()
+    status = agent.mcp_manager.status()
+    console.print(f"[green]MCP 已重载: {len(status)} 个服务器[/green]")
+    for name, s in status.items():
+        console.print(f"  🟢 {name}: {s['tools_count']} tools")
+    return True
+
+
+@cmd_registry.register("/mcp-status", description="MCP 服务器状态", group="info")
+async def cmd_mcp_status(agent, args):
+    if not hasattr(agent, 'mcp_manager'):
+        console.print("[dim]MCP 尚未初始化[/dim]")
+        return True
+    status = agent.mcp_manager.status()
+    if not status:
+        console.print("[dim]无已连接的 MCP 服务器[/dim]")
+        return True
+    console.print("[bold]MCP 服务器状态:[/bold]")
+    for name, s in status.items():
+        icon = "🟢" if s["connected"] else "🔴"
+        console.print(f"  {icon} {name}: {s['tools_count']} tools")
+    return True
+
+
 # ═══════════════════════════════════════════════════════════════════
 # SESSION GROUP
 # ═══════════════════════════════════════════════════════════════════
