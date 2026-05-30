@@ -10,3 +10,64 @@ class InputDriver(ABC):
     async def get_input(self, prompt: str) -> str:
         """Get user input line(s). Multiline handled by driver internally."""
         ...
+
+
+import os
+import time
+from pathlib import Path
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.keys import Keys
+from prompt_toolkit.styles import Style
+
+_PASTE_THRESHOLD = 500  # chars threshold for paste archive
+
+
+class PromptToolkitInput(InputDriver):
+    """prompt_toolkit: paste protection, multiline, command completion, history."""
+
+    def __init__(self, commands: list[str] | None = None):
+        hist_path = os.path.expanduser("~/.merco/input_history")
+        os.makedirs(os.path.dirname(hist_path), exist_ok=True)
+
+        completer = WordCompleter(commands or [], sentence=True)
+
+        bindings = KeyBindings()
+
+        @bindings.add(Keys.Escape, Keys.Enter)
+        def _(event):
+            """Alt+Enter: insert newline for multiline input"""
+            event.current_buffer.insert_text("\n")
+
+        self._session = PromptSession(
+            history=FileHistory(hist_path),
+            completer=completer,
+            key_bindings=bindings,
+            style=Style.from_dict({
+                "prompt": "bold",
+                "completion-menu.completion": "bg:#444 #fff",
+            }),
+        )
+
+    async def get_input(self, prompt: str) -> str:
+        text = await self._session.prompt_async(prompt)
+
+        # Archive long pastes to file (human reference)
+        if len(text) >= _PASTE_THRESHOLD:
+            self._save_paste(text)
+
+        return text
+
+    def _save_paste(self, text: str) -> None:
+        tmpdir = os.path.expanduser("~/.merco/pastes")
+        os.makedirs(tmpdir, exist_ok=True)
+        ts = int(time.time() * 1000)
+        path = os.path.join(tmpdir, f"{ts}.txt")
+        Path(path).write_text(text, encoding="utf-8")
+
+    def update_commands(self, commands: list[str]) -> None:
+        """Dynamically update completion word list."""
+        self._session.completer = WordCompleter(commands, sentence=True)
