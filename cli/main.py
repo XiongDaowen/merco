@@ -406,6 +406,10 @@ def run_repl(agent):
 
         _setup_readline_completer()
 
+        # Pre-load MCP servers before first user input
+        if agent.mcp_manager and agent.config.mcp_servers:
+            await agent.mcp_manager.load_config(agent.config.mcp_servers)
+
         try:
             while True:
                 try:

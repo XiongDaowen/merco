@@ -295,10 +295,6 @@ class Agent:
         if self.context.needs_compression():
             await self._compress_context()
 
-        # Lazy MCP init on first run
-        if self.config.mcp_servers and not self.mcp_manager.status():
-            await self.mcp_manager.load_config(self.config.mcp_servers)
-
         # 执行 Agent 循环
         result = await self._agent_loop()
         self._auto_title(prompt)
