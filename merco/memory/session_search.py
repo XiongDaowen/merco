@@ -94,10 +94,12 @@ class SessionSearch:
 
     @staticmethod
     def _sanitize(query: str) -> str:
-        """清洗 FTS5 查询——去特殊字符，加前缀匹配"""
+        """清洗 FTS5 查询——去特殊字符，加前缀匹配。FTS5 中 `-` 开头表示 NOT/列约束，`.` 和 `/` 破坏分词。"""
         q = query.strip()
-        q = re.sub(r'["\'*()]', '', q)
-        if not q:
+        # 去掉 FTS5 危险字符：引号、运算符、路径分隔符、括号
+        q = re.sub(r'["\'*()\-\./\[\]~]', ' ', q)
+        # 合并多余空格，提取有效词
+        terms = [t for t in q.split() if len(t) >= 2]  # 跳过单字母（FTS5 无意义）
+        if not terms:
             return "*"
-        terms = [t + "*" for t in q.split()]
-        return " ".join(terms)
+        return " ".join(t + "*" for t in terms)
