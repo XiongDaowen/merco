@@ -36,7 +36,7 @@ async def cmd_context(agent, args):
 
 @cmd_registry.register("/tools", description="列出可用工具", group="info")
 async def cmd_tools(agent, args):
-    tools = agent.tool_registry.list_tools() if agent.tool_registry else []
+    tools = [t for t in agent.tool_registry.list_tools() if t.check()] if agent.tool_registry else []
     if not tools:
         console.print("无可用工具")
         return True
