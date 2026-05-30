@@ -58,7 +58,7 @@ async def cmd_tools(agent, args):
             label = "[内置]"
         console.print(f"\n  [bold yellow]{label}[/bold yellow]")
         for t in group_tools:
-            raw = t.description or ""
+            raw = (t.description or "").replace("\n", " ")
             desc = raw[:57] + "..." if len(raw) > 60 else raw
             console.print(f"    [bold]{t.name}[/bold]  [dim]{desc}[/dim]")
     return True
