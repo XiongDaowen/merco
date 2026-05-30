@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import os
-import readline
 import signal
 import typer
 from rich.console import Console
@@ -362,17 +361,9 @@ def run_repl(agent, dashboard=None, config_source=""):
     _on_exit(_save_on_exit)
 
     import cli.commands  # triggers all @cmd_registry.register decorators
+    from cli.input_driver import PromptToolkitInput
+    driver = PromptToolkitInput([c.name for c in cmd_registry.get_all()])
 
-    def _setup_readline_completer():
-        def completer(text, state):
-            matches = cmd_registry.match(text)
-            if state < len(matches):
-                return matches[state].name
-            return None
-
-        readline.set_completer(completer)
-        readline.parse_and_bind("tab: complete")
-        readline.set_completer_delims(" \t\n")
 
 
     async def repl():
@@ -400,8 +391,6 @@ def run_repl(agent, dashboard=None, config_source=""):
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, handle_interrupt)
 
-        _setup_readline_completer()
-
         # Pre-load MCP servers before first user input
         if agent.mcp_manager and agent.config.mcp_servers:
             await agent.mcp_manager.load_config(agent.config.mcp_servers)
@@ -421,8 +410,7 @@ def run_repl(agent, dashboard=None, config_source=""):
                         .use(ContextBar()))
                     pre_text, prompt = prompt_area.render(agent)
                     console.print(f"\n{pre_text}")
-                    user_input = await asyncio.to_thread(input, prompt)
-                    user_input = user_input.strip()
+                    user_input = (await driver.get_input(prompt)).strip()
                     exit_count = 0  # 正常输入，重置计数
 
                     if not user_input:
