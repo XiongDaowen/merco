@@ -64,28 +64,15 @@ class PromptToolkitInput(InputDriver):
 
         self._session.default_buffer.on_text_changed += _on_text_changed
 
-        original_accept = self._session.default_buffer.accept_handler
-
-        def _on_buffer_accept(buff: Buffer) -> bool:
-            if self._paste_stash:
-                buff.text = self._paste_stash
-                self._paste_stash = None
-            if original_accept is not None:
-                return original_accept(buff)
-            return True
-
-        self._session.default_buffer.accept_handler = _on_buffer_accept
-
     async def get_input(self, prompt: str) -> str:
         text = await self._session.prompt_async(prompt)
 
-        # If paste was stashed but accept_handler didn't fire (edge case),
-        # return the original stashed text instead of the marker.
-        if self._paste_stash:
+        # Swap paste marker back to original text before returning
+        if self._paste_stash and text.startswith("[已粘贴"):
             text = self._paste_stash
             self._paste_stash = None
 
-        # Archive long pastes to file (human reference)
+        # Archive long input to file (human reference)
         if len(text) >= _PASTE_THRESHOLD:
             self._save_paste(text)
 
