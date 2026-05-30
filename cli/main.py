@@ -410,6 +410,12 @@ def run_repl(agent):
         if agent.mcp_manager and agent.config.mcp_servers:
             await agent.mcp_manager.load_config(agent.config.mcp_servers)
 
+        # Show MCP tool count on dashboard
+        status = agent.mcp_manager.status()
+        if status:
+            parts = [f"{name} ({s['tools_count']})" for name, s in status.items()]
+            console.print(f"  MCP: [bold]{', '.join(parts)}[/bold]")
+
         try:
             while True:
                 try:
