@@ -158,3 +158,17 @@ class TestCloneSession:
         assert cloned["messages"][1]["tool_call_id"] == "call_1"
         assert cloned["messages"][1]["tool_calls"] == []
         assert cloned["messages"][1]["reasoning"] == ""
+
+
+class TestGetChildren:
+    def test_get_children(self, tmp_path):
+        db_path = str(tmp_path / "get_children_test.db")
+        store = SessionStore(db_path)
+
+        store.create_session("s1", title="Parent")
+        child1_id = store.clone_session("s1")
+        child2_id = store.clone_session("s1")
+        children = store.get_children("s1")
+        assert len(children) >= 2
+        assert any(c["id"] == child1_id for c in children)
+        assert any(c["id"] == child2_id for c in children)

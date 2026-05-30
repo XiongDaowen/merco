@@ -542,6 +542,8 @@ async def handle_command(cmd: str, agent) -> bool:
             "/report   - 会话统计报告\n"
             "/model    - 显示当前模型\n"
             "/tools    - 列出可用工具\n"
+            "/fork     - 从当前会话创建分支\n"
+            "/tree     - 查看会话分支树\n"
             "/context  - 上下文用量\n"
             "/skills   - 列出已加载技能\n"
             "/history  - 查看本会话的文件修改历史\n"
@@ -702,6 +704,44 @@ async def handle_command(cmd: str, agent) -> bool:
                 console.print(f"  - {tool.name}: {tool.description}")
         else:
             console.print("无可用工具")
+        return True
+
+    elif command == "/fork":
+        title = parts[1].strip() if len(parts) > 1 else ""
+        # Save current session
+        agent.observer.save()
+        agent.session.metadata["observer"] = agent.observer.snapshot()
+        agent.session.save()
+        agent._session_store.save_metadata(agent.session.id, agent.session.metadata)
+
+        from merco.core.session import Session
+        new_session = Session.fork(agent.session.id, agent._session_store,
+                                    title=title or None)
+        if not new_session:
+            console.print("[red]Fork 失败[/red]")
+            return True
+
+        agent.session = new_session
+        agent.observer.reset()
+        agent._restore_context()
+        from merco.sandbox import snapshot
+        snapshot.set_current_session(agent.session.id)
+        display = new_session.title or new_session.id[:8]
+        console.print(f"[green]已 fork 到: {display}[/green]")
+        return True
+
+    elif command == "/tree":
+        children = agent._session_store.get_children(agent.session.id)
+        parent = agent.session.metadata.get("parent_id")
+        if not children and not parent:
+            console.print("[dim]单会话，无分支[/dim]")
+            return True
+        if parent:
+            console.print(f"[dim]父会话: {parent[:8]}[/dim]")
+        if children:
+            console.print("[bold]子会话:[/bold]")
+            for c in children[:10]:
+                console.print(f"  - {c['title'] or c['id'][:8]}  [dim]{c['created_at'][:10]}[/dim]")
         return True
 
     elif command == "/recall":

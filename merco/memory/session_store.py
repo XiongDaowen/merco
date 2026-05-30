@@ -238,6 +238,15 @@ class SessionStore:
 
         return new_id
 
+    def get_children(self, session_id: str) -> list[dict]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT id, title, created_at, message_count "
+                "FROM sessions WHERE parent_id = ? ORDER BY created_at DESC",
+                (session_id,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
