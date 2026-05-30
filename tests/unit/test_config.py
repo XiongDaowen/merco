@@ -187,3 +187,28 @@ class TestConfig:
         cfg = MercoConfig._from_dict(data)
         assert cfg.fork_enabled is False
         assert cfg.fork_auto_on_compress is False
+
+    # ── fork_reset_observer config tests ──
+
+    def test_fork_reset_observer_default(self):
+        """fork_reset_observer defaults to False."""
+        cfg = MercoConfig()
+        assert cfg.fork_reset_observer is False
+
+    def test_fork_reset_observer_set_true_via_dict(self):
+        """_from_dict reads fork_reset_observer from 'session' block."""
+        data = {
+            "session": {
+                "fork_reset_observer": True,
+            }
+        }
+        cfg = MercoConfig._from_dict(data)
+        assert cfg.fork_reset_observer is True
+
+    def test_fork_reset_observer_in_to_dict(self):
+        """_to_dict includes fork_reset_observer in 'session' block."""
+        cfg = MercoConfig()
+        cfg.fork_reset_observer = True
+        data = cfg._to_dict()
+        assert "session" in data
+        assert data["session"]["fork_reset_observer"] is True

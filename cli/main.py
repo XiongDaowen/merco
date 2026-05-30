@@ -546,7 +546,7 @@ async def handle_command(cmd: str, agent) -> bool:
             "/tree     - 查看会话分支树\n"
             "/context  - 上下文用量\n"
             "/skills   - 列出已加载技能\n"
-            "/history  - 查看本会话的文件修改历史\n"
+            "/history  - 查看当前会话完整消息记录 (支持分页)\n"
             "/revert   - 撤销本会话的文件修改",
             title="帮助",
         ))
@@ -605,20 +605,36 @@ async def handle_command(cmd: str, agent) -> bool:
         return True
 
     elif command == "/history":
-        from merco.sandbox import snapshot
-        session_id = snapshot.get_current_session()
-        if not session_id:
-            console.print("[red]未找到当前会话[/red]")
+        # 分页：/history 或 /history <offset> <limit>
+        arg = parts[1] if len(parts) > 1 else ""
+        try:
+            args = [int(x) for x in arg.split()]
+        except ValueError:
+            args = []
+        offset = max(1, args[0]) if len(args) >= 1 else 1
+        limit = min(50, args[1]) if len(args) >= 2 else 20
+
+        session_data = agent._session_store.load_session(agent.session.id)
+        msgs = session_data.get("messages", []) if session_data else []
+
+        if not msgs:
+            console.print("[dim]当前会话无消息[/dim]")
             return True
-        records = snapshot.history(session_id)
-        if not records:
-            console.print("[dim]当前会话无文件修改记录[/dim]")
-            return True
-        console.print(f"[bold]📋 会话 {session_id[:8]} 的文件修改:[/bold]")
-        for i, rec in enumerate(records):
-            from datetime import datetime
-            ts = rec.get("timestamp", "")[:19].replace("T", " ")
-            console.print(f"  {i}. [yellow]{rec['path']}[/yellow]  {ts}")
+
+        total = len(msgs)
+        page = msgs[offset-1:offset-1+limit]
+        end_idx = min(offset+limit-1, total)
+
+        console.print(f"[bold]📋 {agent.session.title or agent.session.id[:8]}"
+                      f" ({offset}-{end_idx}/{total}):[/bold]")
+        for i, m in enumerate(page, offset):
+            role_icon = {"user": "👤", "assistant": "🤖", "tool": "🔧", "system": "⚙️"}.get(m["role"], "❓")
+            content = (m.get("content") or "")[:120].replace("\n", " ")
+            timestamp = m.get("timestamp", "")[:16]
+            console.print(f"  {i:3d}. {role_icon} [dim]{timestamp}[/dim] {content}")
+
+        if end_idx < total:
+            console.print(f"  [dim]... 共 {total} 条。下一页: /history {offset+limit}[/dim]")
         return True
 
     elif command == "/revert":
@@ -722,7 +738,7 @@ async def handle_command(cmd: str, agent) -> bool:
             return True
 
         agent.session = new_session
-        agent.observer.reset()
+        agent.observer.reset(full=agent.config.fork_reset_observer)
         agent._restore_context()
         from merco.sandbox import snapshot
         snapshot.set_current_session(agent.session.id)

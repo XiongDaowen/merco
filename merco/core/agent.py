@@ -303,6 +303,26 @@ class Agent:
         snap = self.session.metadata.get("observer")
         if snap:
             self.observer.restore(snap)
+
+        checkpoint = self.session.metadata.get("compress_checkpoint")
+        if checkpoint:
+            # Restore from checkpoint: summary + tail only
+            summary = checkpoint.get("summary", "")
+            tail_count = checkpoint.get("tail_count", 2)
+            all_msgs = self.session.messages
+            tail = all_msgs[-tail_count * 2:] if len(all_msgs) > tail_count * 2 else all_msgs  # ~2 msgs per turn
+
+            if summary:
+                self.context.add({"role": "system", "content": summary})
+            for msg in tail:
+                entry = {"role": msg["role"], "content": msg.get("content", "")}
+                if msg.get("tool_call_id"):
+                    entry["tool_call_id"] = msg["tool_call_id"]
+                if msg.get("tool_calls"):
+                    entry["tool_calls"] = msg["tool_calls"]
+                self.context.add(entry)
+            return
+
         for msg in self.session.messages:
             entry = {"role": msg["role"], "content": msg.get("content", "")}
             if msg.get("tool_call_id"):
@@ -602,8 +622,11 @@ class Agent:
             threshold=self.config.compression_threshold,
         )
 
+        summary_result = None
+
         async def llm_summary(messages: list[dict]) -> str:
             """LLM 生成语义摘要——保留用户意图 + 关键决策"""
+            nonlocal summary_result
             lines = []
             for m in messages:
                 role = m.get("role", "unknown")
@@ -626,10 +649,13 @@ class Agent:
                     [{"role": "user", "content": prompt}], tools=[]
                 )
                 content = response.get("content", "").strip()
-                return f"[Earlier conversation summary]: {content}"
+                summary_result = f"[Earlier conversation summary]: {content}"
+                return summary_result
             except Exception as e:
                 logger.warning("LLM summary failed: %s", e)
-                return f"[{len(messages)} earlier messages — summary unavailable]"
+                fallback = f"[{len(messages)} earlier messages — summary unavailable]"
+                summary_result = fallback
+                return fallback
 
         compressed = await compressor.compress(
             self.context.messages,
@@ -640,9 +666,15 @@ class Agent:
         self.context.current_tokens = sum(
             msg_tokens(m) for m in compressed
         )
-        # 持久化压缩摘要到 session，重启后恢复
-        self.session.metadata["compressed_at"] = self.context.current_tokens
+        # Store compression checkpoint so restart doesn't re-expand
+        self.session.metadata["compress_checkpoint"] = {
+            "summary": summary_result or "",
+            "compressed_at": time.time(),
+            "original_count": len(self.session.messages),
+            "tail_count": 2,  # same as TAIL_TURNS in compressor
+        }
         console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
+        console.print("[dim]→ 用 /history 查看完整记录[/dim]")
 
     @staticmethod
     def _render_reasoning(reasoning: str) -> None:

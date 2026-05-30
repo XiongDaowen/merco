@@ -204,3 +204,63 @@ class TestCompressAutoFork:
             await agent._compress_context()
             # Compress succeeded (messages still in context)
             assert len(agent.context.messages) >= 2
+
+
+class TestRestoreWithCheckpoint:
+    """Tests for checkpoint-based context restore (fix-3)."""
+
+    def test_restore_with_checkpoint_uses_summary(self, test_agent):
+        """When compress_checkpoint exists, only summary + tail are loaded."""
+        agent = test_agent
+        agent.session.metadata["compress_checkpoint"] = {
+            "summary": "[summary] user asked about X, agent did Y",
+            "tail_count": 2, "original_count": 100, "compressed_at": 12345,
+        }
+        agent.session.add_message("user", "recent message 1")
+        agent.session.add_message("assistant", "recent reply 1")
+        agent.session.add_message("user", "recent message 2")
+        agent._restore_context()
+        # verify summary is in context, but not > 4 messages loaded
+        assert len(agent.context.messages) <= 5  # summary + ~4 tail msgs
+        assert "user asked about X" in agent.context.messages[0]["content"]
+
+    def test_restore_without_checkpoint_loads_all(self, test_agent):
+        """Without checkpoint, all session messages are loaded."""
+        agent = test_agent
+        agent.session.add_message("user", "msg1")
+        agent.session.add_message("assistant", "msg2")
+        agent._restore_context()
+        assert len(agent.context.messages) >= 2
+
+    def test_restore_with_checkpoint_no_summary(self, test_agent):
+        """Checkpoint with empty summary: still loads tail only."""
+        agent = test_agent
+        agent.session.metadata["compress_checkpoint"] = {
+            "summary": "",
+            "tail_count": 1, "original_count": 50, "compressed_at": 99999,
+        }
+        agent.session.add_message("user", "msg1")
+        agent.session.add_message("assistant", "msg2")
+        agent.session.add_message("user", "msg3")
+        agent.session.add_message("assistant", "msg4")
+        agent._restore_context()
+        # 1 tail turn = 2 msgs
+        assert len(agent.context.messages) == 2
+
+    def test_restore_with_checkpoint_preserves_tool_calls(self, test_agent):
+        """Tail messages with tool_calls are loaded correctly."""
+        agent = test_agent
+        agent.session.metadata["compress_checkpoint"] = {
+            "summary": "[summary] did some work",
+            "tail_count": 1, "original_count": 20, "compressed_at": 555,
+        }
+        agent.session.add_message("assistant", "calling tool", tool_calls=[
+            {"id": "tc1", "type": "function", "function": {"name": "echo", "arguments": "{}"}}
+        ])
+        agent._restore_context()
+        msgs = agent.context.messages
+        assert len(msgs) >= 1
+        # The assistant message should have tool_calls
+        assistant_msg = [m for m in msgs if m.get("role") == "assistant"]
+        assert len(assistant_msg) >= 1
+        assert "tool_calls" in assistant_msg[0]
