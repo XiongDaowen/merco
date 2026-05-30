@@ -586,6 +586,15 @@ class Agent:
 
     async def _compress_context(self):
         """压缩上下文"""
+        # Auto-fork: save complete copy before compressing
+        if self.config.fork_enabled and self.config.fork_auto_on_compress:
+            try:
+                self.session.save()
+                archived_id = self._session_store.clone_session(self.session.id)
+                console.print(f"[dim]📦 原会话已归档: {archived_id[:8]}[/dim]")
+            except Exception:
+                logger.debug("Auto-fork failed", exc_info=True)
+
         from merco.memory.compressor import ContextCompressor
 
         compressor = ContextCompressor(

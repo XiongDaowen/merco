@@ -165,14 +165,15 @@ class SessionStore:
             )
             conn.commit()
 
-    def set_title(self, session_id: str, title: str):
-        """Always set the title, regardless of current value."""
+    def set_title(self, session_id: str, title: str) -> bool:
+        """Always set the title, regardless of current value. Returns True if a row was updated."""
         with self._conn() as conn:
-            conn.execute(
-                "UPDATE sessions SET title = ? WHERE id = ?",
-                (title, session_id),
+            cur = conn.execute(
+                "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
+                (title, _now(), session_id),
             )
             conn.commit()
+            return cur.rowcount > 0
 
     def delete_session(self, session_id: str):
         with self._conn() as conn:

@@ -68,6 +68,17 @@ class Session:
         return s
 
     @classmethod
+    def fork(cls, session_id: str, store, title: str = None) -> "Session | None":
+        """从 session_id 克隆新会话。返回新 Session 或 None。"""
+        try:
+            new_id = store.clone_session(session_id)
+        except ValueError:
+            return None
+        if title is not None:
+            store.set_title(new_id, title)
+        return cls.load(new_id, store)
+
+    @classmethod
     def resume_or_create(cls, store, session_id: str = None) -> "Session":
         """恢复指定会话，或自动恢复上次，或新建"""
         if session_id:

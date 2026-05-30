@@ -141,3 +141,66 @@ class TestBuildSystemPromptRecall:
 
         assert "## 相关历史对话（仅供参考）" in prompt
         assert "1. [Session One] First memory snippet" in prompt
+
+
+class TestCompressAutoFork:
+    """Tests for auto-fork on context compress (fork-4)."""
+
+    @pytest.mark.asyncio
+    async def test_compress_auto_fork_triggers_clone(self, test_agent):
+        """When fork_enabled + fork_auto_on_compress are True, clone_session is called."""
+        agent = test_agent
+        agent.config.fork_enabled = True
+        agent.config.fork_auto_on_compress = True
+
+        # Add a few messages so compressor returns early (len <= 4 → no real compress)
+        agent.context.add({"role": "user", "content": "hello"})
+        agent.context.add({"role": "assistant", "content": "hi there"})
+
+        with patch.object(agent._session_store, "clone_session", return_value="fake-new-id") as mock_clone:
+            await agent._compress_context()
+            mock_clone.assert_called_once_with(agent.session.id)
+
+    @pytest.mark.asyncio
+    async def test_compress_auto_fork_disabled(self, test_agent):
+        """When fork_auto_on_compress=False, clone_session is NOT called."""
+        agent = test_agent
+        agent.config.fork_enabled = True
+        agent.config.fork_auto_on_compress = False
+
+        agent.context.add({"role": "user", "content": "hello"})
+        agent.context.add({"role": "assistant", "content": "hi"})
+
+        with patch.object(agent._session_store, "clone_session") as mock_clone:
+            await agent._compress_context()
+            mock_clone.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_compress_auto_fork_fork_disabled(self, test_agent):
+        """When fork_enabled=False, no auto-fork even if auto_on_compress=True."""
+        agent = test_agent
+        agent.config.fork_enabled = False
+        agent.config.fork_auto_on_compress = True
+
+        agent.context.add({"role": "user", "content": "hello"})
+        agent.context.add({"role": "assistant", "content": "hi"})
+
+        with patch.object(agent._session_store, "clone_session") as mock_clone:
+            await agent._compress_context()
+            mock_clone.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_compress_auto_fork_clone_failure_does_not_block(self, test_agent):
+        """If clone_session raises, compress still completes normally."""
+        agent = test_agent
+        agent.config.fork_enabled = True
+        agent.config.fork_auto_on_compress = True
+
+        agent.context.add({"role": "user", "content": "hello"})
+        agent.context.add({"role": "assistant", "content": "hi"})
+
+        with patch.object(agent._session_store, "clone_session", side_effect=RuntimeError("DB down")):
+            # Should not raise — compress should complete
+            await agent._compress_context()
+            # Compress succeeded (messages still in context)
+            assert len(agent.context.messages) >= 2

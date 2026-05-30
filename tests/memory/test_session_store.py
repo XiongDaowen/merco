@@ -1,7 +1,48 @@
-"""Tests for SessionStore.clone_session()"""
+"""Tests for SessionStore.clone_session() and SessionStore.set_title()"""
 
 import pytest
 from merco.memory.session_store import SessionStore
+
+
+class TestSetTitle:
+    def test_set_title_existing(self, tmp_path):
+        """Setting title on an existing session returns True and updates title + updated_at."""
+        db_path = str(tmp_path / "set_title_test.db")
+        store = SessionStore(db_path)
+
+        store.create_session("s1", title="Original")
+        original = store.load_session("s1")
+        original_updated = original["updated_at"]
+
+        result = store.set_title("s1", "New Title")
+        assert result is True
+
+        updated = store.load_session("s1")
+        assert updated["title"] == "New Title"
+        # updated_at should be >= original (may be == if within same second)
+        assert updated["updated_at"] >= original_updated
+
+    def test_set_title_overwrite(self, tmp_path):
+        """Overwriting an already-set title returns True and changes the title."""
+        db_path = str(tmp_path / "set_title_overwrite.db")
+        store = SessionStore(db_path)
+
+        store.create_session("s1", title="First")
+        result1 = store.set_title("s1", "Second")
+        assert result1 is True
+        assert store.load_session("s1")["title"] == "Second"
+
+        result2 = store.set_title("s1", "Third")
+        assert result2 is True
+        assert store.load_session("s1")["title"] == "Third"
+
+    def test_set_title_nonexistent(self, tmp_path):
+        """Setting title on a nonexistent session returns False, does NOT crash."""
+        db_path = str(tmp_path / "set_title_nonexistent.db")
+        store = SessionStore(db_path)
+
+        result = store.set_title("ghost-session", "Ghost Title")
+        assert result is False
 
 
 class TestCloneSession:
