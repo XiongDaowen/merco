@@ -19,6 +19,7 @@ dependencies = [
     "ddgs>=7.0.0",
     "ddgs>=9.14.4",
     "mcp>=1.0.0",
+    "prompt-toolkit>=3.0.0",
 ]
 
 [project.scripts]
