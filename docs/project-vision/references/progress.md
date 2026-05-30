@@ -15,6 +15,7 @@
 
 - **Memory 召回（新功能）**: `Recaller` 协议 (`BaseRecaller` ABC) → `FTS5Recaller`（调 SessionSearch）+ `MemoryRecaller`（调 MemoryStore）→ `HybridRecaller` 聚合/排序/去重/截断/缓存。`Agent._build_system_prompt()` 末尾自动注入召回（3条×300字≈600 tokens）。`/recall` CLI 命令手动搜索。配置项：`memory.recall_enabled/limit/max_chars/threshold`。测试 23+7+16=46 个。
 - **memory config 重构**: `memory_enabled/memory_path` 移入 `memory` 嵌套对象，与 recall 配置统一。`_from_dict` 加 isinstance 守卫防非 dict 值 crash。
+- **会话 Fork/分支（新功能）**: `SessionStore.clone_session()` 原子深克隆 + `get_children()` 子会话查询。`Session.fork()` 工厂方法。`Agent._compress_context` 压缩前自动 fork 归档。`/fork` CLI 命令手动分支 + `/tree` 分支树查看。配置：`session.fork_enabled` + `session.fork_auto_on_compress`。测试 15 个。
 
 ### 本次会话更新 (2026-05-28)
 
@@ -160,7 +161,7 @@
 |------|--------|----------|----------|-------|
 | Session CRUD | ✓ | ✓ | ✓ | ✓ |
 | FTS5 全文搜索 | ✓✓ 双tokenizer | ✗ | ✓ | ✓ |
-| Fork/分支 | ✓ | ✓ | ✓ | ✗ |
+| Fork/Branch | ✓ | ✓ | ✓ | **✓ (新增)** |
 | Revert/Undo | ✗ | ✓ | ✗ | ✗ |
 | 压缩保留尾轮 | ✓ | ✓ | ✓ | ✓ |
 | 压缩 checkpoint | ✗ | ✗ | ✓ | ✓ |
@@ -171,7 +172,7 @@
 | 跨会话搜索 | ✓ | ✗ | ✓ | ✓ |
 | 观察性报告 | ✗ | ✗ | ✗ | ✓ 独有 |
 
-**总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 8**
+**总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 9**
 
 ## 下一步（按优先级）
 
