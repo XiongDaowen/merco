@@ -63,7 +63,7 @@ class MCPServerManager:
 
             self._servers[name] = {"config": config, "tools": server_tools}
             if self._hooks:
-                self._hooks.emit("mcp.connect", server=name, tools=len(tools))
+                await self._hooks.emit("mcp.connect", server=name, tools=len(tools))
             logger.info("MCP '%s': %d tools registered", name, len(tools))
             return True
         except Exception as e:
@@ -118,12 +118,12 @@ class MCPServerManager:
                         else:
                             result = await self._call_http_tool(state["config"], tool_name, arguments)
                         if self._hooks:
-                            self._hooks.emit("mcp.tool_call", server=name, tool=tool_name,
+                            await self._hooks.emit("mcp.tool_call", server=name, tool=tool_name,
                                                 duration=time.monotonic()-t0)
                         return result
                     except Exception as e:
                         if self._hooks:
-                            self._hooks.emit("mcp.error", server=name, tool=tool_name, error=str(e))
+                            await self._hooks.emit("mcp.error", server=name, tool=tool_name, error=str(e))
                         raise
         return {"error": f"Tool '{tool_name}' not found in any MCP server", "isError": True}
 

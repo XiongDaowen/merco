@@ -18,7 +18,7 @@ class TestMCPServerManager:
     @pytest.fixture
     def hooks(self):
         h = MagicMock()
-        h.emit = MagicMock()
+        h.emit = AsyncMock()
         return h
 
     @pytest.fixture
