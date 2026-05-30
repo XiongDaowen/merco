@@ -218,11 +218,9 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
         .use(ConfigSection())
         .use(HintSection()))
 
-    console.print(Panel(
-        dashboard.render(agent, config_source=config_source),
-        title="🚀 Mercury Code",
-    ))
-    return agent
+    dashboard_text = dashboard.render(agent, config_source=config_source)
+
+    return agent, dashboard_text
 
 
 # ── 输入区 PromptDecorator ─────────────────────────────────────
@@ -326,7 +324,7 @@ class PromptArea:
 
 # ── REPL 交互循环 ────────────────────────────────────────────────────────
 
-def run_repl(agent):
+def run_repl(agent, dashboard_text=None):
     import termios
 
     try:
@@ -410,11 +408,12 @@ def run_repl(agent):
         if agent.mcp_manager and agent.config.mcp_servers:
             await agent.mcp_manager.load_config(agent.config.mcp_servers)
 
-        # Show MCP tool count on dashboard
-        status = agent.mcp_manager.status()
-        if status:
-            parts = [f"{name} ({s['tools_count']})" for name, s in status.items()]
-            console.print(f"  MCP: [bold]{', '.join(parts)}[/bold]")
+        # Render dashboard (now after MCP loaded, so MCP tools counted in ToolsSection)
+        if dashboard_text:
+            console.print(Panel(
+                dashboard_text,
+                title="🚀 Mercury Code",
+            ))
 
         try:
             while True:
@@ -484,8 +483,8 @@ def main_callback(
 ):
     if ctx.invoked_subcommand is not None:
         return
-    agent = _setup_agent(config, model, api_key, debug)
-    run_repl(agent)
+    agent, dashboard_text = _setup_agent(config, model, api_key, debug)
+    run_repl(agent, dashboard_text)
 
 
 # ── 子命令 ────────────────────────────────────────────────────────────────
@@ -497,8 +496,8 @@ def run_cmd(
     api_key: str = typer.Option(None, "--api-key", "-k", help="API Key"),
     debug: bool = typer.Option(False, "--debug", "-d", help="开启调试日志"),
 ):
-    agent = _setup_agent(config, model, api_key, debug)
-    run_repl(agent)
+    agent, dashboard_text = _setup_agent(config, model, api_key, debug)
+    run_repl(agent, dashboard_text)
 
 
 @app.command("init")
