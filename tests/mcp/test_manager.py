@@ -16,14 +16,14 @@ class TestMCPServerManager:
         return ToolRegistry()
 
     @pytest.fixture
-    def observer(self):
-        obs = MagicMock()
-        obs.emit = MagicMock()
-        return obs
+    def hooks(self):
+        h = MagicMock()
+        h.emit = MagicMock()
+        return h
 
     @pytest.fixture
-    def manager(self, registry, observer):
-        return MCPServerManager(tool_registry=registry, observer=observer)
+    def manager(self, registry, hooks):
+        return MCPServerManager(tool_registry=registry, hooks=hooks)
 
     # --- load_config tests ---
 
@@ -134,7 +134,7 @@ class TestMCPServerManager:
         assert registry.get("tool_b").toolset == "mcp:myserver"
 
     @pytest.mark.asyncio
-    async def test_connect_emits_observer_event(self, manager, registry, observer):
+    async def test_connect_emits_observer_event(self, manager, registry, hooks):
         """Successful connect emits observer event."""
         cfg = MCPServerConfig(name="myserver", command="echo")
 
@@ -147,7 +147,7 @@ class TestMCPServerManager:
             with patch.object(manager, "_connect_stdio", side_effect=mock_connect_stdio):
                 await manager.connect("myserver", cfg)
 
-        observer.emit.assert_called_once_with(
+        hooks.emit.assert_called_once_with(
             "mcp.connect", server="myserver", tools=1
         )
 

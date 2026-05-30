@@ -280,7 +280,7 @@ class Agent:
         from merco.mcp.manager import MCPServerManager
         self.mcp_manager = MCPServerManager(
             tool_registry=self.tool_registry,
-            observer=self.observer,
+            hooks=self.hooks,
         )
 
     async def run(self, prompt: str) -> str:

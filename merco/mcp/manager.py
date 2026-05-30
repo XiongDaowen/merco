@@ -18,9 +18,9 @@ except ImportError:
 
 
 class MCPServerManager:
-    def __init__(self, tool_registry, observer=None):
+    def __init__(self, tool_registry, hooks=None):
         self._registry = tool_registry
-        self._observer = observer
+        self._hooks = hooks
         self._servers: dict[str, dict] = {}  # name → {config, tools: [MCPServerTool]}
         self._original_config: dict = {}
 
@@ -62,8 +62,8 @@ class MCPServerManager:
                 server_tools.append(tool)
 
             self._servers[name] = {"config": config, "tools": server_tools}
-            if self._observer:
-                self._observer.emit("mcp.connect", server=name, tools=len(tools))
+            if self._hooks:
+                self._hooks.emit("mcp.connect", server=name, tools=len(tools))
             logger.info("MCP '%s': %d tools registered", name, len(tools))
             return True
         except Exception as e:
@@ -117,13 +117,13 @@ class MCPServerManager:
                             result = await self._call_stdio_tool(state["config"], tool_name, arguments)
                         else:
                             result = await self._call_http_tool(state["config"], tool_name, arguments)
-                        if self._observer:
-                            self._observer.emit("mcp.tool_call", server=name, tool=tool_name,
+                        if self._hooks:
+                            self._hooks.emit("mcp.tool_call", server=name, tool=tool_name,
                                                 duration=time.monotonic()-t0)
                         return result
                     except Exception as e:
-                        if self._observer:
-                            self._observer.emit("mcp.error", server=name, tool=tool_name, error=str(e))
+                        if self._hooks:
+                            self._hooks.emit("mcp.error", server=name, tool=tool_name, error=str(e))
                         raise
         return {"error": f"Tool '{tool_name}' not found in any MCP server", "isError": True}
 
