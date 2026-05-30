@@ -58,6 +58,9 @@ class SessionSearch:
     def search(self, query: str, session_id: str | None = None,
                limit: int = 20) -> list[dict]:
         """搜索消息，返回排序结果 + 片段"""
+        import sqlite3
+
+        sanitized = self._sanitize(query)
         sql = """
             SELECT
                 m.id, m.session_id, m.role, m.timestamp,
@@ -68,7 +71,7 @@ class SessionSearch:
             JOIN sessions s ON s.id = m.session_id
             WHERE messages_fts MATCH ?
         """
-        params = [self._sanitize(query)]
+        params = [sanitized]
 
         if session_id:
             sql += " AND m.session_id = ?"
@@ -78,7 +81,12 @@ class SessionSearch:
         params.append(limit)
 
         with self._conn() as conn:
-            rows = conn.execute(sql, params).fetchall()
+            try:
+                rows = conn.execute(sql, params).fetchall()
+            except sqlite3.OperationalError:
+                # FTS5 syntax error despite sanitization — return empty
+                logger.debug("FTS5 query error for: %s", sanitized)
+                return []
 
         return [
             {
@@ -94,12 +102,45 @@ class SessionSearch:
 
     @staticmethod
     def _sanitize(query: str) -> str:
-        """清洗 FTS5 查询——去特殊字符，加前缀匹配。FTS5 中 `-` 开头表示 NOT/列约束，`.` 和 `/` 破坏分词。"""
-        q = query.strip()
-        # 去掉 FTS5 危险字符：引号、运算符、路径分隔符、括号等。只保留字母/数字/下划线/中文。
-        q = re.sub(r'[^\w\s\u4e00-\u9fff]', ' ', q, flags=re.UNICODE)
-        # 合并多余空格，提取有效词
-        terms = [t for t in q.split() if t]  # 只去空串，保留所有有效词（FTS5 自行处理 min token）
-        if not terms:
+        """Port of Hermes's _sanitize_fts5_query — preserve meaning, escape danger.
+
+        Strategy (6 steps):
+        1. Protect balanced double-quoted phrases with placeholders
+        2. Strip remaining FTS5-special characters (+, {}, (), ", ^)
+        3. Normalise wildcard * (collapse repeats, remove leading *)
+        4. Remove dangling boolean operators (AND/OR/NOT at start/end)
+        5. Wrap hyphenated/dotted/underscored terms as FTS5 phrase literals
+        6. Restore preserved quoted phrases
+        """
+        if not query or not query.strip():
             return "*"
-        return " ".join(t + "*" for t in terms)
+
+        # Step 1: Extract balanced double-quoted phrases, protect them
+        _quoted_parts: list[str] = []
+
+        def _preserve_quoted(m: re.Match) -> str:
+            _quoted_parts.append(m.group(0))
+            return f"\x00Q{len(_quoted_parts) - 1}\x00"
+
+        sanitized = re.sub(r'"[^"]*"', _preserve_quoted, query)
+
+        # Step 2: Strip remaining FTS5-special characters
+        sanitized = re.sub(r'[+{}()\"^]', " ", sanitized)
+
+        # Step 3: Collapse repeated *, remove leading * (prefix needs char before *)
+        sanitized = re.sub(r"\*+", "*", sanitized)
+        sanitized = re.sub(r"(^|\s)\*", r"\1", sanitized)
+
+        # Step 4: Remove dangling boolean operators at start/end
+        sanitized = re.sub(r"(?i)^(AND|OR|NOT)\b\s*", "", sanitized.strip())
+        sanitized = re.sub(r"(?i)\s+(AND|OR|NOT)\s*$", "", sanitized.strip())
+
+        # Step 5: Wrap hyphenated/dotted/underscored terms in quotes
+        # Single pass avoids double-quoting e.g. my-app.config
+        sanitized = re.sub(r"\b(\w+(?:[._-]\w+)+)\b", r'"\1"', sanitized)
+
+        # Step 6: Restore preserved quoted phrases
+        for i, quoted in enumerate(_quoted_parts):
+            sanitized = sanitized.replace(f"\x00Q{i}\x00", quoted)
+
+        return sanitized.strip() or "*"
