@@ -5,6 +5,7 @@ import logging
 import os
 import sqlite3
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -164,11 +165,77 @@ class SessionStore:
             )
             conn.commit()
 
+    def set_title(self, session_id: str, title: str):
+        """Always set the title, regardless of current value."""
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE sessions SET title = ? WHERE id = ?",
+                (title, session_id),
+            )
+            conn.commit()
+
     def delete_session(self, session_id: str):
         with self._conn() as conn:
             conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             conn.commit()
+
+    def clone_session(self, session_id: str) -> str:
+        """Clone a session and all its messages to a new session ID.
+
+        Returns the new session ID (uuid4 hex string).
+        Raises ValueError if the original session does not exist.
+        """
+        original = self.load_session(session_id)
+        if original is None:
+            raise ValueError(f"Session not found: {session_id}")
+
+        new_id = uuid.uuid4().hex
+        now = _now()
+
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO sessions (id, title, created_at, updated_at, "
+                "message_count, parent_id, metadata) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    new_id,
+                    original["title"],
+                    now,
+                    now,
+                    0,  # updated atomically after message copies
+                    session_id,
+                    json.dumps(original["metadata"], ensure_ascii=False),
+                ),
+            )
+
+            for msg in original["messages"]:
+                tc_json = json.dumps(msg.get("tool_calls") or [], ensure_ascii=False)
+                conn.execute(
+                    "INSERT INTO messages (session_id, role, content, "
+                    "tool_call_id, tool_calls, reasoning, timestamp) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        new_id,
+                        msg["role"],
+                        msg.get("content", ""),
+                        msg.get("tool_call_id", ""),
+                        tc_json,
+                        msg.get("reasoning", ""),
+                        now,
+                    ),
+                )
+
+            # Update message_count atomically
+            conn.execute(
+                "UPDATE sessions SET message_count = ("
+                "SELECT COUNT(*) FROM messages WHERE session_id = ?"
+                ") WHERE id = ?",
+                (new_id, new_id),
+            )
+            conn.commit()
+
+        return new_id
 
 
 def _now() -> str:
