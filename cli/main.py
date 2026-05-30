@@ -368,17 +368,8 @@ def run_repl(agent):
     import cli.commands  # triggers all @cmd_registry.register decorators
 
     def _setup_readline_completer():
-        _panel_requested = False
-
         def completer(text, state):
-            nonlocal _panel_requested
-            # Request panel when user is at "/"
-            if text == "/" and state == 0:
-                _panel_requested = True
-
             matches = cmd_registry.match(text)
-            if text == "/":
-                return None  # don't auto-complete bare "/"
             if state < len(matches):
                 return matches[state].name
             return None
@@ -386,32 +377,7 @@ def run_repl(agent):
         readline.set_completer(completer)
         readline.parse_and_bind("tab: complete")
         readline.set_completer_delims(" \t\n")
-        return lambda: _panel_requested  # expose flag to REPL loop
 
-
-    def _render_command_panel():
-        groups = {}
-        for cmd in cmd_registry.get_all():
-            groups.setdefault(cmd.group, []).append(cmd)
-
-        lines = []
-        for grp in ["session", "search", "info", "control"]:
-            cmds = groups.get(grp, [])
-            if not cmds:
-                continue
-            lines.append(f"[bold yellow]{grp}[/bold yellow]")
-            for c in cmds:
-                sub_hint = ""
-                if c.sub_commands:
-                    sub_keys = " | ".join(c.sub_commands.keys())
-                    sub_hint = f"  [dim]→ {sub_keys}[/dim]"
-                lines.append(
-                    f"  [bold]{c.name:14s}[/bold] [dim]{c.description}[/dim]{sub_hint}"
-                )
-            lines.append("")
-
-        console.print(Panel("\n".join(lines), title="📋 可用命令",
-                            border_style="dim"))
 
     async def repl():
         loop = asyncio.get_running_loop()
@@ -438,12 +404,7 @@ def run_repl(agent):
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, handle_interrupt)
 
-        _check_panel = _setup_readline_completer()
-        _panel_shown = False
-
-        # Show command panel once at startup
-        _render_command_panel()
-        _panel_shown = True
+        _setup_readline_completer()
 
         try:
             while True:
