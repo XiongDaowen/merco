@@ -157,3 +157,33 @@ class TestConfig:
         cfg = MercoConfig._from_dict(data)
         assert cfg.memory_enabled is True
         assert cfg.memory_path == "/new/path"
+
+    # ── Session fork config tests ──
+
+    def test_session_fork_defaults(self):
+        """fork_enabled and fork_auto_on_compress default to True."""
+        cfg = MercoConfig()
+        assert cfg.fork_enabled is True
+        assert cfg.fork_auto_on_compress is True
+
+    def test_session_fork_to_dict(self):
+        """_to_dict includes 'session' key with fork fields."""
+        cfg = MercoConfig()
+        cfg.fork_enabled = False
+        cfg.fork_auto_on_compress = False
+        data = cfg._to_dict()
+        assert "session" in data
+        assert data["session"]["fork_enabled"] is False
+        assert data["session"]["fork_auto_on_compress"] is False
+
+    def test_session_fork_from_dict(self):
+        """_from_dict reads fork settings from 'session' block."""
+        data = {
+            "session": {
+                "fork_enabled": False,
+                "fork_auto_on_compress": False,
+            }
+        }
+        cfg = MercoConfig._from_dict(data)
+        assert cfg.fork_enabled is False
+        assert cfg.fork_auto_on_compress is False

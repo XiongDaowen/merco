@@ -136,6 +136,8 @@ class MercoConfig:
     memory_recall_limit: int = 3
     memory_recall_max_chars: int = 300
     memory_recall_threshold: float = 0.0
+    fork_enabled: bool = True
+    fork_auto_on_compress: bool = True
 
     @classmethod
     def load(cls, config_path: str | None = None) -> "MercoConfig":
@@ -192,6 +194,10 @@ class MercoConfig:
                 "recall_max_chars": self.memory_recall_max_chars,
                 "recall_threshold": self.memory_recall_threshold,
             },
+            "session": {
+                "fork_enabled": self.fork_enabled,
+                "fork_auto_on_compress": self.fork_auto_on_compress,
+            },
         }
 
     @classmethod
@@ -210,6 +216,9 @@ class MercoConfig:
         memory_data = data.get("memory", {})
         if not isinstance(memory_data, dict):
             memory_data = {}
+        sess = data.get("session", {})
+        if not isinstance(sess, dict):
+            sess = {}
         return cls(
             username=data.get("username", "user"),
             model=model,
@@ -230,6 +239,8 @@ class MercoConfig:
             memory_recall_limit=memory_data.get("recall_limit", 3),
             memory_recall_max_chars=memory_data.get("recall_max_chars", 300),
             memory_recall_threshold=memory_data.get("recall_threshold", 0.0),
+            fork_enabled=sess.get("fork_enabled", True),
+            fork_auto_on_compress=sess.get("fork_auto_on_compress", True),
         )
 
     @staticmethod
