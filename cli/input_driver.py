@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.key_binding import KeyBindings
@@ -52,8 +53,36 @@ class PromptToolkitInput(InputDriver):
             }),
         )
 
+        # Paste control: stash long pastes and display short marker
+        self._paste_stash: str | None = None
+
+        def _on_text_changed(buf: Buffer):
+            if len(buf.text) >= _PASTE_THRESHOLD and not buf.text.startswith("[已粘贴"):
+                self._paste_stash = buf.text
+                buf.text = f"[已粘贴 {len(buf.text)} 字]"
+
+        self._session.default_buffer.on_text_changed += _on_text_changed
+
+        original_accept = self._session.default_buffer.accept_handler
+
+        def _on_buffer_accept(buff: Buffer) -> bool:
+            if self._paste_stash:
+                buff.text = self._paste_stash
+                self._paste_stash = None
+            if original_accept is not None:
+                return original_accept(buff)
+            return True
+
+        self._session.default_buffer.accept_handler = _on_buffer_accept
+
     async def get_input(self, prompt: str) -> str:
         text = await self._session.prompt_async(prompt)
+
+        # If paste was stashed but accept_handler didn't fire (edge case),
+        # return the original stashed text instead of the marker.
+        if self._paste_stash:
+            text = self._paste_stash
+            self._paste_stash = None
 
         # Archive long pastes to file (human reference)
         if len(text) >= _PASTE_THRESHOLD:
