@@ -150,6 +150,9 @@ class StreamingProvider(ResponseProvider):
                 current = asyncio.current_task()
                 if current and current.cancelled():
                     live.stop()
+                    # TODO: 此 checkpoint 无法覆盖「Cancel 在 __anext__ I/O 等待中到达」的情况
+                    #      补救方案：加 except asyncio.CancelledError 兜底 handler，抽离保存逻辑。
+                    #      优先级：低——窗口极小且用户主动取消，丢失的 partial content 是预期行为。
                     # 保存部分响应
                     assembled["reasoning"] = reasoning_buf
                     assembled["content"] = content_buf
