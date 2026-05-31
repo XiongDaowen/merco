@@ -224,14 +224,17 @@ async def confirm_edit(
 
     console.print(Rule(style="dim"))
 
-    if sandbox_mode == "show":
-        console.print("[dim]  ✓ 自动应用修改[/dim]")
-        return True
-    elif sandbox_mode == "ask":
-        console.print("[bold yellow]确认修改？[/bold yellow] "
-                      "[dim]按 y 确认 / 其他任意键取消 [/dim]", end="")
-        resp = await asyncio.to_thread(input, "")
-        return resp.strip().lower() in ("y", "yes")
-    else:
-        logger.warning("未知 sandbox_mode=%s, 默认拒绝", sandbox_mode)
-        return False
+    try:
+        if sandbox_mode == "show":
+            console.print("[dim]  ✓ 自动应用修改[/dim]")
+            return True
+        elif sandbox_mode == "ask":
+            console.print("[bold yellow]确认修改？[/bold yellow] "
+                          "[dim]按 y 确认 / 其他任意键取消 [/dim]", end="")
+            resp = await asyncio.to_thread(input, "")
+            return resp.strip().lower() in ("y", "yes")
+        else:
+            logger.warning("未知 sandbox_mode=%s, 默认拒绝", sandbox_mode)
+            return False
+    except KeyboardInterrupt:
+        return False  # 拒绝编辑

@@ -20,6 +20,7 @@ class Observer:
         hooks.on("tool.after_execute", self._on_tool)
         hooks.on("tool.error", self._on_error)
         hooks.on("conversation.turn", self._on_turn)
+        hooks.on("agent.interrupted", self._on_interrupt)
 
     # ── 事件处理 ──────────────────────────────────────────
 
@@ -46,6 +47,14 @@ class Observer:
 
     def _on_turn(self, **kwargs):
         self._live.increment("turns")
+
+    def _on_interrupt(self, interrupted_tools: int = 0, **kwargs):
+        """中断时记录统计。"""
+        if interrupted_tools:
+            self._live.increment("tool_calls_interrupted", interrupted_tools)
+            self._live.increment("tool_calls", interrupted_tools)
+        self._live.increment("turns")
+        self._merge_to_acc()
 
     # ── 生命周期 ──────────────────────────────────────────
 

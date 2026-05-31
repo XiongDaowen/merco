@@ -101,6 +101,11 @@ class MCPServerManager:
         await self._unregister_tools(name)
         self._servers.pop(name, None)
 
+    async def shutdown(self):
+        """关闭所有 MCP 连接。"""
+        for name in list(self._servers.keys()):
+            await self.disconnect(name)
+
     async def reload(self) -> None:
         for name in list(self._servers.keys()):
             await self.disconnect(name)

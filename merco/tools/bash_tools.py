@@ -21,6 +21,9 @@ class BashTool(BaseTool):
         "required": ["command"],
     }
 
+    def __init__(self):
+        self._active_processes: set[asyncio.subprocess.Process] = set()
+
     async def execute(self, command: str, timeout: int = 60, workdir: str = None) -> dict:
         try:
             process = await asyncio.create_subprocess_shell(
@@ -29,6 +32,7 @@ class BashTool(BaseTool):
                 stderr=subprocess.PIPE,
                 cwd=workdir,
             )
+            self._active_processes.add(process)
 
             try:
                 stdout, stderr = await asyncio.wait_for(
@@ -42,9 +46,20 @@ class BashTool(BaseTool):
             except asyncio.TimeoutError:
                 process.kill()
                 return {"error": f"Command timed out after {timeout}s"}
+            finally:
+                self._active_processes.discard(process)
 
         except Exception as e:
             return {"error": str(e)}
+
+    def kill_all(self):
+        """终止所有活跃的子进程。"""
+        for proc in self._active_processes:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+        self._active_processes.clear()
 
 
 from .registry import tool_registry  # noqa: E402 — 模块末尾自注册
