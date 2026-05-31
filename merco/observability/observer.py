@@ -85,7 +85,13 @@ class Observer:
         }
 
     def _merge_to_acc(self):
-        # 只累加待合并的增量
+        # 累加 _live 中的增量（使用快照方式）
+        live_snapshot = self._live.get_counters()
+        for k, v in live_snapshot.items():
+            self._acc_map[k] = self._acc_map.get(k, 0) + v
+        # 重置 _live 计数器
+        self._live = MetricsCollector()
+        # 累加 _pending_deltas 中的增量
         for k, v in self._pending_deltas.items():
             self._acc_map[k] = self._acc_map.get(k, 0) + v
         self._pending_deltas.clear()
