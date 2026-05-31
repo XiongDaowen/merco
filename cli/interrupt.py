@@ -33,8 +33,14 @@ class InterruptStrategy(ABC):
 
     @abstractmethod
     async def handle(self, ctx: InterruptContext) -> bool:
-        """返回 True 表示已处理，停止管线。"""
+        """异步处理中断，返回 True 表示已处理，停止管线。"""
         ...
+
+    def handle_sync(self, ctx: InterruptContext) -> bool:
+        """同步处理中断，用于信号处理器。默认调用异步版本的包装。"""
+        # 默认实现：通过 asyncio.ensure_future 异步执行
+        # 子类应重写此方法以提供真正的同步实现
+        return False
 
 
 class CancelTaskStrategy(InterruptStrategy):
@@ -45,6 +51,18 @@ class CancelTaskStrategy(InterruptStrategy):
         self._interrupted_tasks: set[int] = set()
 
     async def handle(self, ctx: InterruptContext) -> bool:
+        if ctx.state != InterruptState.AGENT_RUNNING or not ctx.task:
+            return False
+        task_id = id(ctx.task)
+        if task_id in self._interrupted_tasks:
+            return True
+        self._interrupted_tasks.add(task_id)
+        ctx.task.cancel()
+        ctx.handled = True
+        return True
+
+    def handle_sync(self, ctx: InterruptContext) -> bool:
+        """同步取消任务，立即生效。"""
         if ctx.state != InterruptState.AGENT_RUNNING or not ctx.task:
             return False
         task_id = id(ctx.task)
@@ -70,6 +88,14 @@ class ClearInputStrategy(InterruptStrategy):
         ctx.handled = True
         return True
 
+    def handle_sync(self, ctx: InterruptContext) -> bool:
+        """同步清空输入框。"""
+        if ctx.state != InterruptState.INPUT_HAS_TEXT:
+            return False
+        self._on_clear()
+        ctx.handled = True
+        return True
+
 
 class ExitWithHooksStrategy(InterruptStrategy):
     """优雅退出。"""
@@ -88,6 +114,17 @@ class ExitWithHooksStrategy(InterruptStrategy):
         await self._on_exit()
         return True
 
+    def handle_sync(self, ctx: InterruptContext) -> bool:
+        """同步退出。"""
+        if ctx.state != InterruptState.IDLE:
+            return False
+        if ctx.exit_count == 0:
+            ctx.exit_count = 1
+            return True
+        ctx.handled = True
+        self._on_exit()
+        return True
+
 
 class InterruptPipeline:
     """中断处理管线。按优先级依次尝试各策略。"""
@@ -100,9 +137,19 @@ class InterruptPipeline:
         return self
 
     async def process(self, ctx: InterruptContext) -> None:
+        """异步执行管线。"""
         for strategy in self._strategies:
             try:
                 if await strategy.handle(ctx):
+                    return
+            except Exception:
+                logger.warning("中断策略 '%s' 异常", strategy.name, exc_info=True)
+
+    def process_sync(self, ctx: InterruptContext) -> None:
+        """同步执行管线，用于信号处理器。"""
+        for strategy in self._strategies:
+            try:
+                if strategy.handle_sync(ctx):
                     return
             except Exception:
                 logger.warning("中断策略 '%s' 异常", strategy.name, exc_info=True)

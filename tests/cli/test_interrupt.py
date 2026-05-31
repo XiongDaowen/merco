@@ -189,3 +189,90 @@ async def test_exit_with_hooks_strategy_second_press():
     assert result is True
     assert ctx.handled is True
     on_exit.assert_called_once()
+
+
+# ── 同步方法测试 ─────────────────────────────────────────────────────
+
+def test_cancel_task_strategy_sync():
+    """CancelTaskStrategy.handle_sync 同步取消任务。"""
+    from cli.interrupt import CancelTaskStrategy
+
+    task = MagicMock()
+    task.done.return_value = False
+
+    ctx = InterruptContext(state=InterruptState.AGENT_RUNNING, task=task)
+    strategy = CancelTaskStrategy()
+
+    result = strategy.handle_sync(ctx)
+
+    assert result is True
+    assert ctx.handled is True
+    task.cancel.assert_called_once()
+
+
+def test_clear_input_strategy_sync():
+    """ClearInputStrategy.handle_sync 同步清空输入框。"""
+    from cli.interrupt import ClearInputStrategy
+
+    on_clear = MagicMock()
+    ctx = InterruptContext(state=InterruptState.INPUT_HAS_TEXT)
+    strategy = ClearInputStrategy(on_clear)
+
+    result = strategy.handle_sync(ctx)
+
+    assert result is True
+    assert ctx.handled is True
+    on_clear.assert_called_once()
+
+
+def test_exit_with_hooks_strategy_sync_first_press():
+    """ExitWithHooksStrategy.handle_sync 第一次按下设置 exit_count。"""
+    from cli.interrupt import ExitWithHooksStrategy
+
+    on_exit = MagicMock()
+    ctx = InterruptContext(state=InterruptState.IDLE, exit_count=0)
+    strategy = ExitWithHooksStrategy(on_exit)
+
+    result = strategy.handle_sync(ctx)
+
+    assert result is True
+    assert ctx.exit_count == 1
+    on_exit.assert_not_called()
+
+
+def test_exit_with_hooks_strategy_sync_second_press():
+    """ExitWithHooksStrategy.handle_sync 第二次按下执行退出。"""
+    from cli.interrupt import ExitWithHooksStrategy
+
+    on_exit = MagicMock()
+    ctx = InterruptContext(state=InterruptState.IDLE, exit_count=1)
+    strategy = ExitWithHooksStrategy(on_exit)
+
+    result = strategy.handle_sync(ctx)
+
+    assert result is True
+    assert ctx.handled is True
+    on_exit.assert_called_once()
+
+
+def test_pipeline_process_sync():
+    """InterruptPipeline.process_sync 同步执行管线。"""
+    from cli.interrupt import CancelTaskStrategy
+
+    task = MagicMock()
+    pipeline = InterruptPipeline()
+    pipeline.use(CancelTaskStrategy())
+
+    ctx = InterruptContext(state=InterruptState.AGENT_RUNNING, task=task)
+    pipeline.process_sync(ctx)
+
+    assert ctx.handled is True
+    task.cancel.assert_called_once()
+
+
+def test_pipeline_process_sync_empty():
+    """空管线不应抛异常。"""
+    pipeline = InterruptPipeline()
+    ctx = InterruptContext(state=InterruptState.IDLE)
+    pipeline.process_sync(ctx)
+    assert ctx.handled is False
