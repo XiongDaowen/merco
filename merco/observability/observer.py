@@ -57,7 +57,7 @@ class Observer:
             self._live.increment("tool_calls", interrupted_tools)
         # 中断也算一轮（用户确实发起了请求）
         self._live.increment("turns")
-        self._merge_to_acc()
+        # 不在这里调用 _merge_to_acc，由 SavePartialState 统一处理
 
     # ── 生命周期 ──────────────────────────────────────────
 
