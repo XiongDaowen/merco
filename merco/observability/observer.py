@@ -55,7 +55,8 @@ class Observer:
         if interrupted_tools:
             self._live.increment("tool_calls_interrupted", interrupted_tools)
             self._live.increment("tool_calls", interrupted_tools)
-        # 不增加 turns，因为中断不等于完成一个 turn
+        # 中断也算一轮（用户确实发起了请求）
+        self._live.increment("turns")
         self._merge_to_acc()
 
     # ── 生命周期 ──────────────────────────────────────────
