@@ -64,6 +64,7 @@ class Observer:
     def reset(self, full: bool = False):
         """清空 live 计数器。full=True 时也清空累计。"""
         self._live = MetricsCollector()
+        self._last_merged = {}  # 清空上次合并的值
         if full:
             self._acc_map = {}
 
