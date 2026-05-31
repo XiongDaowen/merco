@@ -53,7 +53,7 @@ class Observer:
         if interrupted_tools:
             self._live.increment("tool_calls_interrupted", interrupted_tools)
             self._live.increment("tool_calls", interrupted_tools)
-        self._live.increment("turns")
+        # 不增加 turns，因为中断不等于完成一个 turn
         self._merge_to_acc()
 
     # ── 生命周期 ──────────────────────────────────────────
