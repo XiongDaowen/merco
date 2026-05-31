@@ -2,6 +2,7 @@
 
 import asyncio
 import pytest
+from unittest.mock import AsyncMock, MagicMock
 from cli.interrupt import (
     InterruptState, InterruptContext, InterruptStrategy, InterruptPipeline
 )
@@ -74,3 +75,116 @@ async def test_pipeline_handles_strategy_exception():
     await pipeline.process(ctx)
 
     assert s2.called
+
+
+@pytest.mark.asyncio
+async def test_cancel_task_strategy_running():
+    """CancelTaskStrategy 在 AGENT_RUNNING 状态下取消任务。"""
+    from cli.interrupt import CancelTaskStrategy
+
+    task = MagicMock()
+    task.done.return_value = False
+    task.cancel = MagicMock()
+
+    ctx = InterruptContext(state=InterruptState.AGENT_RUNNING, task=task)
+    strategy = CancelTaskStrategy()
+
+    result = await strategy.handle(ctx)
+
+    assert result is True
+    assert ctx.handled is True
+    task.cancel.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_cancel_task_strategy_not_running():
+    """CancelTaskStrategy 在非 AGENT_RUNNING 状态下跳过。"""
+    from cli.interrupt import CancelTaskStrategy
+
+    ctx = InterruptContext(state=InterruptState.IDLE)
+    strategy = CancelTaskStrategy()
+
+    result = await strategy.handle(ctx)
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_cancel_task_strategy_prevent_reentry():
+    """CancelTaskStrategy 防止重入。"""
+    from cli.interrupt import CancelTaskStrategy
+
+    task = MagicMock()
+    task.done.return_value = False
+    task._interrupting = True
+
+    ctx = InterruptContext(state=InterruptState.AGENT_RUNNING, task=task)
+    strategy = CancelTaskStrategy()
+
+    result = await strategy.handle(ctx)
+
+    assert result is True
+    task.cancel.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_clear_input_strategy():
+    """ClearInputStrategy 清空输入缓冲区。"""
+    from cli.interrupt import ClearInputStrategy
+
+    on_clear = MagicMock()
+    ctx = InterruptContext(state=InterruptState.INPUT_HAS_TEXT)
+    strategy = ClearInputStrategy(on_clear)
+
+    result = await strategy.handle(ctx)
+
+    assert result is True
+    assert ctx.handled is True
+    on_clear.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_clear_input_strategy_wrong_state():
+    """ClearInputStrategy 在非 INPUT_HAS_TEXT 状态下跳过。"""
+    from cli.interrupt import ClearInputStrategy
+
+    on_clear = MagicMock()
+    ctx = InterruptContext(state=InterruptState.IDLE)
+    strategy = ClearInputStrategy(on_clear)
+
+    result = await strategy.handle(ctx)
+
+    assert result is False
+    on_clear.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_exit_with_hooks_strategy_first_press():
+    """ExitWithHooksStrategy 第一次按下设置 exit_count。"""
+    from cli.interrupt import ExitWithHooksStrategy
+
+    on_exit = AsyncMock()
+    ctx = InterruptContext(state=InterruptState.IDLE, exit_count=0)
+    strategy = ExitWithHooksStrategy(on_exit)
+
+    result = await strategy.handle(ctx)
+
+    assert result is True
+    assert ctx.exit_count == 1
+    on_exit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_exit_with_hooks_strategy_second_press():
+    """ExitWithHooksStrategy 第二次按下执行退出。"""
+    from cli.interrupt import ExitWithHooksStrategy
+
+    on_exit = AsyncMock()
+    ctx = InterruptContext(state=InterruptState.IDLE, exit_count=1)
+    strategy = ExitWithHooksStrategy(on_exit)
+
+    result = await strategy.handle(ctx)
+
+    assert result is True
+    assert ctx.handled is True
+    on_exit.assert_called_once()

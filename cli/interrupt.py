@@ -36,6 +36,54 @@ class InterruptStrategy(ABC):
         ...
 
 
+class CancelTaskStrategy(InterruptStrategy):
+    """取消运行中的 Agent 任务。"""
+    name = "cancel_task"
+
+    async def handle(self, ctx: InterruptContext) -> bool:
+        if ctx.state != InterruptState.AGENT_RUNNING or not ctx.task:
+            return False
+        if '_interrupting' in ctx.task.__dict__ and ctx.task._interrupting:
+            return True
+        ctx.task._interrupting = True
+        ctx.task.cancel()
+        ctx.handled = True
+        return True
+
+
+class ClearInputStrategy(InterruptStrategy):
+    """清空输入框。"""
+    name = "clear_input"
+
+    def __init__(self, on_clear: Callable[[], None]):
+        self._on_clear = on_clear
+
+    async def handle(self, ctx: InterruptContext) -> bool:
+        if ctx.state != InterruptState.INPUT_HAS_TEXT:
+            return False
+        self._on_clear()
+        ctx.handled = True
+        return True
+
+
+class ExitWithHooksStrategy(InterruptStrategy):
+    """优雅退出。"""
+    name = "exit_with_hooks"
+
+    def __init__(self, on_exit: Callable[[], Any]):
+        self._on_exit = on_exit
+
+    async def handle(self, ctx: InterruptContext) -> bool:
+        if ctx.state != InterruptState.IDLE:
+            return False
+        if ctx.exit_count == 0:
+            ctx.exit_count = 1
+            return True
+        ctx.handled = True
+        await self._on_exit()
+        return True
+
+
 class InterruptPipeline:
     """中断处理管线。按优先级依次尝试各策略。"""
 
