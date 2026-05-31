@@ -392,23 +392,24 @@ def run_repl(agent, dashboard=None, config_source=""):
         def handle_interrupt():
             nonlocal exit_count, exit_timer
             state = InterruptState.AGENT_RUNNING if current_task and not current_task.done() else InterruptState.IDLE
-            ctx = InterruptContext(state=state, task=current_task, exit_count=exit_count)
 
-            async def _process():
-                nonlocal exit_count, exit_timer
-                await interrupt_pipeline.process(ctx)
-                if ctx.handled and state == InterruptState.IDLE:
-                    # 退出流程已在策略中处理
-                    pass
-                elif ctx.exit_count > exit_count:
-                    exit_count = ctx.exit_count
+            if state == InterruptState.AGENT_RUNNING:
+                # 同步取消任务，立即生效
+                if not getattr(current_task, '_interrupting', False):
+                    current_task._interrupting = True
+                    current_task.cancel()
+            elif state == InterruptState.IDLE:
+                # 空闲状态，处理退出逻辑
+                if exit_count == 0:
+                    exit_count = 1
                     console.print("[dim]再按一次退出[/dim]")
-                    # 3 秒后重置 exit_count
                     if exit_timer:
                         exit_timer.cancel()
                     exit_timer = asyncio.create_task(_reset_exit_count())
-
-            asyncio.ensure_future(_process())
+                else:
+                    console.print("\n[dim]正在保存...[/dim]")
+                    _run_exit_hooks()
+                    os._exit(0)
 
         async def _reset_exit_count():
             nonlocal exit_count
