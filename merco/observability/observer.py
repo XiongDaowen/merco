@@ -83,6 +83,8 @@ class Observer:
     def _merge_to_acc(self):
         for k, v in self._live.get_counters().items():
             self._acc_map[k] = self._acc_map.get(k, 0) + v
+        # 合并后清空 live 计数器，避免重复累加
+        self._live = MetricsCollector()
 
     def restore(self, data: dict):
         """从快照恢复 acc_map"""
