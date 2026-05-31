@@ -47,16 +47,9 @@ class CancelTaskStrategy(InterruptStrategy):
     """取消运行中的 Agent 任务。"""
     name = "cancel_task"
 
-    def __init__(self):
-        self._interrupted_tasks: set[int] = set()
-
     async def handle(self, ctx: InterruptContext) -> bool:
         if ctx.state != InterruptState.AGENT_RUNNING or not ctx.task:
             return False
-        task_id = id(ctx.task)
-        if task_id in self._interrupted_tasks:
-            return True
-        self._interrupted_tasks.add(task_id)
         ctx.task.cancel()
         ctx.handled = True
         return True
@@ -65,10 +58,6 @@ class CancelTaskStrategy(InterruptStrategy):
         """同步取消任务，立即生效。"""
         if ctx.state != InterruptState.AGENT_RUNNING or not ctx.task:
             return False
-        task_id = id(ctx.task)
-        if task_id in self._interrupted_tasks:
-            return True
-        self._interrupted_tasks.add(task_id)
         ctx.task.cancel()
         ctx.handled = True
         return True

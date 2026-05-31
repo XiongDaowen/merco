@@ -109,8 +109,8 @@ async def test_cancel_task_strategy_not_running():
 
 
 @pytest.mark.asyncio
-async def test_cancel_task_strategy_prevent_reentry():
-    """CancelTaskStrategy 防止重入。"""
+async def test_cancel_task_strategy_can_cancel_multiple_times():
+    """CancelTaskStrategy 允许同一任务多次取消。"""
     from cli.interrupt import CancelTaskStrategy
 
     task = MagicMock()
@@ -122,10 +122,10 @@ async def test_cancel_task_strategy_prevent_reentry():
     assert result1 is True
     task.cancel.assert_called_once()
 
-    # 同一任务再次中断，不应重复 cancel
+    # 同一任务再次中断，应该再次 cancel
     result2 = await strategy.handle(ctx)
     assert result2 is True
-    task.cancel.assert_called_once()
+    assert task.cancel.call_count == 2
 
 
 @pytest.mark.asyncio
