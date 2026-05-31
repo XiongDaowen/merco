@@ -15,7 +15,7 @@ class Observer:
     def __init__(self, hooks: HookRegistry):
         self._live = MetricsCollector()
         self._acc_map: dict[str, int] = {}
-        self._pending_deltas: dict[str, int] = {}  # 待合并的增量
+        self._last_merged: dict[str, int] = {}  # 记录上次合并时的 live 值
 
         hooks.on("llm.chat", self._on_llm)
         hooks.on("tool.after_execute", self._on_tool)
@@ -53,15 +53,11 @@ class Observer:
         """中断时记录统计。"""
         # 记录中断的 LLM 调用
         self._live.increment("llm_calls_interrupted")
-        self._pending_deltas["llm_calls_interrupted"] = self._pending_deltas.get("llm_calls_interrupted", 0) + 1
         if interrupted_tools:
             self._live.increment("tool_calls_interrupted", interrupted_tools)
             self._live.increment("tool_calls", interrupted_tools)
-            self._pending_deltas["tool_calls_interrupted"] = self._pending_deltas.get("tool_calls_interrupted", 0) + interrupted_tools
-            self._pending_deltas["tool_calls"] = self._pending_deltas.get("tool_calls", 0) + interrupted_tools
         # 中断也算一轮（用户确实发起了请求）
         self._live.increment("turns")
-        self._pending_deltas["turns"] = self._pending_deltas.get("turns", 0) + 1
 
     # ── 生命周期 ──────────────────────────────────────────
 
@@ -85,16 +81,13 @@ class Observer:
         }
 
     def _merge_to_acc(self):
-        # 累加 _live 中的增量（使用快照方式）
-        live_snapshot = self._live.get_counters()
-        for k, v in live_snapshot.items():
-            self._acc_map[k] = self._acc_map.get(k, 0) + v
-        # 重置 _live 计数器
-        self._live = MetricsCollector()
-        # 累加 _pending_deltas 中的增量
-        for k, v in self._pending_deltas.items():
-            self._acc_map[k] = self._acc_map.get(k, 0) + v
-        self._pending_deltas.clear()
+        # 只累加增量（当前值 - 上次合并的值）
+        for k, v in self._live.get_counters().items():
+            last = self._last_merged.get(k, 0)
+            delta = v - last
+            if delta > 0:
+                self._acc_map[k] = self._acc_map.get(k, 0) + delta
+            self._last_merged[k] = v
 
     def restore(self, data: dict):
         """从快照恢复 acc_map"""
