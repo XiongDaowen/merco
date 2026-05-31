@@ -150,6 +150,29 @@ class StreamingProvider(ResponseProvider):
                 current = asyncio.current_task()
                 if current and current.cancelled():
                     live.stop()
+                    # 保存部分响应
+                    assembled["reasoning"] = reasoning_buf
+                    assembled["content"] = content_buf
+                    if tc_buf:
+                        assembled["tool_calls"] = [
+                            {"id": v["id"], "name": v["name"],
+                             "arguments": _json.loads(v["arguments"])
+                             if v["arguments"] else {}}
+                            for v in (tc_buf[i] for i in sorted(tc_buf))
+                        ]
+                    # 将部分响应添加到 context 和 session
+                    if reasoning_buf or content_buf or tc_buf:
+                        assistant_msg = {
+                            "role": "assistant",
+                            "content": content_buf,
+                            "reasoning": reasoning_buf,
+                        }
+                        if tc_buf:
+                            assistant_msg["tool_calls"] = assembled["tool_calls"]
+                        agent.context.add(assistant_msg)
+                        agent.session.add_message("assistant", content_buf,
+                                                  reasoning=reasoning_buf,
+                                                  tool_calls=assembled.get("tool_calls"))
                     raise asyncio.CancelledError()
                 r = chunk.get("reasoning", "")
                 if r:
