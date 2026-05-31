@@ -478,7 +478,7 @@ def run_repl(agent, dashboard=None, config_source=""):
                 except asyncio.CancelledError:
                     console.rule(style="dim")
                     console.print("[dim]操作已取消[/dim]")
-                    current_task = None
+                    current_task = None  # 重置，等待下次 Agent 运行时重新设置
                     continue  # skip run_in_executor, go back to input
 
                 except EOFError:
