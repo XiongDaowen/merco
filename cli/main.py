@@ -391,16 +391,12 @@ def run_repl(agent, dashboard=None, config_source=""):
 
         def handle_interrupt():
             nonlocal exit_count, exit_timer
-            import sys
-            print(f"\n[DEBUG] handle_interrupt called, current_task={current_task}, done={current_task.done() if current_task else 'N/A'}", file=sys.stderr)
             ctx = InterruptContext(
                 state=InterruptState.AGENT_RUNNING if current_task and not current_task.done() else InterruptState.IDLE,
                 task=current_task,
                 exit_count=exit_count
             )
-            print(f"[DEBUG] ctx.state={ctx.state}, ctx.task={ctx.task}", file=sys.stderr)
             interrupt_pipeline.process_sync(ctx)
-            print(f"[DEBUG] ctx.handled={ctx.handled}, ctx.exit_count={ctx.exit_count}", file=sys.stderr)
             if not ctx.handled and ctx.exit_count > exit_count:
                 exit_count = ctx.exit_count
                 console.print("[dim]再按一次退出[/dim]")
@@ -436,6 +432,14 @@ def run_repl(agent, dashboard=None, config_source=""):
                     pre_text, prompt = prompt_area.render(agent)
                     console.print(pre_text)
                     user_input = (await driver.get_input(prompt)).strip()
+
+                    # 重新注册信号处理器（prompt_toolkit 可能已清除）
+                    for sig in (signal.SIGINT, signal.SIGTERM):
+                        try:
+                            loop.remove_signal_handler(sig)
+                        except (NotImplementedError, RuntimeError):
+                            pass
+                        loop.add_signal_handler(sig, handle_interrupt)
 
                     if not user_input:
                         continue
