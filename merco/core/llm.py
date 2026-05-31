@@ -395,9 +395,13 @@ class LLMClient:
         result["content"] = _strip_think_tags(result["content"])
 
         if message.tool_calls:
+            normalized = self._normalize_tool_calls(message.tool_calls)
+            logger.debug("_parse_response: 检测到 %d 个 tool_calls: %s",
+                        len(normalized),
+                        [f"{tc['name']}({tc['id'][:8]})" for tc in normalized])
             result["tool_calls"] = [
                 {**tc, "arguments": json.loads(tc["arguments"]) if tc["arguments"] else {}}
-                for tc in self._normalize_tool_calls(message.tool_calls)
+                for tc in normalized
             ]
 
         return result
@@ -420,6 +424,11 @@ class LLMClient:
             result["reasoning"] = extracted["reasoning"]
         if delta.tool_calls:
             result["tool_calls"] = self._normalize_tool_calls(delta.tool_calls)
+            tcs = result["tool_calls"]
+            logger.debug("_parse_chunk: 流式收到 %d 个 tool_calls delta: index=%s name=%s",
+                        len(tcs),
+                        [tc.get("index", "?") for tc in tcs],
+                        [tc.get("name", "") or "?" for tc in tcs])
 
         if choice.finish_reason:
             result["finish_reason"] = choice.finish_reason

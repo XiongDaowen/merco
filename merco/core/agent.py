@@ -222,9 +222,10 @@ class StreamingProvider(ResponseProvider):
                 for v in (tc_buf[i] for i in sorted(tc_buf))
             ]
         logger.debug(
-            "stream done: finish=%s content=%d reasoning=%d tool_calls=%d",
+            "stream done: finish=%s content=%d reasoning=%d tool_calls=%d%s",
             assembled.get("finish_reason"), len(assembled["content"]),
-            len(assembled["reasoning"]), len(assembled["tool_calls"]))
+            len(assembled["reasoning"]), len(assembled["tool_calls"]),
+            f" {[tc['name'] for tc in assembled['tool_calls']]}" if assembled["tool_calls"] else "")
         return assembled
 
 class Agent:
@@ -489,6 +490,10 @@ class Agent:
                                    cache_read_tokens=usage.get("cache_read_tokens", 0) if usage else 0)
 
             tool_calls = response.get("tool_calls")
+            if tool_calls:
+                logger.debug("Agent 循环: 收到 %d 个 tool_calls: %s",
+                            len(tool_calls),
+                            [f"{tc['name']}({tc.get('id','?')[:8]})" for tc in tool_calls])
             if not tool_calls:
                 content = response.get("content", "") or ""
                 content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL).strip()
@@ -534,6 +539,8 @@ class Agent:
 
             # 批量超上限 → 不执行工具，直接收尾
             if self._tool_calls_count + len(tool_calls) > self._max_tool_calls:
+                logger.debug("Agent 循环: 工具调用超上限 (%d + %d > %d)，跳过执行直接收尾",
+                            self._tool_calls_count, len(tool_calls), self._max_tool_calls)
                 console.print("[dim]  已截停，达到调用上限[/dim]")
                 return await self._wrap_up_call(self._wrap_up_messages(await self._build_messages()))
 
@@ -662,6 +669,7 @@ class Agent:
             exec_contexts.append(pctx)
             self._tool_calls_count += 1
 
+        logger.debug("_execute_tool_calls: %d 个结果存入 context", len(tool_results))
         for tr in tool_results:
             self.context.add(tr)
             self.session.add_message("tool", tr["content"],
