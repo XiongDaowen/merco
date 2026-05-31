@@ -15,6 +15,7 @@ class Observer:
     def __init__(self, hooks: HookRegistry):
         self._live = MetricsCollector()
         self._acc_map: dict[str, int] = {}
+        self._last_merged: dict[str, int] = {}  # 记录上次合并的值
 
         hooks.on("llm.chat", self._on_llm)
         hooks.on("tool.after_execute", self._on_tool)
@@ -82,9 +83,11 @@ class Observer:
 
     def _merge_to_acc(self):
         for k, v in self._live.get_counters().items():
-            self._acc_map[k] = self._acc_map.get(k, 0) + v
-        # 合并后清空 live 计数器，避免重复累加
-        self._live = MetricsCollector()
+            # 只累加增量（当前值 - 上次合并的值）
+            delta = v - self._last_merged.get(k, 0)
+            if delta > 0:
+                self._acc_map[k] = self._acc_map.get(k, 0) + delta
+                self._last_merged[k] = v
 
     def restore(self, data: dict):
         """从快照恢复 acc_map"""
