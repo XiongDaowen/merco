@@ -172,6 +172,8 @@ class StreamingProvider(ResponseProvider):
                         }
                         if tc_buf:
                             assistant_msg["tool_calls"] = assembled["tool_calls"]
+                        logger.debug("StreamingProvider 中断: 将 reasoning(%d chars) 存入 context (这是唯一泄漏窗口)",
+                                    len(reasoning_buf))
                         agent.context.add(assistant_msg)
                         agent.session.add_message("assistant", content_buf,
                                                   reasoning=reasoning_buf,
@@ -388,6 +390,10 @@ class Agent:
             return
 
         for msg in self.session.messages:
+            r = msg.get("reasoning", "")
+            if r:
+                logger.debug("_restore_context: session 消息含 reasoning (%d chars, 已丢弃)",
+                            len(r))
             entry = {"role": msg["role"], "content": msg.get("content", "")}
             if msg.get("tool_call_id"):
                 entry["tool_call_id"] = msg["tool_call_id"]
@@ -487,6 +493,9 @@ class Agent:
                 content = response.get("content", "") or ""
                 content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL).strip()
                 reasoning = response.get("reasoning", "")
+                if reasoning:
+                    logger.debug("Agent 循环: 收到 reasoning (%d chars)，丢弃（不存入 context）",
+                                len(reasoning))
                 if not content:
                     _empty_retries += 1
                     if _empty_retries == 1 and reasoning:
@@ -558,6 +567,10 @@ class Agent:
              "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=True)}}
             for tc in tool_calls
         ]
+        reasoning = response.get("reasoning", "")
+        if reasoning:
+            logger.debug("_dispatch_tool_calls: response 有 reasoning (%d chars) 但未传入 context",
+                        len(reasoning))
         self.context.add({"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls})
         self.session.add_message("assistant", assistant_content, tool_calls=api_tool_calls)
         logger.debug("⚙ 执行 %d 个工具调用: %s", len(tool_calls), [tc["name"] for tc in tool_calls])
@@ -665,6 +678,13 @@ class Agent:
 
         # 添加上下文窗口中的消息
         messages.extend(self.context.get_window())
+
+        # 检测 reasoning 泄漏：如果消息列表中有任何非空的 reasoning 字段，记录警告
+        for i, m in enumerate(messages):
+            r = m.get("reasoning", "")
+            if r:
+                logger.warning("_build_messages: messages[%d] 含有 reasoning (%d chars, 前 100=%s…)",
+                               i, len(r), r[:100].replace("\n", "\\n"))
 
         return messages
 
