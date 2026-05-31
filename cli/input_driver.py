@@ -79,7 +79,8 @@ class PromptToolkitInput(InputDriver):
 
     async def get_input(self, prompt: str) -> str:
         try:
-            text = await self._session.prompt_async(prompt)
+            # handle_sigint=False: 不覆盖我们的 SIGINT 信号处理器
+            text = await self._session.prompt_async(prompt, handle_sigint=False)
         except InputInterrupt:
             raise  # propagate to REPL for exit handling
 
