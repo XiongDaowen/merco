@@ -122,6 +122,11 @@ class Observer:
                     avg = live.get_avg_timing(name)
                     parts.append(f"[dim]{name[5:]}[/dim] {cnt}次({avg:.1f}s)")
             lines.append(f"       工具: {', '.join(parts)}" if parts else f"       工具: {tool_calls} 次")
+
+        interrupted = live.get_counter("tool_calls_interrupted")
+        if interrupted:
+            lines.append(f"       [yellow]中断: {interrupted} 次工具调用[/yellow]")
+
         if errors:
             lines.append(f"       [red]错误: {errors}[/red]")
 

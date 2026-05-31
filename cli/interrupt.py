@@ -3,9 +3,10 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Any
+from typing import Any
 
 logger = logging.getLogger("merco.cli.interrupt")
 
@@ -40,12 +41,16 @@ class CancelTaskStrategy(InterruptStrategy):
     """取消运行中的 Agent 任务。"""
     name = "cancel_task"
 
+    def __init__(self):
+        self._interrupted_tasks: set[int] = set()
+
     async def handle(self, ctx: InterruptContext) -> bool:
         if ctx.state != InterruptState.AGENT_RUNNING or not ctx.task:
             return False
-        if '_interrupting' in ctx.task.__dict__ and ctx.task._interrupting:
+        task_id = id(ctx.task)
+        if task_id in self._interrupted_tasks:
             return True
-        ctx.task._interrupting = True
+        self._interrupted_tasks.add(task_id)
         ctx.task.cancel()
         ctx.handled = True
         return True

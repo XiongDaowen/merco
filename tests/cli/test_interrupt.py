@@ -1,11 +1,10 @@
 """InterruptPipeline 单元测试"""
 
-import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from cli.interrupt import (
-    InterruptState, InterruptContext, InterruptStrategy, InterruptPipeline
-)
+
+import pytest
+
+from cli.interrupt import InterruptContext, InterruptPipeline, InterruptState, InterruptStrategy
 
 
 class MockStrategy(InterruptStrategy):
@@ -115,16 +114,18 @@ async def test_cancel_task_strategy_prevent_reentry():
     from cli.interrupt import CancelTaskStrategy
 
     task = MagicMock()
-    task.done.return_value = False
-    task._interrupting = True
 
     ctx = InterruptContext(state=InterruptState.AGENT_RUNNING, task=task)
     strategy = CancelTaskStrategy()
 
-    result = await strategy.handle(ctx)
+    result1 = await strategy.handle(ctx)
+    assert result1 is True
+    task.cancel.assert_called_once()
 
-    assert result is True
-    task.cancel.assert_not_called()
+    # 同一任务再次中断，不应重复 cancel
+    result2 = await strategy.handle(ctx)
+    assert result2 is True
+    task.cancel.assert_called_once()
 
 
 @pytest.mark.asyncio
