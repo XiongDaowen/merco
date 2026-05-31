@@ -402,7 +402,7 @@ class LLMClient:
                     "index": tc.index,
                     "id": tc.id,
                     "name": tc.function.name,
-                    "arguments": tc.function.arguments,
+                    "arguments": tc.function.arguments or "",
                 }
                 for tc in delta.tool_calls
             ]
