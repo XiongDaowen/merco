@@ -249,23 +249,28 @@ class LLMClient:
         temperature: float = 0.7,
         max_tokens: int = 4096,
         cooldown: float = 0,  # 请求最小间隔（秒），0=不禁用
+        extra_params: Optional[dict] = None,  # 额外 API 参数（top_p / seed 等）
+        headers: Optional[dict] = None,  # 自定义 HTTP header（X-Title 等）
     ):
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.cooldown = cooldown
+        self.extra_params = extra_params or {}
         self._last_request_time = 0.0
 
         import httpx
         from openai import AsyncOpenAI
 
-        client_kwargs = {
+        client_kwargs: dict = {
             "api_key": api_key,
             "max_retries": 0,
             "timeout": httpx.Timeout(connect=10.0, read=None, write=None, pool=10.0),
         }
         if base_url:
             client_kwargs["base_url"] = base_url
+        if headers:
+            client_kwargs["http_client"] = httpx.AsyncClient(headers=headers)
 
         self.client = AsyncOpenAI(**client_kwargs)
 
@@ -316,9 +321,11 @@ class LLMClient:
         }
         if stream:
             params["stream"] = True
+            params["stream_options"] = {"include_usage": True}
         if tools:
             params["tools"] = tools
             params["tool_choice"] = tool_choice
+        params.update(self.extra_params)
         return params
 
     async def _request(self, params: dict):
@@ -342,8 +349,27 @@ class LLMClient:
         self._last_request_time = time.monotonic()
         return response
 
+    @staticmethod
+    def _normalize_tool_calls(tool_calls: list) -> list[dict]:
+        """统一将 SDK tool_call 列表归一为安全 dict 列表，避免 None 穿透。"""
+        result = []
+        for tc in tool_calls:
+            entry: dict = {
+                "id": tc.id or "",
+                "name": tc.function.name or "",
+                "arguments": tc.function.arguments or "",
+            }
+            idx = getattr(tc, "index", None)
+            if idx is not None:
+                entry["index"] = idx
+            result.append(entry)
+        return result
+
     def _parse_response(self, response) -> dict:
         """解析完整响应"""
+        if not response.choices:
+            return {"content": "", "finish_reason": None, "usage": _extract_usage(response)}
+
         choice = response.choices[0]
         message = choice.message
 
@@ -370,12 +396,8 @@ class LLMClient:
 
         if message.tool_calls:
             result["tool_calls"] = [
-                {
-                    "id": tc.id,
-                    "name": tc.function.name,
-                    "arguments": json.loads(tc.function.arguments),
-                }
-                for tc in message.tool_calls
+                {**tc, "arguments": json.loads(tc["arguments"]) if tc["arguments"] else {}}
+                for tc in self._normalize_tool_calls(message.tool_calls)
             ]
 
         return result
@@ -397,15 +419,7 @@ class LLMClient:
         if extracted.get("reasoning"):
             result["reasoning"] = extracted["reasoning"]
         if delta.tool_calls:
-            result["tool_calls"] = [
-                {
-                    "index": tc.index,
-                    "id": tc.id,
-                    "name": tc.function.name,
-                    "arguments": tc.function.arguments or "",
-                }
-                for tc in delta.tool_calls
-            ]
+            result["tool_calls"] = self._normalize_tool_calls(delta.tool_calls)
 
         if choice.finish_reason:
             result["finish_reason"] = choice.finish_reason

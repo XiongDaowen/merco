@@ -247,6 +247,8 @@ class Agent:
             temperature=config.model.temperature,
             max_tokens=config.model.max_tokens,
             cooldown=0.3,  # 请求冷却（秒），0=禁用；共享网关可调大
+            extra_params=config.model.extra_params,
+            headers=config.model.headers,
         )
 
         self._tool_calls_count = 0

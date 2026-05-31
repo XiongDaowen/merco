@@ -97,6 +97,8 @@ class ModelConfig:
     base_url: str | None = None
     temperature: float = 0.7
     max_tokens: int = 4096
+    extra_params: dict = field(default_factory=dict)
+    headers: dict = field(default_factory=dict)
 
     def resolve(self):
         """后处理：根据 provider 名补齐未填的字段"""
@@ -176,6 +178,8 @@ class MercoConfig:
                 "base_url": self.model.base_url,
                 "temperature": self.model.temperature,
                 "max_tokens": self.model.max_tokens,
+                "extra_params": self.model.extra_params or None,
+                "headers": self.model.headers or None,
             },
             "max_tool_calls": self.max_tool_calls,
             "max_input_tokens": self.max_input_tokens,
@@ -216,6 +220,8 @@ class MercoConfig:
             base_url=model_data.get("base_url"),
             temperature=model_data.get("temperature", 0.7),
             max_tokens=model_data.get("max_tokens", 4096),
+            extra_params=model_data.get("extra_params", {}),
+            headers=model_data.get("headers", {}),
         )
         memory_data = data.get("memory", {})
         if not isinstance(memory_data, dict):
