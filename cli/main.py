@@ -391,12 +391,16 @@ def run_repl(agent, dashboard=None, config_source=""):
 
         def handle_interrupt():
             nonlocal exit_count, exit_timer
+            import sys
+            print(f"\n[DEBUG] handle_interrupt called, current_task={current_task}, done={current_task.done() if current_task else 'N/A'}", file=sys.stderr)
             ctx = InterruptContext(
                 state=InterruptState.AGENT_RUNNING if current_task and not current_task.done() else InterruptState.IDLE,
                 task=current_task,
                 exit_count=exit_count
             )
+            print(f"[DEBUG] ctx.state={ctx.state}, ctx.task={ctx.task}", file=sys.stderr)
             interrupt_pipeline.process_sync(ctx)
+            print(f"[DEBUG] ctx.handled={ctx.handled}, ctx.exit_count={ctx.exit_count}", file=sys.stderr)
             if not ctx.handled and ctx.exit_count > exit_count:
                 exit_count = ctx.exit_count
                 console.print("[dim]再按一次退出[/dim]")

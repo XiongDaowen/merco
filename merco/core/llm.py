@@ -334,7 +334,11 @@ class LLMClient:
                 logger.debug("⏳ 冷却 %.1fs（距上次请求 %.1fs）", wait, elapsed)
                 await asyncio.sleep(wait)
 
-        response = await self.client.chat.completions.create(**params)
+        try:
+            response = await self.client.chat.completions.create(**params)
+        except asyncio.CancelledError:
+            logger.debug("⚠ 请求被取消")
+            raise
         self._last_request_time = time.monotonic()
         return response
 
