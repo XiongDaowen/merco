@@ -146,6 +146,11 @@ class StreamingProvider(ResponseProvider):
         try:
             stream = agent.llm.chat_stream(messages, tools=tools)
             async for chunk in stream:
+                # 取消检查点：如果任务被取消，立即退出
+                current = asyncio.current_task()
+                if current and current.cancelled():
+                    live.stop()
+                    raise asyncio.CancelledError()
                 r = chunk.get("reasoning", "")
                 if r:
                     reasoning_buf += r
