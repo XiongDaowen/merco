@@ -4,11 +4,16 @@ import asyncio
 import logging
 import os
 import signal
+import sys
 import typer
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from cli.registry import cmd_registry
+from cli.interrupt import (
+    InterruptPipeline, InterruptContext, InterruptState,
+    CancelTaskStrategy, ClearInputStrategy, ExitWithHooksStrategy
+)
 
 console = Console()
 
@@ -364,29 +369,51 @@ def run_repl(agent, dashboard=None, config_source=""):
     from cli.input_driver import PromptToolkitInput, InputInterrupt
     driver = PromptToolkitInput([c.name for c in cmd_registry.get_all()])
 
+    # ── 中断处理管线 ──
+    def _clear_input_buffer():
+        driver._session.default_buffer.text = ""
 
+    def _exit_gracefully():
+        console.print("\n[dim]正在保存...[/dim]")
+        _run_exit_hooks()
+        sys.exit(0)
+
+    interrupt_pipeline = (InterruptPipeline()
+        .use(CancelTaskStrategy())
+        .use(ClearInputStrategy(_clear_input_buffer))
+        .use(ExitWithHooksStrategy(_exit_gracefully)))
 
     async def repl():
         loop = asyncio.get_running_loop()
         current_task: asyncio.Task | None = None
         exit_count = 0
+        exit_timer: asyncio.Task | None = None
 
         def handle_interrupt():
-            nonlocal current_task, exit_count
-            if current_task and not current_task.done():
-                current_task.cancel()
-            else:
-                exit_count += 1
-                if exit_count == 1:
-                    console.print("\n[yellow]再按 Ctrl+C 退出，或输入 /exit。[/yellow]")
-                else:
-                    console.print("\n[dim]再见！[/dim]")
-                    try:
-                        loop.remove_signal_handler(signal.SIGINT)
-                    except Exception:
-                        pass
-                    _run_exit_hooks()
-                    os._exit(0)
+            nonlocal exit_count, exit_timer
+            state = InterruptState.AGENT_RUNNING if current_task and not current_task.done() else InterruptState.IDLE
+            ctx = InterruptContext(state=state, task=current_task, exit_count=exit_count)
+
+            async def _process():
+                nonlocal exit_count, exit_timer
+                await interrupt_pipeline.process(ctx)
+                if ctx.handled and state == InterruptState.IDLE:
+                    # 退出流程已在策略中处理
+                    pass
+                elif ctx.exit_count > exit_count:
+                    exit_count = ctx.exit_count
+                    console.print("[dim]再按一次退出[/dim]")
+                    # 3 秒后重置 exit_count
+                    if exit_timer:
+                        exit_timer.cancel()
+                    exit_timer = asyncio.create_task(_reset_exit_count())
+
+            asyncio.ensure_future(_process())
+
+        async def _reset_exit_count():
+            nonlocal exit_count
+            await asyncio.sleep(3)
+            exit_count = 0
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, handle_interrupt)
@@ -411,15 +438,6 @@ def run_repl(agent, dashboard=None, config_source=""):
                     pre_text, prompt = prompt_area.render(agent)
                     console.print(pre_text)
                     user_input = (await driver.get_input(prompt)).strip()
-                    exit_count = 0  # 正常输入，重置计数
-
-                    # Re-register signal handlers (prompt_toolkit may have cleared them)
-                    for sig in (signal.SIGINT, signal.SIGTERM):
-                        try:
-                            loop.remove_signal_handler(sig)
-                        except (NotImplementedError, RuntimeError):
-                            pass
-                        loop.add_signal_handler(sig, handle_interrupt)
 
                     if not user_input:
                         continue
@@ -439,17 +457,14 @@ def run_repl(agent, dashboard=None, config_source=""):
                     console.rule(style="dim")
 
                 except InputInterrupt:
-                    # Ctrl+C with empty buffer → exit logic
-                    exit_count += 1
-                    if exit_count == 1:
-                        console.print("\n[yellow]再按 Ctrl+C 退出，或输入 /exit。[/yellow]")
-                    else:
-                        console.print("\n[dim]再见！[/dim]")
-                        break
+                    console.print("\n[dim]再见！[/dim]")
+                    break
                 except asyncio.CancelledError:
                     console.rule(style="dim")
-                    console.print("\n[dim]操作已取消。再按一次 Ctrl+C 退出。[/dim]")
+                    console.print("[dim]操作已取消[/dim]")
                     current_task = None
+                    continue  # skip run_in_executor, go back to input
+
                 except EOFError:
                     console.print("\n[dim]再见！[/dim]")
                     break

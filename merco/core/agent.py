@@ -18,6 +18,11 @@ from .session import Session
 from .message import Message, MessageRole
 from .context import ContextManager, msg_tokens, estimate_tokens as est_tk
 from .pipeline import ProcessContext
+from .interrupt import (
+    InterruptCleanupPipeline, CleanupContext,
+    InjectCancelMessages, TerminateSubprocesses,
+    CloseMCPConnections, EmitInterruptHooks, SavePartialState
+)
 
 console = Console()
 logger = logging.getLogger("merco.agent")
@@ -283,6 +288,14 @@ class Agent:
             hooks=self.hooks,
         )
 
+        # ── 中断清理管线 ──
+        self._cleanup_pipeline = (InterruptCleanupPipeline()
+            .use(InjectCancelMessages())
+            .use(TerminateSubprocesses())
+            .use(CloseMCPConnections())
+            .use(EmitInterruptHooks())
+            .use(SavePartialState()))
+
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
         self._current_prompt = prompt
@@ -296,7 +309,18 @@ class Agent:
             await self._compress_context()
 
         # 执行 Agent 循环
-        result = await self._agent_loop()
+        try:
+            result = await self._agent_loop()
+        except asyncio.CancelledError:
+            # 使用 InterruptCleanupPipeline 替换 _inject_interrupted_tool_results
+            cancelled_tool_calls = self._find_orphan_tool_calls()
+            cleanup_ctx = CleanupContext(
+                agent=self,
+                cancelled_tool_calls=cancelled_tool_calls,
+                session_id=self.session.id,
+            )
+            await self._cleanup_pipeline.process(cleanup_ctx)
+            raise
         self._auto_title(prompt)
         self.session.metadata["observer"] = self.observer.snapshot()
         self.session.save()
@@ -474,6 +498,22 @@ class Agent:
             await self._dispatch_tool_calls(tool_calls, response)
             await asyncio.sleep(0.5)
 
+    def _find_orphan_tool_calls(self) -> list[dict]:
+        """查找孤儿 tool_calls（未完成的）。"""
+        completed_ids = set()
+        for msg in self.context.messages:
+            if msg.get("tool_call_id"):
+                completed_ids.add(msg["tool_call_id"])
+
+        orphans = []
+        for msg in reversed(self.context.messages):
+            if msg.get("role") != "assistant":
+                continue
+            for tc in (msg.get("tool_calls") or []):
+                tc_id = tc.get("id") if isinstance(tc, dict) else None
+                if tc_id and tc_id not in completed_ids:
+                    orphans.append(tc)
+        return orphans
 
     async def _dispatch_tool_calls(self, tool_calls: list[dict], response: dict) -> None:
         """工具调度：渲染内容 → 写上下文 → 执行工具"""
