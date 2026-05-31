@@ -145,15 +145,23 @@ class Observer:
         if errors:
             lines.append(f"       [red]错误: {errors}[/red]")
 
-        # 累计
+        # 累计 — acc 里已含上次 merge 的 live 值，只加「未合并增量」避免重复计数
+        lm = self._last_merged
+        u_turns = turns - lm.get("turns", 0)
+        u_llm = llm_calls - lm.get("llm_calls", 0)
+        u_tools = tool_calls - lm.get("tool_calls", 0)
+        u_tokens_in = tokens_in - lm.get("tokens_in", 0)
+        u_tokens_out = tokens_out - lm.get("tokens_out", 0)
+        u_errors = errors - lm.get("errors", 0)
+
         if acc_turns or acc_llm or acc_tools:
             lines.append("")
             lines.append(
-                f"  累计: {acc_turns + turns} 轮  {acc_llm + llm_calls} 次 LLM  "
-                f"入 {_fmt_n(acc_tokens_in + tokens_in)} tokens  "
-                f"出 {_fmt_n(acc_tokens_out + tokens_out)} tokens  "
-                f"{acc_tools + tool_calls} 次工具"
-                + (f"  [red]{acc_errors + errors} 错误[/red]" if acc_errors + errors else "")
+                f"  累计: {acc_turns + u_turns} 轮  {acc_llm + u_llm} 次 LLM  "
+                f"入 {_fmt_n(acc_tokens_in + u_tokens_in)} tokens  "
+                f"出 {_fmt_n(acc_tokens_out + u_tokens_out)} tokens  "
+                f"{acc_tools + u_tools} 次工具"
+                + (f"  [red]{acc_errors + u_errors} 错误[/red]" if acc_errors + u_errors else "")
             )
 
         if not turns and not acc_turns:
