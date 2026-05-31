@@ -50,6 +50,8 @@ class Observer:
 
     def _on_interrupt(self, interrupted_tools: int = 0, **kwargs):
         """中断时记录统计。"""
+        # 记录中断的 LLM 调用
+        self._live.increment("llm_calls_interrupted")
         if interrupted_tools:
             self._live.increment("tool_calls_interrupted", interrupted_tools)
             self._live.increment("tool_calls", interrupted_tools)
@@ -123,9 +125,15 @@ class Observer:
                     parts.append(f"[dim]{name[5:]}[/dim] {cnt}次({avg:.1f}s)")
             lines.append(f"       工具: {', '.join(parts)}" if parts else f"       工具: {tool_calls} 次")
 
-        interrupted = live.get_counter("tool_calls_interrupted")
-        if interrupted:
-            lines.append(f"       [yellow]中断: {interrupted} 次工具调用[/yellow]")
+        interrupted_tools = live.get_counter("tool_calls_interrupted")
+        interrupted_llm = live.get_counter("llm_calls_interrupted")
+        if interrupted_tools or interrupted_llm:
+            parts = []
+            if interrupted_llm:
+                parts.append(f"{interrupted_llm} 次 LLM")
+            if interrupted_tools:
+                parts.append(f"{interrupted_tools} 次工具调用")
+            lines.append(f"       [yellow]中断: {', '.join(parts)}[/yellow]")
 
         if errors:
             lines.append(f"       [red]错误: {errors}[/red]")
