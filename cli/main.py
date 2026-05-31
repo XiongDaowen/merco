@@ -457,8 +457,19 @@ def run_repl(agent, dashboard=None, config_source=""):
                     console.rule(style="dim")
 
                 except InputInterrupt:
-                    console.print("\n[dim]再见！[/dim]")
-                    break
+                    # 同步处理二次确认逻辑
+                    if exit_count == 0:
+                        exit_count = 1
+                        console.print("[dim]再按一次退出[/dim]")
+                        # 3 秒后重置 exit_count
+                        if exit_timer:
+                            exit_timer.cancel()
+                        exit_timer = asyncio.create_task(_reset_exit_count())
+                    else:
+                        console.print("\n[dim]正在保存...[/dim]")
+                        _run_exit_hooks()
+                        sys.exit(0)
+                    continue
                 except asyncio.CancelledError:
                     console.rule(style="dim")
                     console.print("[dim]操作已取消[/dim]")
