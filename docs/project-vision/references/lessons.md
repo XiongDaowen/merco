@@ -411,7 +411,7 @@ _wrap_up_call(messages):
 
 ### ANSI prompt
 
-- ``/`` 包裹 ANSI 码 → readline 正确计宽
+- ``/`​` 包裹 ANSI 码 → readline 正确计宽
 - 不用 Rich console.print 做 prompt（光标位置计算错乱）
 
 ### 常见坑
@@ -419,3 +419,218 @@ _wrap_up_call(messages):
 - `write_file` 覆盖整文件 → 局部改动用 patch
 - Rich status spinner 与 console.print 同一 stdout 会冲突 → 工具日志走 stderr
 - stderr/stdout 交叉输出破坏 Rich 光标管理
+
+
+---
+
+## 2026-05-31: 可观察性的解耦 —— Hooks 事件流而非直接埋点
+
+**场景**：v0.2.0 设计 Observability 时，三种选择摆在面前：
+1. agent.py 散落 `metrics.increment("llm_calls")`（直接埋点）
+2. Observer 单例直接调用业务方法（双向耦合）
+3. 业务代码 emit 事件，Observer/Metrics/Audit 订阅（事件流）
+
+**选择**：第 3 种。HookRegistry 4 个事件（llm.chat/tool.after_execute/tool.error/conversation.turn），Observer 订阅。
+
+**对比**：
+- 旧：agent.py 导入 MetricsCollector，6+ 处埋点散落。加新指标改 5+ 文件
+- 新：agent.py 只 `await self.hooks.emit(...)`，Observer/Metrics/Audit 各自订阅。改 1 行加新指标
+
+**教训**：
+- **解耦的可观察性 = 事件流 + 订阅者**，不是单例 + 全局调用
+- 业务代码不感知 Observability 存在，但所有行为都被记录
+- 多个订阅者并存（Observer/Metrics/Audit/Tracing）无需改业务代码
+- 事件命名要稳定：改动事件名 = 破坏所有订阅者
+
+---
+
+## 2026-05-31: ToolGuard 规则链 —— 默认 ask 不硬拦截
+
+**场景**：v0.2.0 设计敏感命令拦截时，三种选择：
+1. 全 deny（rm -rf / 等全拦截）
+2. 全 allow（等于没做）
+3. 默认 ask（用户决策）+ 用户可加 deny 规则
+
+**选择**：第 3 种。30 条默认规则全 ask（确认后放行），用户可在 `merco.json` 追加 `{"tool":"bash","pattern":"DROP TABLE","action":"deny"}`。
+
+**接入位置**：ToolGuard.check() 在 agent._execute_tool_calls 工具执行前，**不修改任何工具自身**。业务解耦。
+
+**教训**：
+- **默认行为要为正常使用留空间**——全 deny 阻断正常开发
+- **规则链优先级**——user 规则在链首，可覆盖默认
+- **守卫不该侵入工具自身**——hook 模式（agent 层调用）> 装饰器模式（工具层包装）
+- **action 三态**：allow（强制放行）/ ask（确认）/ deny（硬拦截）。只有 deny 是终结，allow/ask 都可被后续规则覆盖
+
+---
+
+## 2026-05-31: SessionStore SQLite —— 元数据字段承载跨运行状态
+
+**场景**：Observer 的累计统计（跨运行）需要持久化。两种选择：
+1. 单独建一个 `~/.merco/observer.db` 表
+2. 复用 `sessions.metadata` JSON 字段
+
+**选择**：第 2 种。`session.metadata["observer"] = observer.snapshot()`，每轮 save 时持久化。
+
+**为什么**：Observer 状态本质属于"这个会话的一部分"。单独建表要处理 observer 与 session 的一对多（一个会话一个 observer，但跨重启 observer 唯一）关系，得不偿失。JSON 字段无 schema 约束，正适合动态 snapshot。
+
+**教训**：
+- **元数据 JSON 字段 = 跨域数据的低成本存储**——任何"我需要存点东西但不想建表"的场景都适用
+- **Session 状态分层**：messages（高频写）/ metadata（低频写）/ 结构化字段（id/title/created_at）。metadata 字段是"扩展点"
+- **未来 Session Fork 复用**：`parent_id` 字段已建好（Phase 5 直接用），Observer snapshot 也跟着 fork 走
+
+---
+
+## 2026-05-31: ProviderInfo dataclass + 向后兼容 `__getitem__`
+
+**场景**：v0.2.0 升级 `PROVIDER_REGISTRY` 从 dict 到 dataclass，dict 风格访问 `PROVIDER_REGISTRY["openai"]["base_url"]` 散落 10+ 处。
+
+**选择**：保留 dataclass + 加 `__getitem__` 向后兼容层。
+
+```python
+@dataclass
+class ProviderInfo:
+    base_url: str
+    key_env: str
+    def __getitem__(self, key):
+        if key == "base_url": return self.base_url
+        if key == "key_env": return self.key_env
+        raise KeyError(key)
+```
+
+**教训**：
+- **重构时给"读多写少"的旧 API 加兼容层**比"全量替换"成本低 10 倍
+- dataclass 提供类型提示 + IDE 补全，`__getitem__` 让旧调用点零改动
+- 向后兼容层宁滥勿缺——你不知道哪个角落的代码还依赖旧 API
+- `__getitem__` 只暴露常用字段（base_url/key_env），其他字段强迫走属性访问
+
+---
+
+## 2026-05-31: merco setup 向导 —— ProviderInfo 自动驱动 UI
+
+**场景**：用户首次启动无 API key，需要引导。两种方案：
+1. 写死 5 个平台的特殊处理代码
+2. 通用向导读 `PROVIDER_REGISTRY` 自动生成
+
+**选择**：第 2 种。`merco setup` 命令读 `PROVIDER_REGISTRY`，5 步流程（选平台→填 key→选 model→确认 base_url→保存）全自动。
+
+**结果**：新增平台只需在 `PROVIDER_REGISTRY` 加一条 `ProviderInfo`，setup 向导 + 自动补全 + base_url 兜底全部自动适配。
+
+**教训**：
+- **配置驱动 UI**——任何"枚举型配置项"都该有对应的 UI 自动生成
+- **新平台一行注册**——架构好不好，看加新 case 要改几行
+- **fallback 必须有**——未收录的 provider 必须有清晰的"我不认识这个"路径（warning + 要求显式 base_url）
+- **5 步流程**——超过 5 步用户会中途放弃；少于 3 步说明信息量不够
+
+---
+
+## 2026-05-31: Token fallback —— Provider 不返回 usage 时的兜底
+
+**场景**：MiniMax 流式 API 不返回 `usage` 字段，OpenAI/Anthropic 缓存字段名不同（`cached_tokens` vs `cache_read_tokens`）。
+
+**解决**：
+1. `_extract_usage` 统一字段映射：`cached_tokens or cache_read_tokens` 都采集
+2. `total_tokens` 优先 `last_actual_tokens`，零时回退 `est_tk(content+reasoning)`
+3. 进度条永不显示 0
+
+**教训**：
+- **多 provider 兼容 = 字段映射层**——别在调用方写 `if provider == "openai"`，统一抽象 `_extract_usage`
+- **进度条永不为 0**——估算出错比 0 显示好。0 让用户以为 agent 没在工作
+- **缓存命中率是有用指标**——各 provider 字段不同，但语义一致，统一抽象后 Observer 自动统计
+
+---
+
+## 2026-05-31: SkillViewTool 动态 describe() —— 工具元数据按需生成
+
+**场景**：技能列表会变化（新增/删除/改描述），但 system prompt 是静态的。两种方案：
+1. 启动时拼 system prompt（含技能列表）
+2. 工具 describe() 动态生成
+
+**选择**：第 2 种。`SkillViewTool.describe(context)` 在 tool definition 调用时拼接当前可用技能列表。
+
+**附加设计**：
+- `check()` 方法：有技能才显示工具（无技能时不暴露 `skill_view`）
+- `set_skill_registry()` 注入：避免循环导入
+
+**教训**：
+- **静态 system prompt + 动态工具元数据**——技能列表在 tool description 而非 system prompt，更新零改动
+- **check() 控制可见性**——无依赖的工具不暴露，避免 LLM 调空工具
+- **注入而非导入**——循环依赖的通解。`set_registry()` 在 Agent 构造时调用，模块 import 阶段无依赖
+
+---
+
+## 2026-05-31: 集成测试用 MockLLMClient —— 测试金字塔顶端
+
+**场景**：v0.2.0 需要测试 Agent 端到端流程（对话/工具/会话/guard/压缩）。真实 LLM 调用：
+- 慢（每次 5+ 秒）
+- 贵（CI 跑测试 1000 次烧钱）
+- 不确定（同样输入不同响应）
+
+**解决**：`tests/conftest.py` 提供 `MockLLMClient` fixture：
+```python
+class MockLLMClient:
+    def __init__(self, responses: list[dict]):
+        self.responses = responses
+        self.call_count = 0
+    async def chat(self, *args, **kwargs):
+        resp = self.responses[self.call_count]
+        self.call_count += 1
+        return resp
+```
+
+**测试速度**：2 秒全过 10+ 集成测试。CI 友好。
+
+**教训**：
+- **集成测试 mock LLM，单元测试 mock 一切**——CI 不依赖外部服务
+- **测试用例是 LLM 响应序列**——可读性 > 灵活性。预设 `responses=[...]` 列出每轮的 LLM 输出
+- **MockLLMClient 不验证响应格式**——格式错就当 LLM 出错走恢复路径，与真实行为一致
+- **测试金字塔**：单元（多、快）+ 集成（中、MockLLM）+ E2E（少、真实 LLM，可选）
+
+---
+
+## 2026-05-31: openai import 延迟加载 —— 测试环境解耦
+
+**场景**：`merco/core/llm.py` 顶部 `from openai import AsyncOpenAI`。测试环境 conftest.py 不安装 openai，整个 agent 模块 import 失败。
+
+**解决**：openai import 延迟到 `LLMClient.__init__`：
+```python
+class LLMClient:
+    def __init__(self, ...):
+        import openai  # 延迟到实例化
+        self.client = openai.AsyncOpenAI(...)
+```
+
+**教训**：
+- **顶层 import 是隐式强依赖**——任何缺失导致整个模块崩
+- **延迟 import = 可选依赖**——只在实际使用时检查依赖
+- **测试环境依赖最小化**——conftest 只 import 必要模块，缺失的留给延迟 import 处理
+- **架构层观察**：llm.py 是 core 模块，被测试大量 import。第三方 SDK 应放在实例化阶段
+
+---
+
+## 2026-05-31: Skill 文档与代码同步纪律 —— 三个副本必须对齐
+
+**场景**：v0.2.0 发布后，发现三个 skill 副本严重不一致：
+- `docs/project-vision/` (源) — 已更新到 2026-05-28
+- `.merco/skills/` — 内容更新但描述了未实现功能
+- `.opencode/skills/` — 停留在 2026-05-20（OpenMercury 命名）
+- `.reasonix/skills/` — 停留在 2026-05-22
+
+**根因**：每次大提交未同步副本。"源 → 副本"单向同步纪律缺失。
+
+**教训**：
+- **"提交后同步"是 hard rule**——和"提交前跑测试"同等重要
+- **多副本场景必须以源为唯一真相**——副本只允许来自源的同步
+- **副本中的"未来功能描述"必须明确标记 Phase**——避免用户误以为已实现
+- **grep 验证是底线**——文档声称的功能，grep 代码必须能找到对应实现
+
+---
+
+## 2026-05-31: 命名变更 OpenMercury → Mercury Code (merco) — 一次大扫除
+
+**场景**：项目名 OpenMercury 改为 Mercury Code (merco) 更简洁，5 个文件 mtime 显著不同（`docs/SKILL.md` 已改、`.opencode/SKILL.md` 没改）。
+
+**教训**：
+- **项目改名不是只改 README**——所有外部引用、skill 副本、文档入口、配置文件、commit message 都要扫一遍
+- **`grep -r "OpenMercury"` 是改名后的第一步**——机械但有效
+- **多 skill 副本场景下改名成本倍增**——副本越多越容易漏
+- **rename 提交 + docs 同步应原子化**——不要拆分到不同 commit

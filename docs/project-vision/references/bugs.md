@@ -13,7 +13,7 @@
 | 2026-05-21 | 请求频发触发网关限流 | agent loop 无请求间隔 | 新增 `cooldown` 参数（默认 0.3s） |
 | 2026-05-21 | 注释/代码里写了 SCNet | 核心模块不应知道 provider 名 | 全部清除，参数化 `retry_delays`/`cooldown` |
 | 2026-05-22 | Ctrl+C 退出崩溃 + 两段确认 | 七次迭代 → 回退 `input()` + `exit_count` 计数器 | 信号 handler 只做动作不打印 |
-| 2026-05-22 | `openmercury` 必须带子命令才能启动 | `run` 是 `@app.command` | 改为 `@app.callback(invoke_without_command=True)` |
+| 2026-05-22 | `merco` 必须带子命令才能启动 | `run` 是 `@app.command` | 改为 `@app.callback(invoke_without_command=True)` |
 | 2026-05-22 | 工具参数显示为 `\uXXXX` | `json.dumps` 默认 `ensure_ascii=True` | 改为 `ensure_ascii=False` |
 | 2026-05-22 | max_tool_calls 硬编码 | `_max_tool_calls=10` | 改为配置项 `max_tool_calls`（默认 15） |
 | 2026-05-22 | 响应 markdown 裸显 | `console.print(f"\n{response}")` | `console.print(Markdown(response))` |
@@ -38,15 +38,36 @@
 | 2026-05-26 | `context.py` `ContextCompressor` 死壳 | 空壳 stub，真身在 memory/compressor.py | 删除死壳 |
 | 2026-05-26 | `LLMClient` chat/chat_stream ~50行重复 | params/cooldown/retry 两处一模一样 | `_build_params` + `_request` 提取 |
 | 2026-05-26 | LLM retry 两层重复 | LLM 层 + Agent 层各自重试，最坏 9 次 | LLM 层 retry 归零，RecoveryPipeline 唯一控制点 |
+| 2026-05-31 | ToolGuard 用户规则优先级反转 | user 规则放在默认规则后，匹配顺序不对 | `user_rules` 在 `__init__` 中先添加，`_DEFAULT_RULES` 后 extend，user 规则在链首 |
+| 2026-05-31 | SessionStore 启动恢复上下文丢失 | 旧实现只 load messages，不恢复 tool_call_id/tool_calls/reasoning 字段 | `Session.load()` 完整读取所有字段，agent._restore_context 灌入 |
+| 2026-05-31 | Observer 双计数器重复累加 | `_merge_to_acc()` 后 acc 已含 live 值，下轮 save 又叠加 | 改为 save 时合并、reset live；restore 只读 acc |
+| 2026-05-31 | Observer snapshot 不持久化 | 重启后累计统计全丢 | `session.metadata["observer"]` 存 snapshot，`save_metadata()` 持久化到 SQLite |
+| 2026-05-31 | MiniMax 流式不返回 usage → 进度条为 0 | 流式 response.usage 为 None，`last_actual_tokens=0` | Token fallback：usage 缺失时 `est_tk(content+reasoning)` 估算 |
+| 2026-05-31 | OpenAI/Anthropic cache 字段名不同 | OpenAI `cached_tokens`、Anthropic `cache_read_tokens` | `_extract_usage` 统一字段映射，`cached_tokens or cache_read_tokens` |
+| 2026-05-31 | openai 缺失导致测试 import 失败 | `from openai import AsyncOpenAI` 在 llm.py 顶部 | openai import 延迟到 `LLMClient.__init__` |
+| 2026-05-31 | edit_file Live spinner 覆盖确认提示 | Rich Live 渲染覆盖 confirm_edit 的 y/N 提示 | 交互式工具（edit_file）跳过 Live spinner |
+| 2026-05-31 | think tag 残留 content | DirectFieldStrategy 命中后 ThinkTagStrategy 没跑 | `_strip_think_tags` 兜底清理 |
+| 2026-05-31 | read_file 大文件阻塞 | `f.readlines()` 一次读完 100MB 文件 | 流式逐行迭代，读到 limit 即停 |
+| 2026-05-31 | diff 全量并排+全量染色噪音 | 1 行改动显示 1000 行 diff | SequenceMatcher 对齐 + 上下文裁剪 ±3 行 + 仅变色变更行 |
 
 ## 待修复
 
 | 日期 | 问题 | 描述 | 优先级 |
 |------|------|------|--------|
+| 2026-05-31 | scheduler 未启动 | CLI/Web 未实例化 CronScheduler | 中 |
+| 2026-05-31 | Memory → Sessions 未集成 | SessionStore 不存 MemoryStore，recall 不接 system prompt | 中（Phase 5） |
+| 2026-05-31 | Hooks handler 仍为 pass | lifecycle/chat/tool 三个 hooks 文件的 handler 未实现 | 低（Phase 6） |
+| 2026-05-31 | compressor LLM 摘要未实 | `_summarize` 返回占位文本而非真实 LLM 摘要 | 低（Phase 6） |
+| 2026-05-31 | context.compress() 未实 | ContextManager.compress() NotImplementedError | 低（Phase 6） |
+| 2026-05-31 | WebSearch 骨架 | web_tools.WebSearch 返回 "not yet configured" | 中（Phase 3） |
+| 2026-05-31 | mcp_tools 骨架 | MCPTool/MCPManager 全部 NotImplementedError | 中（Phase 3） |
+| 2026-05-31 | task_tools 骨架 | TaskTool 无子代理派发 | 中（Phase 5） |
+| 2026-05-31 | gateway/telegram discord 骨架 | 所有方法 pass | 低（Phase 5） |
+| 2026-05-31 | tui.py "coming soon" | 仅有占位 print | 中（Phase 4） |
+| 2026-05-31 | web/app.py "/chat" 返回 coming soon | 未对接 Agent | 中（Phase 4） |
+| 2026-05-31 | builtin/skills 空目录 | 无内置 skill 文档 | 低（Phase 3） |
+| 2026-05-31 | commands.py 3 行注释 | `/recall` `/fork` `/tree` 命令未实现 | 中（Phase 5） |
 | 2026-05-21 | CLI 等待响应时无法输入 | REPL 同步阻塞在 `agent.run()` | 中 |
-| 2026-05-21 | 启动无模型探活 | 模型不存在在用户输入后才报错 | 中 |
-| 2026-05-21 | 敏感操作无权限拦截 | bash/file 未接入 SecurityChecker | 高 |
-| 2026-05-20 | 工具结果过长撑爆上下文 | 已加 4000 字截断 | 低 |
 | 2026-05-22 | cooldown 硬编码在 agent.py | 应走配置层 | 中 |
 | 2026-05-22 | 工具调用日志过多刷屏 | 15+ 调用占满终端 | 低 |
 | 2026-05-22 | Ctrl+C 提示打断输入流 | 警告在当前行上方遮住 input() | 低 |

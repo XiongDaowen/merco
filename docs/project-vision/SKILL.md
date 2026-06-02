@@ -38,7 +38,7 @@ merco skills -l        # 列出技能
 
 ## 当前状态
 
-**Phase 2 深入** | 18 REAL + 7 PARTIAL + 10 SKELETON + 4 NOT WIRED | 架构清理：LLM去重、retry统一、token账本修复、Dashboard/PromptDecorator可组合 | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-05-26
+**Phase 2 → v0.2.0** | 24 REAL + 6 PARTIAL + 8 SKELETON + 3 NOT WIRED | v0.2.0 关键集成：Observer+Hooks 驱动可观察性、ToolGuard 敏感命令守卫、SessionStore SQLite 持久化、ProviderInfo+setup 向导 | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-06-03
 
 ## 详细文档
 
@@ -49,9 +49,6 @@ merco skills -l        # 列出技能
 | [关键决策](references/decisions.md) | 重要决策记录与原因 |
 | [开发教训](references/lessons.md) | 犯过的错、反思、以后的规则 |
 | [Bug 追踪](references/bugs.md) | 已修复和待修复的 bug |
-| [Phase 1 Bugs](references/phase1-bugs.md) | Phase 1 具体 bug 及首次 CLI 调试记录 |
-| [CLI 模式](references/cli-patterns.md) | CLI 输出规范与踩坑模式 |
-| [续命模式](references/continuation-pattern.md) | LLM 决策注入、演化历史、废弃方案 |
 
 ## 工作原则
 
