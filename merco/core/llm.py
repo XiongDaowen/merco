@@ -400,7 +400,10 @@ class LLMClient:
                         len(normalized),
                         [f"{tc['name']}({tc['id'][:8]})" for tc in normalized])
             result["tool_calls"] = [
-                {**tc, "arguments": json.loads(tc["arguments"]) if tc["arguments"] else {}}
+                {**tc,
+                 "arguments": json.loads(tc["arguments"]) if tc["arguments"] else {},
+                 "_arguments_raw": tc["arguments"],  # 保留原始字符串，避免 roundtrip 损坏
+                }
                 for tc in normalized
             ]
 

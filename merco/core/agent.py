@@ -160,7 +160,8 @@ class StreamingProvider(ResponseProvider):
                         assembled["tool_calls"] = [
                             {"id": v["id"], "name": v["name"],
                              "arguments": _json.loads(v["arguments"])
-                             if v["arguments"] else {}}
+                             if v["arguments"] else {},
+                             "_arguments_raw": v["arguments"]}
                             for v in (tc_buf[i] for i in sorted(tc_buf))
                         ]
                     # 将部分响应添加到 context 和 session
@@ -218,7 +219,8 @@ class StreamingProvider(ResponseProvider):
             assembled["tool_calls"] = [
                 {"id": v["id"], "name": v["name"],
                  "arguments": _json.loads(v["arguments"])
-                 if v["arguments"] else {}}
+                 if v["arguments"] else {},
+                 "_arguments_raw": v["arguments"]}
                 for v in (tc_buf[i] for i in sorted(tc_buf))
             ]
         logger.debug(
@@ -571,7 +573,9 @@ class Agent:
             console.print(Panel(Markdown(assistant_content), border_style="dim"))
         api_tool_calls = [
             {"id": tc["id"], "type": "function",
-             "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=True)}}
+             "function": {"name": tc["name"],
+                          "arguments": tc.get("_arguments_raw",
+                                             json.dumps(tc["arguments"], ensure_ascii=True))}}
             for tc in tool_calls
         ]
         reasoning = response.get("reasoning", "")

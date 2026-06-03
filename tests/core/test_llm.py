@@ -117,3 +117,41 @@ def test_parse_response_handles_none_arguments():
     assert tc["id"] == "call_456"
     assert tc["name"] == "bash"
     assert tc["arguments"] == {}
+
+
+def test_parse_response_preserves_arguments_raw():
+    """_parse_response 保留原始 arguments 字符串，防止 json.loads→json.dumps roundtrip 损坏。"""
+    original_args = '{"model": "qwen3.5","temperature": 0.7}'
+
+    class FakeFunction:
+        name = "edit_file"
+        arguments = original_args
+
+    class FakeToolCall:
+        id = "call_789"
+        function = FakeFunction()
+
+    class FakeMessage:
+        content = ""
+        role = "assistant"
+        tool_calls = [FakeToolCall()]
+
+    class FakeChoice:
+        message = FakeMessage()
+        finish_reason = "tool_calls"
+
+    class FakeResponse:
+        choices = [FakeChoice()]
+        usage = None
+
+    client = LLMClient(api_key="test", base_url="http://test")
+    result = client._parse_response(FakeResponse())
+
+    tc = result["tool_calls"][0]
+    # 执行侧：arguments 是 dict
+    assert tc["arguments"] == {"model": "qwen3.5", "temperature": 0.7}
+    # 上下文重放侧：_arguments_raw 是原始字符串，一模一样
+    assert tc["_arguments_raw"] == original_args
+    # _arguments_raw 不能有 ensure_ascii 转义副作用
+    assert '"model"' in tc["_arguments_raw"]
+    assert "\\u" not in tc["_arguments_raw"]
