@@ -253,12 +253,14 @@ class LLMClient:
         cooldown: float = 0,  # 请求最小间隔（秒），0=不禁用
         extra_params: Optional[dict] = None,  # 额外 API 参数（top_p / seed 等）
         headers: Optional[dict] = None,  # 自定义 HTTP header（X-Title 等）
+        stream_options: Optional[dict] = None,  # 流式额外参数（如 {"include_usage": True}）
     ):
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.cooldown = cooldown
         self.extra_params = extra_params or {}
+        self.stream_options = stream_options
         self._last_request_time = 0.0
 
         import httpx
@@ -323,9 +325,8 @@ class LLMClient:
         }
         if stream:
             params["stream"] = True
-            stream_opts = self.extra_params.get("stream_options")
-            if stream_opts:
-                params["stream_options"] = stream_opts
+            if self.stream_options:
+                params["stream_options"] = self.stream_options
         if tools:
             params["tools"] = tools
             params["tool_choice"] = tool_choice

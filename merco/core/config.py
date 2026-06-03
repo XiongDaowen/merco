@@ -99,6 +99,7 @@ class ModelConfig:
     max_tokens: int = 4096
     extra_params: dict = field(default_factory=dict)
     headers: dict = field(default_factory=dict)
+    stream_options: dict | None = None
 
     def resolve(self):
         """后处理：根据 provider 名补齐未填的字段"""
@@ -180,6 +181,7 @@ class MercoConfig:
                 "max_tokens": self.model.max_tokens,
                 "extra_params": self.model.extra_params or None,
                 "headers": self.model.headers or None,
+                "stream_options": self.model.stream_options,
             },
             "max_tool_calls": self.max_tool_calls,
             "max_input_tokens": self.max_input_tokens,
@@ -222,6 +224,7 @@ class MercoConfig:
             max_tokens=model_data.get("max_tokens", 4096),
             extra_params=model_data.get("extra_params", {}),
             headers=model_data.get("headers", {}),
+            stream_options=model_data.get("stream_options"),
         )
         memory_data = data.get("memory", {})
         if not isinstance(memory_data, dict):
