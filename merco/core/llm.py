@@ -334,6 +334,16 @@ class LLMClient:
                      self.model, len(params.get("messages", [])),
                      len(params.get("tools", [])))
 
+        # ── 临时日志：捕获完整请求体用于 debug vs non-debug 对比 ──
+        safe = {k: v for k, v in params.items() if k != "messages"}
+        safe["messages"] = [
+            {k: v for k, v in m.items() if k != "reasoning"}
+            for m in params.get("messages", [])
+        ]
+        body = json.dumps(safe, ensure_ascii=False, indent=2)
+        logger.warning("→ 临时请求日志 (%d bytes): %s", len(body),
+                      body[:2000] if len(body) > 2000 else body)
+
         if self.cooldown > 0:
             elapsed = time.monotonic() - self._last_request_time
             if elapsed < self.cooldown:
@@ -345,6 +355,9 @@ class LLMClient:
             response = await self.client.chat.completions.create(**params)
         except asyncio.CancelledError:
             logger.debug("⚠ 请求被取消")
+            raise
+        except Exception as e:
+            logger.warning("← 临时错误日志: %s", str(e)[:500])
             raise
         self._last_request_time = time.monotonic()
         return response
