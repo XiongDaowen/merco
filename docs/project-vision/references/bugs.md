@@ -71,6 +71,7 @@
 | 2026-05-22 | cooldown 硬编码在 agent.py | 应走配置层 | 中 |
 | 2026-05-22 | 工具调用日志过多刷屏 | 15+ 调用占满终端 | 低 |
 | 2026-05-22 | Ctrl+C 提示打断输入流 | 警告在当前行上方遮住 input() | 低 |
+| 2026-05-29 | **Context 压缩丢上下文** | 触发压缩后 LLM 丢失大量历史。`_build_summary` fallback 只有纯计数无信息量；LLM 摘要结果未持久化到 session message。需：摘要存 session + fallback 保留最近 N 轮原文而非纯计数 | **高** |
 
 
 ---

@@ -3,12 +3,17 @@
 import asyncio
 import logging
 import os
-import readline
 import signal
+import sys
 import typer
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+from cli.registry import cmd_registry
+from cli.interrupt import (
+    InterruptPipeline, InterruptContext, InterruptState,
+    CancelTaskStrategy, ClearInputStrategy, ExitWithHooksStrategy
+)
 
 console = Console()
 
@@ -217,11 +222,7 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
         .use(ConfigSection())
         .use(HintSection()))
 
-    console.print(Panel(
-        dashboard.render(agent, config_source=config_source),
-        title="🚀 Mercury Code",
-    ))
-    return agent
+    return agent, dashboard, config_source
 
 
 # ── 输入区 PromptDecorator ─────────────────────────────────────
@@ -325,7 +326,7 @@ class PromptArea:
 
 # ── REPL 交互循环 ────────────────────────────────────────────────────────
 
-def run_repl(agent):
+def run_repl(agent, dashboard=None, config_source=""):
     import termios
 
     try:
@@ -364,30 +365,64 @@ def run_repl(agent):
 
     _on_exit(_save_on_exit)
 
+    import cli.commands  # triggers all @cmd_registry.register decorators
+    from cli.input_driver import PromptToolkitInput, InputInterrupt
+    driver = PromptToolkitInput([c.name for c in cmd_registry.get_all()])
+
+    # ── 中断处理管线 ──
+    def _clear_input_buffer():
+        driver._session.default_buffer.text = ""
+
+    def _exit_gracefully():
+        console.print("\n[dim]正在保存...[/dim]")
+        _run_exit_hooks()
+        sys.exit(0)
+
+    interrupt_pipeline = (InterruptPipeline()
+        .use(CancelTaskStrategy())
+        .use(ClearInputStrategy(_clear_input_buffer))
+        .use(ExitWithHooksStrategy(_exit_gracefully)))
+
     async def repl():
         loop = asyncio.get_running_loop()
         current_task: asyncio.Task | None = None
         exit_count = 0
+        exit_timer: asyncio.Task | None = None
 
         def handle_interrupt():
-            nonlocal current_task, exit_count
-            if current_task and not current_task.done():
-                current_task.cancel()
-            else:
-                exit_count += 1
-                if exit_count == 1:
-                    console.print("\n[yellow]再按 Ctrl+C 退出，或输入 /exit。[/yellow]")
-                else:
-                    console.print("\n[dim]再见！[/dim]")
-                    try:
-                        loop.remove_signal_handler(signal.SIGINT)
-                    except Exception:
-                        pass
-                    _run_exit_hooks()
-                    os._exit(0)
+            nonlocal exit_count, exit_timer
+            ctx = InterruptContext(
+                state=InterruptState.AGENT_RUNNING if current_task and not current_task.done() else InterruptState.IDLE,
+                task=current_task,
+                exit_count=exit_count
+            )
+            interrupt_pipeline.process_sync(ctx)
+            if not ctx.handled and ctx.exit_count > exit_count:
+                exit_count = ctx.exit_count
+                console.print("[dim]再按一次退出[/dim]")
+                if exit_timer:
+                    exit_timer.cancel()
+                exit_timer = asyncio.create_task(_reset_exit_count())
+
+        async def _reset_exit_count():
+            nonlocal exit_count
+            await asyncio.sleep(3)
+            exit_count = 0
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, handle_interrupt)
+
+        # Pre-load MCP servers before first user input
+        if agent.mcp_manager and agent.config.mcp_servers:
+            await agent.mcp_manager.load_config(agent.config.mcp_servers)
+
+        # Render dashboard after MCP loaded
+        if dashboard:
+            dashboard_text = dashboard.render(agent, config_source=config_source)
+            console.print(Panel(
+                dashboard_text,
+                title="🚀 Mercury Code",
+            ))
 
         try:
             while True:
@@ -395,10 +430,16 @@ def run_repl(agent):
                     prompt_area = (PromptArea()
                         .use(ContextBar()))
                     pre_text, prompt = prompt_area.render(agent)
-                    console.print(f"\n{pre_text}")
-                    user_input = await asyncio.to_thread(input, prompt)
-                    user_input = user_input.strip()
-                    exit_count = 0  # 正常输入，重置计数
+                    console.print(pre_text)
+                    user_input = (await driver.get_input(prompt)).strip()
+
+                    # 重新注册信号处理器（prompt_toolkit 可能已清除）
+                    for sig in (signal.SIGINT, signal.SIGTERM):
+                        try:
+                            loop.remove_signal_handler(sig)
+                        except (NotImplementedError, RuntimeError):
+                            pass
+                        loop.add_signal_handler(sig, handle_interrupt)
 
                     if not user_input:
                         continue
@@ -417,10 +458,29 @@ def run_repl(agent):
                     console.print(Panel(Markdown(response), border_style="dim"))
                     console.rule(style="dim")
 
+                except InputInterrupt:
+                    # 通过管线处理退出逻辑
+                    ctx = InterruptContext(
+                        state=InterruptState.IDLE,
+                        exit_count=exit_count
+                    )
+                    interrupt_pipeline.process_sync(ctx)
+                    if ctx.handled:
+                        # 已处理（exit_count=1 时会调用 on_exit）
+                        pass
+                    elif ctx.exit_count > exit_count:
+                        exit_count = ctx.exit_count
+                        console.print("[dim]再按一次退出[/dim]")
+                        if exit_timer:
+                            exit_timer.cancel()
+                        exit_timer = asyncio.create_task(_reset_exit_count())
+                    continue
                 except asyncio.CancelledError:
                     console.rule(style="dim")
-                    console.print("\n[dim]操作已取消。再按一次 Ctrl+C 退出。[/dim]")
-                    current_task = None
+                    console.print("[dim]操作已取消[/dim]")
+                    current_task = None  # 重置，等待下次 Agent 运行时重新设置
+                    continue  # skip run_in_executor, go back to input
+
                 except EOFError:
                     console.print("\n[dim]再见！[/dim]")
                     break
@@ -457,8 +517,8 @@ def main_callback(
 ):
     if ctx.invoked_subcommand is not None:
         return
-    agent = _setup_agent(config, model, api_key, debug)
-    run_repl(agent)
+    agent, dashboard, config_source = _setup_agent(config, model, api_key, debug)
+    run_repl(agent, dashboard, config_source)
 
 
 # ── 子命令 ────────────────────────────────────────────────────────────────
@@ -470,8 +530,8 @@ def run_cmd(
     api_key: str = typer.Option(None, "--api-key", "-k", help="API Key"),
     debug: bool = typer.Option(False, "--debug", "-d", help="开启调试日志"),
 ):
-    agent = _setup_agent(config, model, api_key, debug)
-    run_repl(agent)
+    agent, dashboard, config_source = _setup_agent(config, model, api_key, debug)
+    run_repl(agent, dashboard, config_source)
 
 
 @app.command("init")
@@ -524,167 +584,15 @@ def setup_cmd():
 
 async def handle_command(cmd: str, agent) -> bool:
     parts = cmd.split(maxsplit=1)
-    command = parts[0].lower()
+    name = parts[0].lower()
+    args = parts[1] if len(parts) > 1 else ""
 
-    if command in ("/exit", "/quit", "/q"):
-        console.print("[dim]再见！[/dim]")
-        return False
-
-    elif command == "/help":
-        console.print(Panel(
-            "[bold]可用命令[/bold]\n\n"
-            "/help     - 显示此帮助\n"
-            "/exit     - 退出\n"
-            "/new      - 新会话\n"
-            "/sessions - 历史会话列表\n"
-            "/report   - 会话统计报告\n"
-            "/model    - 显示当前模型\n"
-            "/tools    - 列出可用工具\n"
-            "/context  - 上下文用量\n"
-            "/skills   - 列出已加载技能\n"
-            "/history  - 查看本会话的文件修改历史\n"
-            "/revert   - 撤销本会话的文件修改",
-            title="帮助",
-        ))
+    cmd_def = cmd_registry.get(name)
+    if cmd_def is None:
+        console.print(f"[dim]未知命令: {name}，输入 /help 查看帮助[/dim]")
         return True
 
-    elif command == "/new":
-        agent.observer.save()
-        agent.session.metadata["observer"] = agent.observer.snapshot()
-        agent.session.save()
-        agent._session_store.save_metadata(agent.session.id, agent.session.metadata)
-        agent.reset()
-        agent.observer.reset(full=True)
-        from merco.sandbox import snapshot
-        snapshot.set_current_session(agent.session.id)
-        console.print("[dim]已开启新会话[/dim]")
-        return True
-
-    elif command == "/report":
-        arg = parts[1] if len(parts) > 1 else ""
-        if arg == "reset":
-            agent.observer.reset()
-            console.print("[dim]统计数据已清零[/dim]")
-        else:
-            console.print(Panel(agent.observer.report(), title="📊 Session Report"))
-        return True
-
-    elif command == "/model":
-        console.print(f"当前模型: {agent.config.model.provider}/{agent.config.model.model}")
-        return True
-
-    elif command == "/context":
-        stats = agent.get_context_stats()
-        bar = ContextBar()
-        console.print(bar.render(agent))
-        console.print(f"  阈值: {int(stats['threshold']*100)}%  |  模型推算: {'是' if stats['is_estimate'] else '否（API 实测）'}")
-        return True
-
-    elif command == "/history":
-        from merco.sandbox import snapshot
-        session_id = snapshot.get_current_session()
-        if not session_id:
-            console.print("[red]未找到当前会话[/red]")
-            return True
-        records = snapshot.history(session_id)
-        if not records:
-            console.print("[dim]当前会话无文件修改记录[/dim]")
-            return True
-        console.print(f"[bold]📋 会话 {session_id[:8]} 的文件修改:[/bold]")
-        for i, rec in enumerate(records):
-            from datetime import datetime
-            ts = rec.get("timestamp", "")[:19].replace("T", " ")
-            console.print(f"  {i}. [yellow]{rec['path']}[/yellow]  {ts}")
-        return True
-
-    elif command == "/revert":
-        from merco.sandbox import snapshot
-        session_id = snapshot.get_current_session()
-        if not session_id:
-            console.print("[red]未找到当前会话[/red]")
-            return True
-        records = snapshot.history(session_id)
-        if not records:
-            console.print("[dim]当前会话无文件修改记录[/dim]")
-            return True
-        resp = await asyncio.to_thread(
-            input, f"将撤销 {len(records)} 处修改，确认？[y/N] ")
-        if resp.strip().lower() not in ("y", "yes"):
-            console.print("[dim]已取消[/dim]")
-            return True
-        results = snapshot.revert(session_id)
-        ok = sum(1 for r in results if r["reverted"])
-        fail = sum(1 for r in results if not r["reverted"])
-        console.print(f"[green]已恢复 {ok} 个文件[/green]"
-                      + (f"，{fail} 个失败" if fail else ""))
-        return True
-
-    elif command == "/sessions":
-        arg = parts[1] if len(parts) > 1 else ""
-
-        if arg:
-            # 切换会话：支持序号 (1,2,3) 或 session id
-            sessions = agent._session_store.list_sessions(limit=20)
-            target_id = None
-
-            if arg.isdigit():
-                idx = int(arg) - 1
-                if 0 <= idx < len(sessions):
-                    target_id = sessions[idx]["id"]
-            else:
-                target_id = arg  # 直接传 session id
-
-            if target_id and target_id != agent.session.id:
-                from merco.core.session import Session
-                agent.observer.save()
-                agent.session.metadata["observer"] = agent.observer.snapshot()
-                agent.session.save()
-                agent._session_store.save_metadata(agent.session.id, agent.session.metadata)
-                s = Session.load(target_id, agent._session_store)
-                if s:
-                    agent.session = s
-                    agent.observer.reset()
-                    agent._restore_context()
-                    from merco.sandbox import snapshot
-                    snapshot.set_current_session(agent.session.id)
-                    console.print(f"[green]已切换到: {s.title or s.id}[/green]")
-                else:
-                    console.print(f"[red]会话 {target_id} 不存在[/red]")
-            elif target_id == agent.session.id:
-                console.print("[dim]已经是当前会话[/dim]")
-            else:
-                console.print("[red]无效的会话序号[/red]")
-            return True
-
-        # 列出
-        sessions = agent._session_store.list_sessions(limit=20)
-        if not sessions:
-            console.print("[dim]无历史会话[/dim]")
-            return True
-        console.print("[bold]📋 历史会话:[/bold]")
-        for i, s in enumerate(sessions):
-            marker = " ← 当前" if s["id"] == agent.session.id else ""
-            title = s["title"] or f"会话 {s['id']}"
-            console.print(
-                f"  {i+1}. [bold]{title}[/bold]{marker}"
-                f"  [dim]{s['message_count']} 条消息  {s['updated_at'][:10]}"
-                f"  [/dim][bright_black]{s['id']}[/bright_black]")
-        console.print("[dim]用 /sessions <序号> 切换会话[/dim]")
-        return True
-
-    elif command == "/tools":
-        tools = agent.tool_registry.list_tools() if agent.tool_registry else []
-        if tools:
-            console.print("[bold]可用工具:[/bold]")
-            for tool in tools:
-                console.print(f"  - {tool.name}: {tool.description}")
-        else:
-            console.print("无可用工具")
-        return True
-
-    else:
-        console.print(f"[dim]未知命令: {command}，输入 /help 查看帮助[/dim]")
-        return True
+    return await cmd_def.handler(agent, args)
 
 
 if __name__ == "__main__":

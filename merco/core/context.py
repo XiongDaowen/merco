@@ -1,7 +1,10 @@
 """上下文管理与压缩"""
 
 import json
+import logging
 import re
+
+_logger = logging.getLogger("merco.context")
 
 
 def estimate_tokens(text: str) -> int:
@@ -25,6 +28,10 @@ class ContextManager:
 
     def add(self, message: dict):
         """添加消息到上下文"""
+        r = message.get("reasoning", "")
+        if r:
+            _logger.warning("context.add: 消息包含 reasoning (%d chars, first 100: %s…)",
+                           len(r), r[:100].replace("\n", "\\n"))
         self.messages.append(message)
         self.current_tokens += msg_tokens(message)
 

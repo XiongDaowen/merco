@@ -15,11 +15,13 @@ class Observer:
     def __init__(self, hooks: HookRegistry):
         self._live = MetricsCollector()
         self._acc_map: dict[str, int] = {}
+        self._last_merged: dict[str, int] = {}  # 记录上次合并时的 live 值
 
         hooks.on("llm.chat", self._on_llm)
         hooks.on("tool.after_execute", self._on_tool)
         hooks.on("tool.error", self._on_error)
         hooks.on("conversation.turn", self._on_turn)
+        hooks.on("agent.interrupted", self._on_interrupt)
 
     # ── 事件处理 ──────────────────────────────────────────
 
@@ -47,11 +49,22 @@ class Observer:
     def _on_turn(self, **kwargs):
         self._live.increment("turns")
 
+    def _on_interrupt(self, interrupted_tools: int = 0, **kwargs):
+        """中断时记录统计。"""
+        # 记录中断的 LLM 调用
+        self._live.increment("llm_calls_interrupted")
+        if interrupted_tools:
+            self._live.increment("tool_calls_interrupted", interrupted_tools)
+            self._live.increment("tool_calls", interrupted_tools)
+        # 中断也算一轮（用户确实发起了请求）
+        self._live.increment("turns")
+
     # ── 生命周期 ──────────────────────────────────────────
 
     def reset(self, full: bool = False):
         """清空 live 计数器。full=True 时也清空累计。"""
         self._live = MetricsCollector()
+        self._last_merged = {}  # 清空上次合并的值
         if full:
             self._acc_map = {}
 
@@ -69,8 +82,13 @@ class Observer:
         }
 
     def _merge_to_acc(self):
+        # 只累加增量（当前值 - 上次合并的值）
         for k, v in self._live.get_counters().items():
-            self._acc_map[k] = self._acc_map.get(k, 0) + v
+            last = self._last_merged.get(k, 0)
+            delta = v - last
+            if delta > 0:
+                self._acc_map[k] = self._acc_map.get(k, 0) + delta
+            self._last_merged[k] = v
 
     def restore(self, data: dict):
         """从快照恢复 acc_map"""
@@ -113,18 +131,37 @@ class Observer:
                     avg = live.get_avg_timing(name)
                     parts.append(f"[dim]{name[5:]}[/dim] {cnt}次({avg:.1f}s)")
             lines.append(f"       工具: {', '.join(parts)}" if parts else f"       工具: {tool_calls} 次")
+
+        interrupted_tools = live.get_counter("tool_calls_interrupted")
+        interrupted_llm = live.get_counter("llm_calls_interrupted")
+        if interrupted_tools or interrupted_llm:
+            parts = []
+            if interrupted_llm:
+                parts.append(f"{interrupted_llm} 次 LLM")
+            if interrupted_tools:
+                parts.append(f"{interrupted_tools} 次工具调用")
+            lines.append(f"       [yellow]中断: {', '.join(parts)}[/yellow]")
+
         if errors:
             lines.append(f"       [red]错误: {errors}[/red]")
 
-        # 累计
+        # 累计 — acc 里已含上次 merge 的 live 值，只加「未合并增量」避免重复计数
+        lm = self._last_merged
+        u_turns = turns - lm.get("turns", 0)
+        u_llm = llm_calls - lm.get("llm_calls", 0)
+        u_tools = tool_calls - lm.get("tool_calls", 0)
+        u_tokens_in = tokens_in - lm.get("tokens_in", 0)
+        u_tokens_out = tokens_out - lm.get("tokens_out", 0)
+        u_errors = errors - lm.get("errors", 0)
+
         if acc_turns or acc_llm or acc_tools:
             lines.append("")
             lines.append(
-                f"  累计: {acc_turns + turns} 轮  {acc_llm + llm_calls} 次 LLM  "
-                f"入 {_fmt_n(acc_tokens_in + tokens_in)} tokens  "
-                f"出 {_fmt_n(acc_tokens_out + tokens_out)} tokens  "
-                f"{acc_tools + tool_calls} 次工具"
-                + (f"  [red]{acc_errors + errors} 错误[/red]" if acc_errors + errors else "")
+                f"  累计: {acc_turns + u_turns} 轮  {acc_llm + u_llm} 次 LLM  "
+                f"入 {_fmt_n(acc_tokens_in + u_tokens_in)} tokens  "
+                f"出 {_fmt_n(acc_tokens_out + u_tokens_out)} tokens  "
+                f"{acc_tools + u_tools} 次工具"
+                + (f"  [red]{acc_errors + u_errors} 错误[/red]" if acc_errors + u_errors else "")
             )
 
         if not turns and not acc_turns:

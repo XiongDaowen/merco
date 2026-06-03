@@ -18,6 +18,11 @@ from .session import Session
 from .message import Message, MessageRole
 from .context import ContextManager, msg_tokens, estimate_tokens as est_tk
 from .pipeline import ProcessContext
+from .interrupt import (
+    InterruptCleanupPipeline, CleanupContext,
+    InjectCancelMessages, TerminateSubprocesses,
+    CloseMCPConnections, EmitInterruptHooks, SavePartialState
+)
 
 console = Console()
 logger = logging.getLogger("merco.agent")
@@ -141,6 +146,39 @@ class StreamingProvider(ResponseProvider):
         try:
             stream = agent.llm.chat_stream(messages, tools=tools)
             async for chunk in stream:
+                # 取消检查点：如果任务被取消，立即退出
+                current = asyncio.current_task()
+                if current and current.cancelled():
+                    live.stop()
+                    # TODO: 此 checkpoint 无法覆盖「Cancel 在 __anext__ I/O 等待中到达」的情况
+                    #      补救方案：加 except asyncio.CancelledError 兜底 handler，抽离保存逻辑。
+                    #      优先级：低——窗口极小且用户主动取消，丢失的 partial content 是预期行为。
+                    # 保存部分响应
+                    assembled["reasoning"] = reasoning_buf
+                    assembled["content"] = content_buf
+                    if tc_buf:
+                        assembled["tool_calls"] = [
+                            {"id": v["id"], "name": v["name"],
+                             "arguments": _json.loads(v["arguments"])
+                             if v["arguments"] else {}}
+                            for v in (tc_buf[i] for i in sorted(tc_buf))
+                        ]
+                    # 将部分响应添加到 context 和 session
+                    if reasoning_buf or content_buf or tc_buf:
+                        assistant_msg = {
+                            "role": "assistant",
+                            "content": content_buf,
+                            "reasoning": reasoning_buf,
+                        }
+                        if tc_buf:
+                            assistant_msg["tool_calls"] = assembled["tool_calls"]
+                        logger.debug("StreamingProvider 中断: 将 reasoning(%d chars) 存入 context (这是唯一泄漏窗口)",
+                                    len(reasoning_buf))
+                        agent.context.add(assistant_msg)
+                        agent.session.add_message("assistant", content_buf,
+                                                  reasoning=reasoning_buf,
+                                                  tool_calls=assembled.get("tool_calls"))
+                    raise asyncio.CancelledError()
                 r = chunk.get("reasoning", "")
                 if r:
                     reasoning_buf += r
@@ -184,9 +222,10 @@ class StreamingProvider(ResponseProvider):
                 for v in (tc_buf[i] for i in sorted(tc_buf))
             ]
         logger.debug(
-            "stream done: finish=%s content=%d reasoning=%d tool_calls=%d",
+            "stream done: finish=%s content=%d reasoning=%d tool_calls=%d%s",
             assembled.get("finish_reason"), len(assembled["content"]),
-            len(assembled["reasoning"]), len(assembled["tool_calls"]))
+            len(assembled["reasoning"]), len(assembled["tool_calls"]),
+            f" {[tc['name'] for tc in assembled['tool_calls']]}" if assembled["tool_calls"] else "")
         return assembled
 
 class Agent:
@@ -211,6 +250,8 @@ class Agent:
             temperature=config.model.temperature,
             max_tokens=config.model.max_tokens,
             cooldown=0.3,  # 请求冷却（秒），0=禁用；共享网关可调大
+            extra_params=config.model.extra_params,
+            headers=config.model.headers,
         )
 
         self._tool_calls_count = 0
@@ -232,7 +273,9 @@ class Agent:
 
         # ── 会话持久化 ──
         from merco.memory.session_store import SessionStore
+        from merco.memory.session_search import SessionSearch
         self._session_store = SessionStore(_get_db_path())
+        self._search = SessionSearch(self._session_store)
         self.session = Session.resume_or_create(self._session_store)
         self._restore_context()
 
@@ -262,6 +305,33 @@ class Agent:
         self.prompt_builder.use(SkillsHintChunk())
         self.prompt_builder.use(TimeContextChunk())
 
+        # ── Memory 召回 ──
+        from merco.memory.recall import HybridRecaller, FTS5Recaller, MemoryRecaller
+        from merco.memory.store import MemoryStore
+
+        _fts5 = FTS5Recaller(self._search)
+        _mem = MemoryRecaller(MemoryStore(config.memory_path))
+        self.recaller = (
+            HybridRecaller(limit=config.memory_recall_limit, max_chars=config.memory_recall_max_chars)
+            .add(_fts5)
+            .add(_mem)
+        )
+
+        # ── MCP 客户端 ──
+        from merco.mcp.manager import MCPServerManager
+        self.mcp_manager = MCPServerManager(
+            tool_registry=self.tool_registry,
+            hooks=self.hooks,
+        )
+
+        # ── 中断清理管线 ──
+        self._cleanup_pipeline = (InterruptCleanupPipeline()
+            .use(InjectCancelMessages())
+            .use(TerminateSubprocesses())
+            .use(CloseMCPConnections())
+            .use(EmitInterruptHooks())
+            .use(SavePartialState()))
+
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
         self._current_prompt = prompt
@@ -270,12 +340,23 @@ class Agent:
         self.context.add({"role": "user", "content": prompt})
 
         tools = self.tool_registry.get_definitions() if self.tool_registry else []
-        self.context.set_overhead(self._build_system_prompt(), len(tools))
+        self.context.set_overhead(await self._build_system_prompt(), len(tools))
         if self.context.needs_compression():
             await self._compress_context()
 
         # 执行 Agent 循环
-        result = await self._agent_loop()
+        try:
+            result = await self._agent_loop()
+        except asyncio.CancelledError:
+            # 使用 InterruptCleanupPipeline 替换 _inject_interrupted_tool_results
+            cancelled_tool_calls = self._find_orphan_tool_calls()
+            cleanup_ctx = CleanupContext(
+                agent=self,
+                cancelled_tool_calls=cancelled_tool_calls,
+                session_id=self.session.id,
+            )
+            await self._cleanup_pipeline.process(cleanup_ctx)
+            raise
         self._auto_title(prompt)
         self.session.metadata["observer"] = self.observer.snapshot()
         self.session.save()
@@ -289,7 +370,31 @@ class Agent:
         snap = self.session.metadata.get("observer")
         if snap:
             self.observer.restore(snap)
+
+        checkpoint = self.session.metadata.get("compress_checkpoint")
+        if checkpoint:
+            # Restore from checkpoint: summary + tail only
+            summary = checkpoint.get("summary", "")
+            tail_count = checkpoint.get("tail_count", 2)
+            all_msgs = self.session.messages
+            tail = all_msgs[-tail_count * 2:] if len(all_msgs) > tail_count * 2 else all_msgs  # ~2 msgs per turn
+
+            if summary:
+                self.context.add({"role": "system", "content": summary})
+            for msg in tail:
+                entry = {"role": msg["role"], "content": msg.get("content", "")}
+                if msg.get("tool_call_id"):
+                    entry["tool_call_id"] = msg["tool_call_id"]
+                if msg.get("tool_calls"):
+                    entry["tool_calls"] = msg["tool_calls"]
+                self.context.add(entry)
+            return
+
         for msg in self.session.messages:
+            r = msg.get("reasoning", "")
+            if r:
+                logger.debug("_restore_context: session 消息含 reasoning (%d chars, 已丢弃)",
+                            len(r))
             entry = {"role": msg["role"], "content": msg.get("content", "")}
             if msg.get("tool_call_id"):
                 entry["tool_call_id"] = msg["tool_call_id"]
@@ -333,7 +438,7 @@ class Agent:
         tools = []
 
         while True:
-            messages = self._build_messages()
+            messages = await self._build_messages()
             tools = list(self.tool_registry.get_definitions() if self.tool_registry else [])
 
             if self._tool_calls_count >= self._max_tool_calls:
@@ -385,10 +490,17 @@ class Agent:
                                    cache_read_tokens=usage.get("cache_read_tokens", 0) if usage else 0)
 
             tool_calls = response.get("tool_calls")
+            if tool_calls:
+                logger.debug("Agent 循环: 收到 %d 个 tool_calls: %s",
+                            len(tool_calls),
+                            [f"{tc['name']}({tc.get('id','?')[:8]})" for tc in tool_calls])
             if not tool_calls:
                 content = response.get("content", "") or ""
                 content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL).strip()
                 reasoning = response.get("reasoning", "")
+                if reasoning:
+                    logger.debug("Agent 循环: 收到 reasoning (%d chars)，丢弃（不存入 context）",
+                                len(reasoning))
                 if not content:
                     _empty_retries += 1
                     if _empty_retries == 1 and reasoning:
@@ -427,12 +539,30 @@ class Agent:
 
             # 批量超上限 → 不执行工具，直接收尾
             if self._tool_calls_count + len(tool_calls) > self._max_tool_calls:
+                logger.debug("Agent 循环: 工具调用超上限 (%d + %d > %d)，跳过执行直接收尾",
+                            self._tool_calls_count, len(tool_calls), self._max_tool_calls)
                 console.print("[dim]  已截停，达到调用上限[/dim]")
-                return await self._wrap_up_call(self._wrap_up_messages(self._build_messages()))
+                return await self._wrap_up_call(self._wrap_up_messages(await self._build_messages()))
 
             await self._dispatch_tool_calls(tool_calls, response)
             await asyncio.sleep(0.5)
 
+    def _find_orphan_tool_calls(self) -> list[dict]:
+        """查找孤儿 tool_calls（未完成的）。"""
+        completed_ids = set()
+        for msg in self.context.messages:
+            if msg.get("tool_call_id"):
+                completed_ids.add(msg["tool_call_id"])
+
+        orphans = []
+        for msg in reversed(self.context.messages):
+            if msg.get("role") != "assistant":
+                continue
+            for tc in (msg.get("tool_calls") or []):
+                tc_id = tc.get("id") if isinstance(tc, dict) else None
+                if tc_id and tc_id not in completed_ids:
+                    orphans.append(tc)
+        return orphans
 
     async def _dispatch_tool_calls(self, tool_calls: list[dict], response: dict) -> None:
         """工具调度：渲染内容 → 写上下文 → 执行工具"""
@@ -444,6 +574,10 @@ class Agent:
              "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=True)}}
             for tc in tool_calls
         ]
+        reasoning = response.get("reasoning", "")
+        if reasoning:
+            logger.debug("_dispatch_tool_calls: response 有 reasoning (%d chars) 但未传入 context",
+                        len(reasoning))
         self.context.add({"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls})
         self.session.add_message("assistant", assistant_content, tool_calls=api_tool_calls)
         logger.debug("⚙ 执行 %d 个工具调用: %s", len(tool_calls), [tc["name"] for tc in tool_calls])
@@ -471,12 +605,12 @@ class Agent:
                 arg_str = arg_str[:max(0, avail)] + "..."
 
             # ── 守卫检查 ──
+            t0 = time.monotonic()
             approved = await self.guard.check(tool_name, arguments)
             if not approved:
                 result = {"error": "操作已被拦截或取消"}
 
             elif self.tool_registry:
-                t0 = time.monotonic()
 
                 _INTERACTIVE_TOOLS = {"edit_file"}  # 会弹确认提示的工具，不能用 spinner（会覆盖终端）
                 if tool_name in _INTERACTIVE_TOOLS:
@@ -535,6 +669,7 @@ class Agent:
             exec_contexts.append(pctx)
             self._tool_calls_count += 1
 
+        logger.debug("_execute_tool_calls: %d 个结果存入 context", len(tool_results))
         for tr in tool_results:
             self.context.add(tr)
             self.session.add_message("tool", tr["content"],
@@ -543,22 +678,51 @@ class Agent:
             for msg in pctx.extra_messages:
                 self.context.add(msg)
 
-    def _build_messages(self) -> list[dict]:
+    async def _build_messages(self) -> list[dict]:
         """构建发送给 LLM 的消息列表"""
         messages = [
-            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "system", "content": await self._build_system_prompt()},
         ]
 
         # 添加上下文窗口中的消息
         messages.extend(self.context.get_window())
 
+        # 检测 reasoning 泄漏：如果消息列表中有任何非空的 reasoning 字段，记录警告
+        for i, m in enumerate(messages):
+            r = m.get("reasoning", "")
+            if r:
+                logger.warning("_build_messages: messages[%d] 含有 reasoning (%d chars, 前 100=%s…)",
+                               i, len(r), r[:100].replace("\n", "\\n"))
+
         return messages
 
-    def _build_system_prompt(self) -> str:
-        return self.prompt_builder.build(self)
+    async def _build_system_prompt(self) -> str:
+        base = self.prompt_builder.build(self)
+
+        if self.config.memory_recall_enabled and self._current_prompt:
+            try:
+                recalled = await self.recaller.recall(self._current_prompt)
+                if recalled:
+                    lines = ["\n## 相关历史对话（仅供参考）"]
+                    for i, r in enumerate(recalled, 1):
+                        lines.append(f"{i}. [{r.session_title}] {r.snippet}")
+                    base += "\n".join(lines)
+            except Exception:
+                logging.getLogger("merco.agent").debug("Memory recall failed", exc_info=True)
+
+        return base
 
     async def _compress_context(self):
         """压缩上下文"""
+        # Auto-fork: save complete copy before compressing
+        if self.config.fork_enabled and self.config.fork_auto_on_compress:
+            try:
+                self.session.save()
+                archived_id = self._session_store.clone_session(self.session.id)
+                console.print(f"[dim]📦 原会话已归档: {archived_id[:8]}[/dim]")
+            except Exception:
+                logger.debug("Auto-fork failed", exc_info=True)
+
         from merco.memory.compressor import ContextCompressor
 
         compressor = ContextCompressor(
@@ -566,8 +730,11 @@ class Agent:
             threshold=self.config.compression_threshold,
         )
 
+        summary_result = None
+
         async def llm_summary(messages: list[dict]) -> str:
             """LLM 生成语义摘要——保留用户意图 + 关键决策"""
+            nonlocal summary_result
             lines = []
             for m in messages:
                 role = m.get("role", "unknown")
@@ -590,10 +757,13 @@ class Agent:
                     [{"role": "user", "content": prompt}], tools=[]
                 )
                 content = response.get("content", "").strip()
-                return f"[Earlier conversation summary]: {content}"
+                summary_result = f"[Earlier conversation summary]: {content}"
+                return summary_result
             except Exception as e:
                 logger.warning("LLM summary failed: %s", e)
-                return f"[{len(messages)} earlier messages — summary unavailable]"
+                fallback = f"[{len(messages)} earlier messages — summary unavailable]"
+                summary_result = fallback
+                return fallback
 
         compressed = await compressor.compress(
             self.context.messages,
@@ -604,7 +774,15 @@ class Agent:
         self.context.current_tokens = sum(
             msg_tokens(m) for m in compressed
         )
+        # Store compression checkpoint so restart doesn't re-expand
+        self.session.metadata["compress_checkpoint"] = {
+            "summary": summary_result or "",
+            "compressed_at": time.time(),
+            "original_count": len(self.session.messages),
+            "tail_count": 2,  # same as TAIL_TURNS in compressor
+        }
         console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
+        console.print("[dim]→ 用 /history 查看完整记录[/dim]")
 
     @staticmethod
     def _render_reasoning(reasoning: str) -> None:

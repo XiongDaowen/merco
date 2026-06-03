@@ -30,93 +30,45 @@ class ContextCompressor:
         return sum(msg_tokens(m) for m in messages)
 
     async def _sliding(self, messages: list[dict], summary_fn=None) -> list[dict]:
-        """滑动窗口压缩"""
+        """滑动窗口压缩 — 保留最后 2 轮原文 + 摘要旧消息"""
+        TAIL_TURNS = 2  # 保留最近 N 轮原文不压缩
 
-        # —— 1. 分类 ——
-        # 最后一条 user 的索引
-        last_user_idx = None
-        for i, msg in enumerate(messages):
-            if msg.get("role") == "user":
-                last_user_idx = i
+        # —— 1. 找出最后 N 条 user 消息，保留它们的完整 tool 链 ——
+        tail_start = 0
+        user_count = 0
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get("role") == "user":
+                user_count += 1
+                if user_count >= TAIL_TURNS:
+                    tail_start = i
+                    break
 
-        # 从尾往前扫：当前 tool 链 + 最终回复
-        tail = []
-        tail_ids = set()
-        in_chain = False  # 是否在 tool_calls → tool 链中
-        for msg in reversed(messages):
-            role = msg.get("role", "")
-            rid = id(msg)
+        body = messages[:tail_start]  # 旧消息 → 压缩
+        tail = messages[tail_start:]  # 最近 N 轮 → 保留
 
-            if role == "assistant" and not msg.get("tool_calls") and not in_chain:
-                # 纯文本回复（不含 tool_calls），且不在链中 → 最终回复
-                tail.insert(0, msg)
-                tail_ids.add(rid)
-            elif role == "tool":
-                tail.insert(0, msg)
-                tail_ids.add(rid)
-                in_chain = True
-            elif role == "assistant" and msg.get("tool_calls"):
-                if in_chain:
-                    tail.insert(0, msg)
-                    tail_ids.add(rid)
-                else:
-                    break  # 当前链结束
-            else:
-                break  # 遇到非链消息，停止
+        if not body:
+            return messages  # 不够 TAIL_TURNS 轮，不压缩
 
-        # —— 2. 保留项 + 压缩项 ——
-        kept = []
-
-        for i, msg in enumerate(messages):
-            role = msg.get("role", "")
-            rid = id(msg)
-
-            if role == "system":
-                kept.append(msg)
-            elif i == last_user_idx:
-                kept.append(msg)  # 当前任务
-            elif rid in tail_ids:
-                pass  # 等尾部分类完统一处理
-            elif role == "user":
-                kept.append(msg)  # 旧 user 消息也进压缩
-            elif role in ("assistant", "tool"):
-                kept.append(msg)  # 旧消息进压缩
-            else:
-                kept.append(msg)
-
-        # —— 3. LLM 摘要压缩项 ——
-        if summary_fn and kept:
+        # —— 2. LLM 摘要 body ——
+        if summary_fn:
             try:
-                summary_text = await summary_fn(kept)
+                summary_text = await summary_fn(body)
                 summary = {"role": "system", "content": summary_text}
             except Exception as e:
-                logger.warning("LLM 摘要失败: %s", e)
-                summary = self._build_summary(kept)
+                logger.warning("LLM 摘要失败: %s, fallback", e)
+                summary = self._build_summary(body)
         else:
-            summary = self._build_summary(kept)
+            summary = self._build_summary(body)
 
-        # —— 4. 组装：保留 key + 摘要 + 尾巴 ——
-        result = []
-        for i, msg in enumerate(messages):
-            role = msg.get("role", "")
-            rid = id(msg)
+        # —— 3. 组装: system + 摘要 + 尾巴 ——
+        result = [m for m in tail if m.get("role") == "system"][:1]  # 保留最高层 system
+        result.append(summary)
+        result.extend(m for m in tail if m.get("role") != "system")
 
-            if role == "system":
-                result.append(msg)
-            elif i == last_user_idx:
-                result.append(msg)
-                result.append(summary)  # 摘要插在最后一条 user 之后
-            # 跳过尾巴中的消息（稍后统一加）
-            elif rid in tail_ids:
-                continue
-            # 其他 user 消息不保留
-
-        # 加尾巴
-        result.extend(tail)
-
-        logger.debug("压缩: %d条(%dtok) → %d条(%dtok) — LLM摘要 %d条",
-                     len(messages), self._total_tokens(messages),
-                     len(result), self._total_tokens(result), len(kept))
+        before = self._total_tokens(messages)
+        after = self._total_tokens(result)
+        logger.debug("压缩: %d条(%dtok) → %d条(%dtok) — 保留 %d 轮",
+                     len(messages), before, len(result), after, TAIL_TURNS)
         return result
 
     def _truncate(self, messages: list[dict]) -> list[dict]:
@@ -155,14 +107,16 @@ class ContextCompressor:
         return kept
 
     def _build_summary(self, messages: list[dict]) -> dict:
-        """统计摘要 fallback"""
-        user_msgs = sum(1 for m in messages if m.get("role") == "user")
-        assistant_msgs = sum(1 for m in messages if m.get("role") == "assistant")
-        tool_msgs = sum(1 for m in messages if m.get("role") == "tool")
-        return {
-            "role": "system",
-            "content": (
-                f"[{len(messages)} earlier messages summarized: "
-                f"{user_msgs} user, {assistant_msgs} assistant, {tool_msgs} tool calls]"
-            ),
-        }
+        """Fallback 摘要 — 保留最近几条用户消息的关键内容"""
+        user_msgs = [m for m in messages if m.get("role") == "user"]
+        preview = []
+        for um in user_msgs[-5:]:
+            c = um.get("content", "")[:60]
+            if c:
+                preview.append(f"• {c}")
+        intro = (
+            f"[压缩了 {len(messages)} 条历史消息。"
+            f"最近讨论: {'; '.join(preview) if preview else '无'}。"
+            f"详细历史请用 /search 查询。]"
+        )
+        return {"role": "system", "content": intro}
