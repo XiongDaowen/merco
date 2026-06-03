@@ -321,7 +321,8 @@ class LLMClient:
         }
         if stream:
             params["stream"] = True
-            params["stream_options"] = {"include_usage": True}
+            if "stream_options" in self.extra_params:
+                params["stream_options"] = self.extra_params["stream_options"]
         if tools:
             params["tools"] = tools
             params["tool_choice"] = tool_choice
