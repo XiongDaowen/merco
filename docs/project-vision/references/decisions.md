@@ -15,6 +15,11 @@
 | 2026-05-31 | SkillViewTool 动态 describe() | 技能列表变更时无需改 system prompt。`describe()` 在 tool definition 调用时拼接当前可用技能。`check()` 有技能才显示（无技能时不暴露工具）。 |
 | 2026-05-31 | 集成测试用 MockLLMClient | 真实 LLM 调用慢/贵/不确定。MockLLMClient 接收预设响应序列，conftest.py fixture 复用。集成测试 2 秒全过，CI 友好。 |
 | 2026-05-31 | `_extract_usage` 多 provider 缓存采集 | 各 provider usage 字段不一致（OpenAI: `cached_tokens`、Anthropic: `cache_read_tokens`）。`_extract_usage` 统一字段映射：`cached_tokens or cache_read_tokens` 都采集，Observer 统计缓存命中率。 |
+| 2026-06-03 | StreamingProvider CancelledError checkpoint 保留为设计 trade-off | async for 内 __anext__ I/O 等待时被取消会丢 partial content，窗口极小且用户主动取消，收益近零，低优先级。 |
+| 2026-06-03 | LLMClient 统一 None 防护 + extra_params/headers 可配置 | _normalize_tool_calls 归一 tool_call 避免 str += None；extra_params 透传 top_p/seed 等；headers 支持 X-Title；stream_options 收流式 usage。 |
+| 2026-06-03 | _normalize_tool_calls 不假设 tc.function 存在 | scnet 等 API 分 chunk 补全 function（首 chunk 无 function 字段），`func = tc.function; func.name if func else ""` 兼容。 |
+| 2026-06-03 | 推理泄漏采用日志观察优先策略 | 先加 5 处 WARNING/DEBUG 日志打桩，`--debug` 运行观察；若无 WARNING 则判定为 provider 端行为，不改客户端代码。 |
+| 2026-06-03 | MCPServerManager 支持 stdio + HTTP 传输 | stdio（子进程）+ StreamableHTTP（URL 远程）两种传输，工具发现 + 自动注册 + 沙箱集成。 |
 | 2026-05-26 | LLM retry 统一到 Agent RecoveryPipeline | LLM 层和 Agent 层各有一套 retry，重复且策略分散。改为 LLM 纯传输（不重试），Agent RecoveryPipeline 唯一控制点。llm.py 330 行→200 行。 |
 | 2026-05-26 | 启动首页 Dashboard + 输入区 PromptDecorator 可组合架构 | 硬编码 f-string 和进度条无法扩展。Dashboard/DashboardSection 和 PromptArea/PromptDecorator 组合模式，新增条目只需继承 + .use()。 |
 | 2026-05-26 | Token 账本优先 API 实测值 | `total_tokens` 此前永远走估算（含魔术数 tool*200）。改为优先 `last_actual_tokens`，回退估算。`msg_tokens()` 补 tool_calls 计数。 |

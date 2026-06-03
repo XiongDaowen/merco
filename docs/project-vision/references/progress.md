@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-05-29
+> 最后更新: 2026-06-03
 
 ## 目标对标
 
@@ -16,6 +16,15 @@
 - **Memory 召回（新功能）**: `Recaller` 协议 (`BaseRecaller` ABC) → `FTS5Recaller`（调 SessionSearch）+ `MemoryRecaller`（调 MemoryStore）→ `HybridRecaller` 聚合/排序/去重/截断/缓存。`Agent._build_system_prompt()` 末尾自动注入召回（3条×300字≈600 tokens）。`/recall` CLI 命令手动搜索。配置项：`memory.recall_enabled/limit/max_chars/threshold`。测试 23+7+16=46 个。
 - **memory config 重构**: `memory_enabled/memory_path` 移入 `memory` 嵌套对象，与 recall 配置统一。`_from_dict` 加 isinstance 守卫防非 dict 值 crash。
 - **会话 Fork/分支（新功能）**: `SessionStore.clone_session()` 原子深克隆 + `get_children()` 子会话查询。`Session.fork()` 工厂方法。`Agent._compress_context` 压缩前自动 fork 归档。`/fork` CLI 命令手动分支 + `/tree` 分支树查看。配置：`session.fork_enabled` + `session.fork_auto_on_compress`。测试 15 个。
+
+### 本次会话更新 (2026-06-03)
+
+- **中断处理重构**: Ctrl+C 三态（取消工具→清输入→退出）。InterruptCleanupPipeline 策略/处理器模式。StreamingProvider cancel checkpoint 保存 partial reasoning/content/tool_calls。Report 累计公式修复为 `acc + (live - last_merged)`。
+- **OpenAI 兼容加固**: `_normalize_tool_calls` 统一防护 id/name/arguments/function 为 None（scnet 等不标准 API 首 chunk function 字段缺失不崩）。`extra_params`/`headers` 可配置透传。`stream_options={"include_usage": True}` 自动注入。空 choices 提早返回。
+- **MCP 客户端（新功能）**: MCPServerManager 164 行完整实现，支持 stdio/HTTP 传输、工具发现、自动注册、ToolGuard 沙箱集成、Hook 适配。
+- **观察性升级**: Observer 深度集成到中断管线（SavePartialState snapshot/restore）、Observer 实例化并用于中断快照/恢复/Report。
+- **日志打桩**: context.add/reasoning 泄漏检测 WARNING、工具调用全链路 DEBUG、会话恢复路径推理追踪。5 个检查点。
+- **设计文档清理**: 移除 `docs/superpowers/` 下 23 个已完成的规划/设计文档。
 
 ### 本次会话更新 (2026-05-28)
 
@@ -72,11 +81,11 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `agent.py` | 🟢 POLISHED | Full agent loop。LLM retry 归零（交 RecoveryPipeline）。_wrap_up 收尾。`_execute_tool_calls` json.dumps 兜底。`PromptBuilder` + 3 chunks。 |
+| `agent.py` | 🟢 POLISHED | Full agent loop。LLM retry 归零（交 RecoveryPipeline）。_wrap_up 收尾。Interrupt pipeline 策略/处理器模式（中断恢复 + partial state 保存到 context/session）。Observer integration（snapshot/restore/report）。**但**: hooks 未接入、sandbox 未调用。 |
 | `config.py` | 🟢 POLISHED | `ProviderInfo` dataclass 含 name/models/key_help。5 个预置平台，一条记录驱动 setup 向导。 |
 | `setup.py` | 🟢 NEW | 交互式 API 配置向导，5步流程。`merco setup` 命令。 |
 | `observer.py` | 🟢 NEW | hooks 驱动可观察性门面，`/report` 命令，live+acc 双计数器。 |
-| `llm.py` | 🟢 POLISHED | 纯传输层 + `_strip_think_tags` + `_extract_usage` 多 provider 缓存采集。 |
+| `llm.py` | 🟢 POLISHED | 纯传输层 + `_strip_think_tags` + `_extract_usage` 多 provider 缓存采集 + `_normalize_tool_calls` None 防护（id/name/arguments/function 任一 None 不崩）+ `extra_params`/`headers` 透传 + `stream_options`。 |
 | `session.py` | 🟢 POLISHED | Session 数据类 + save/load/resume_or_create，增量写 SQLite，tool call 完整链路持久化。 |
 | `message.py` | 🟢 REAL | `Message` dataclass + `to_dict()` + `MessageProcessor`。|
 | `context.py` | 🟢 REAL | `ContextManager` + `estimate_tokens()`/`msg_tokens()`（含 tool_calls 计数）+ `total_tokens` 优先 API 实测。死壳已删。|
@@ -92,7 +101,7 @@
 | `bash_tools.py` | 🟢 REAL | `BashTool` asyncio subprocess。**未调 SecurityChecker。** |
 | `web_tools.py` | 🟡 PARTIAL | `WebFetch` 可用。`WebSearch` 骨架。|
 | `task_tools.py` | 🔴 SKELETON | `"not yet implemented"`。|
-| `mcp_tools.py` | 🔴 SKELETON | `"not yet configured"`。|
+| `mcp_tools.py` | 🟢 REAL | MCPServerManager（stdio/HTTP 传输，工具发现，自动注册）+ ToolGuard 沙箱集成 + Hook 适配。 |
 
 ### merco/skills/ — Skills System
 
@@ -119,7 +128,8 @@
 | `hooks/` | 🔴 SKELETON — 未集成 |
 | `sandbox/` | 🟢 POLISHED — diff split view + show mode + ToolGuard guard。未集成到 Tools |
 | `scheduler/` | 🟢 REAL — CLI 未启动 |
-| `observability/` | 🟢 REAL — 未集成到 Agent |
+| `observability/` | 🟢 REAL — Observer 已接入 Agent（中断/Report），hooks 未触发 |
+| `mcp/` | 🟢 NEW — MCPServerManager stdio+HTTP 传输，工具发现+注册，沙箱集成 |
 | `gateway/` | 🔴 SKELETON |
 
 ### cli/ — CLI Interface
@@ -139,7 +149,8 @@
 | Retry → RecoveryPipeline | ✅ WIRED | LLM 不重试，错误上抛 → RecoveryPipeline。 |
 | Hooks → Agent | ❌ NOT WIRED | 无 import，无 emit。 |
 | Sandbox → Tools | ❌ NOT WIRED | Tools 未调 SecurityChecker。 |
-| Observability → Agent | ✅ WIRED | Observer hooks 驱动，llm.chat/tool/conversation.turn 事件完整。 |
+| Observability → Agent | ⚠️ PARTIAL | Observer 已实例化并用于中断快照/恢复/Report。LLM 调用/Tool 执行点通过 hooks emit（需先打通 Hooks → Agent）。中断管线 SavePartialState 使用 Observer snapshot。 |
+| MCP → Agent | ✅ WIRED | MCPServerManager 接管 MCP config 加载 + 工具注册 + 沙箱守卫。 |
 | Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
 
 ---
@@ -149,11 +160,11 @@
 | Status | Count |
 |--------|-------|
 | 🟢 POLISHED | 11 |
-| 🟢 NEW | 4 |
-| 🟢 REAL | 7 |
-| 🟡 PARTIAL | 7 |
-| 🔴 SKELETON | 10 |
-| ✅ WIRED | 3 |
+| 🟢 NEW | 5 |
+| 🟢 REAL | 8 |
+| 🟡 PARTIAL | 6 |
+| 🔴 SKELETON | 8 |
+| ✅ WIRED | 4 |
 
 ## 三家对标 (2026-05-29)
 
@@ -172,14 +183,27 @@
 | 跨会话搜索 | ✓ | ✗ | ✓ | ✓ |
 | 观察性报告 | ✗ | ✗ | ✗ | ✓ 独有 |
 
-**总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 9**
+**总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 10**
+
+## 已知问题 / 技术债
+
+| # | 位置 | 问题 | 修复方案 | 优先级 |
+|---|------|------|----------|--------|
+| 1 | `core/agent.py` StreamingProvider checkpoint | `__anext__()` I/O 等待时 CancelledError 不执行 checkpoint，partial content 丢失 | 改用 `except CancelledError` 统一拦截 | 低 |
+| 2 | `core/agent.py` StreamingProvider reasoning 渲染 | 大段推理文本每次 chunk 重建 Panel，卡顿后跳出一堆 | 限流 50ms + 截断 3000 字符显示 | 低 |
+| 3 | `core/llm.py` / `agent.py` reasoning 泄漏怀疑 | 用户观察到历史 reasoning 出现在 thinking 面板，代码审查未发现客户端泄漏路径 | 已在 5 处加日志打桩，`--debug` 观察 | — |
 
 ## 下一步（按优先级）
 
-1. **成本追踪** — token 用量自动折算为费用，多 provider 定价表
-2. **Fork/分支** — parent_id 链，压缩自动 fork
-3. **MCP 客户端协议** — 接入外部 MCP server
-3. **streaming 重构** — 拆开 streaming 参数和渲染逻辑，接 `stream_content` 打字机效果，统一 Provider
-4. **Session FTS5 搜索** — SQLite FTS5 全文搜索历史会话
-5. **TUI 升级** — Textual 分栏界面，替代纯 CLI REPL
-6. **多 agent 协作** — scheduler 启动 + 子 agent 委托
+1. **打通 Sandbox → Tools** — Bash/File 工具调用 SecurityChecker + SandboxIsolation
+2. **打通 Hooks → Agent** — Agent Loop 关键节点 emit 事件
+3. **打通 Observability → Agent** — 通过 hooks emit 完整可观察性埋点
+4. **实现 Session 持久化** — 增量写 SQLite（已基础实现，需容错增强）
+5. **接入 LLM 上下文压缩** — 替换占位摘要为真实 LLM 调用（已基础实现）
+6. **实现 WebSearch** — 对接搜索 API
+7. **实现 MCP 客户端协议** — 接入外部 MCP server（已实现 MCPServerManager）
+8. **补充集成测试** — mock LLM 的 Agent-Loop 全覆盖测试
+9. **打通 Memory → Sessions** — Agent 存储/召回会话记忆
+10. **打通 Scheduler → Runtime** — CLI/Web 启动时激活
+11. **通一个 Gateway** — Telegram 端到端
+12. **TUI 实现** — Textual 替换 `"coming soon"`
