@@ -53,3 +53,5 @@ references/
 .merco/
 .pytest_cache/
 .hermes/
+HERMES.md
+config/openmercury-config.json.example
