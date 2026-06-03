@@ -97,7 +97,7 @@ config/merco.json.example        # 配置模板（git 跟踪，供参考）
 - `provider` — 形如 "openai"、"deepseek"、"minimax"（仅用于 setup 向导，不影响实际 API）
 - `api_key` — API 密钥
 - `base_url` — API 端点 URL（决定了实际调用哪个服务）
-- `extra_params` — 额外传给 API 的参数（如 `top_p`、`seed`）
+- `extra_params` — 额外传给 API 的参数（如 `top_p`、`seed`）。**若要流式返回 usage（Groq/Together 等需要），加 `"stream_options": {"include_usage": true}`**。**不要给不支持此参数的 API 加，否则 400。**
 - `headers` — 自定义 HTTP header（如 `X-Title`）
 
 ## 可用的斜杠命令
