@@ -2,37 +2,15 @@
 
 | 日期 | 决策 | 原因 |
 |------|------|------|
-| 2026-06-03 | Skill 三状态计数 (REAL/PARTIAL/SKELETON + NOT WIRED) | 原五状态 (POLISHED/NEW/REAL/PARTIAL/SKELETON) 难以维护，三状态够用。Skill 副本与代码状态重对齐。 |
-| 2026-06-03 | Recaller 协议/Session Fork 标记为 Phase 5 计划中 | `.merco/skills` 副本曾描述但代码未实现，避免误导用户。 |
-| 2026-05-31 | Hooks 驱动可观察性（Observer + HookRegistry） | 原 metrics 直接埋点侵入式，新增指标改 5+ 文件。Hooks 解耦：业务代码只 emit，Observer/Metrics 订阅。Phase 6 加 MetricsCollector/AuditLogger 订阅点。 |
-| 2026-05-31 | ToolGuard 30 条默认 ask 规则（不硬拦截） | 全 deny 阻断正常开发，全 allow 无意义。ask 模式：用户可加 deny 规则，30 条默认覆盖 rm/sudo/pip/docker 敏感点。ToolGuard.check() 接入 agent._execute_tool_calls 前。 |
-| 2026-05-31 | SessionStore SQLite 替代 JSON 文件 | JSON 文件并发写丢消息 + 全文检索需遍历。SQLite WAL 模式支持并发读 + 单写，WAL 性能 > 默认 rollback。`FOREIGN KEY` 保证 messages 关联 session 完整性。 |
-| 2026-05-31 | ProviderInfo dataclass 替代 dict 注册表 | dict-style 访问无类型提示，IDE 补全差。dataclass + `__getitem__` 向后兼容（PROVIDER_REGISTRY["openai"]["base_url"] 仍可用）。新平台一行注册。 |
-| 2026-05-31 | Token 兼容 fallback（usage 缺失时估算） | MiniMax 流式不返回 usage，`total_tokens=0` 导致进度条为 0。`last_actual_tokens` 优先，非零采信；零时回退 `est_tk(content+reasoning)`。永不为 0。 |
-| 2026-05-31 | Observer 累计公式 `acc + (live - last_merged)` | `_merge_to_acc()` 后 acc 已含 live 值，直接 acc+live 重复计数。三容器职责：acc 锚点（跨运行）/ live 实时（当前 run）/ last_merged 合并快照（防双计）。 |
-| 2026-05-31 | Observer snapshot 存 session.metadata 字段 | 会话 SQLite 已有 metadata JSON 字段，Observer 状态随会话持久化。重启时 `_restore_context` 读 metadata → `observer.restore()` 恢复 acc。 |
-| 2026-05-31 | openai import 延迟到 LLMClient.__init__ | 测试环境 conftest.py 需 import 其他模块，openai 缺失导致整个 agent 跑不起来。延迟 import 让单元测试不依赖 openai。 |
-| 2026-05-31 | SkillViewTool 动态 describe() | 技能列表变更时无需改 system prompt。`describe()` 在 tool definition 调用时拼接当前可用技能。`check()` 有技能才显示（无技能时不暴露工具）。 |
-| 2026-05-31 | 集成测试用 MockLLMClient | 真实 LLM 调用慢/贵/不确定。MockLLMClient 接收预设响应序列，conftest.py fixture 复用。集成测试 2 秒全过，CI 友好。 |
-| 2026-05-31 | `_extract_usage` 多 provider 缓存采集 | 各 provider usage 字段不一致（OpenAI: `cached_tokens`、Anthropic: `cache_read_tokens`）。`_extract_usage` 统一字段映射：`cached_tokens or cache_read_tokens` 都采集，Observer 统计缓存命中率。 |
-| 2026-05-26 | LLM retry 统一到 Agent RecoveryPipeline | LLM 层和 Agent 层各有一套 retry，重复且策略分散。改为 LLM 纯传输（不重试），Agent RecoveryPipeline 唯一控制点。llm.py 330 行→200 行。 |
-| 2026-05-26 | 启动首页 Dashboard + 输入区 PromptDecorator 可组合架构 | 硬编码 f-string 和进度条无法扩展。Dashboard/DashboardSection 和 PromptArea/PromptDecorator 组合模式，新增条目只需继承 + .use()。 |
-| 2026-05-26 | Token 账本优先 API 实测值 | `total_tokens` 此前永远走估算（含魔术数 tool*200）。改为优先 `last_actual_tokens`，回退估算。`msg_tokens()` 补 tool_calls 计数。 |
-| 2026-05-26 | `_is_transient_429` 悬空引用改大类+关键字 | 函数从未存在，ImportError 被吞使 429 永不重试。改 HTTP 状态码大类（429+5xx）+ 消息关键字兜底。 |
-| 2026-05-26 | Token 估算统一到 `core/context.py` | `compressor.py` 和 `context.py` 各有一份。合并到 `core/context.py`。 |
-| 2026-05-26 | PromptBuilder 新增 TimeContextChunk | LLM 不知道当前时间，注入日期时间帮助判断文件时效。~25 token。 |
-| 2026-05-26 | 删除 `context.py` 死壳 `ContextCompressor` | 真身在 `memory/compressor.py`，stub 是早期死代码。 |
-| 2026-05-28 | WebSearch 接入 DuckDuckGo（免费/无 key）| `check()` 返回 False 导致工具隐藏。接入 API 实现真正搜索。保留 `source` 参数扩展口，后续 Google/SearXNG 按 Provider 注册表模式接入。 |
-| 2026-05-28 | openai 导入延迟到 `LLMClient.__init__` | 测试环境无 openai 时 import agent 模块失败。延迟到类实例化时导入。 |
-| 2026-05-23 | 收尾架构定稿：`_wrap_up_messages` + `_wrap_up_call` | 删 grace call（MiniMax 不配合）。提示词收敛为一条 user 消息。tool_choice="none" + 幻觉校验 + regex 兜底。 |
-| 2026-05-22 | 工具异常喂回 LLM 自愈 | `ToolRegistry.execute()` try/except：TypeError 返回结构化 error，通用异常返回 {error}。 |
-| 2026-05-22 | CLI 输出分区架构：rule 分隔 + Markdown 渲染 | `console.rule()` 框响应区，`Markdown()` 渲染。 |
-| 2026-05-22 | Context 压缩重写：滑动窗口 + 链完整 | 原 `messages[-10:]` 切掉 tool 链。改为 token 感知滑动窗口 + `_extend_to_chain()`。 |
-| 2026-05-22 | LLM 中间文字保留 | tool_calls 时 LLM 可能同时有文字（如"让我查询..."），保留渲染。 |
-| 2026-05-21 | 重试策略参数化为 `retry_delays` + 扩展为 429+5xx | SDK 自动重试太快，新增 cooldown 参数。现已废弃——retry 统一归 RecoveryPipeline。 |
-| 2026-05-21 | tool_calls 格式修正为 OpenAI 标准 | `{id, type:"function", function:{name, arguments}}`。 |
-| 2026-05-21 | 全链路调试日志系统 | Agent/LLM/Tool 均注 logger.debug；CLI `--debug` 开关。 |
-| 2026-05-20 | Bug 修复必须走根因流程 + 同类全检 | 表面修复延迟爆炸。project-vision SKILL.md 强制遵守。 |
-| 2026-05-20 | 采用 Python 3.12+ / uv 包管理 | 现代语法特性，asyncio 完善。 |
-| 2026-05-20 | skill 源文件放 docs/，渐进式多文件披露 | 入口精简，详细内容按需读取。 |
-| 2026-05-20 | 根目录 merco.json 不入库 | 模板在 config/。 |
+| 2026-05-20 | 采用 Python 3.12+ | 现代语法特性，asyncio 支持完善 |
+| 2026-05-20 | 使用 uv 作为包管理 | 速度快，依赖解析优秀 |
+| 2026-05-20 | 混合架构设计 | 结合两家框架优势，精简冗余 |
+| 2026-05-20 | skill 源文件放 docs/，渐进式多文件披露 | 入口精简，详细内容按需读取；agent 同步副本由 gitignore 排除 |
+| 2026-05-20 | 根目录 merco.json 不入库 | 本地开发配置，模板在 config/merco.json.example |
+| 2026-05-20 | config 反序列化补全 api_key/base_url | 原 _from_dict 漏字段导致对接非 OpenAI 厂商时 base_url 丢失 |
+| 2026-05-20 | 5 处关键集成链路标记为最优先 | 代码已完成但调用链缺失：Sandbox→Tools, Hooks→Agent, Observability→Agent, Memory→Sessions, Scheduler→Runtime |
+| 2026-05-31 | Observer report 累计公式用 `acc + (live - last_merged)` | `_merge_to_acc()` 后 acc 含 live 值，直接 acc+live 重复计数；三个容器各司其职：acc 锚点 / live 实时 / last_merged 合并快照 |
+| 2026-05-31 | StreamingProvider CancelledError checkpoint 保留为设计 trade-off | async for 内 __anext__ I/O 等待时被取消会丢 partial content，窗口极小且用户主动取消，收益近零，低优先级 |
+| 2026-05-31 | LLMClient 统一 None 防护 + extra_params/headers 可配置 | _normalize_tool_calls 归一 tool_call 避免 str += None；extra_params 透传 top_p/seed 等；headers 支持 X-Title 自定义 header；stream_options 收流式 usage |
+| 2026-05-31 | _normalize_tool_calls 不假设 tc.function 存在 | scnet 等 API 分 chunk 补全 function（首 chunk 无 function 字段），`func = tc.function; func.name if func else ""` 兼容 |
+| 2026-05-31 | 推理泄漏采用日志观察优先策略 | 先加 5 处 WARNING/DEBUG 日志打桩，`--debug` 运行观察；若日志无 WARNING 则判定为 provider 端行为，不改客户端代码 |
