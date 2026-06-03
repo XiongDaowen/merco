@@ -323,7 +323,9 @@ class LLMClient:
         }
         if stream:
             params["stream"] = True
-            params["stream_options"] = {"include_usage": True}
+            stream_opts = self.extra_params.get("stream_options")
+            if stream_opts:
+                params["stream_options"] = stream_opts
         if tools:
             params["tools"] = tools
             params["tool_choice"] = tool_choice
@@ -336,17 +338,6 @@ class LLMClient:
                      self.model, len(params.get("messages", [])),
                      len(params.get("tools", [])))
 
-        # ── 临时日志：完整请求体写入文件用于对比 ──
-        safe = {k: v for k, v in params.items() if k != "messages"}
-        safe["messages"] = [
-            {k: v for k, v in m.items() if k != "reasoning"}
-            for m in params.get("messages", [])
-        ]
-        body = json.dumps(safe, ensure_ascii=False, indent=2)
-        f = Path(tempfile.gettempdir()) / f"merco_req_{int(time.time()*1000)}.json"
-        f.write_text(body)
-        logger.warning("→ 请求已写入 %s (%d bytes)", f, len(body))
-
         if self.cooldown > 0:
             elapsed = time.monotonic() - self._last_request_time
             if elapsed < self.cooldown:
@@ -355,12 +346,10 @@ class LLMClient:
                 await asyncio.sleep(wait)
 
         try:
+            await asyncio.sleep(0)
             response = await self.client.chat.completions.create(**params)
         except asyncio.CancelledError:
             logger.debug("⚠ 请求被取消")
-            raise
-        except Exception as e:
-            logger.warning("← 临时错误日志: %s", str(e)[:500])
             raise
         self._last_request_time = time.monotonic()
         return response
