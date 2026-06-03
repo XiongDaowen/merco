@@ -78,7 +78,12 @@ merco skills -l        # 列出技能
 修改 `docs/project-vision/` 下任何文件后，需同步到 agent 的 skill 目录:
 
 ```bash
-cp -r docs/project-vision .merco/skills/
+# 同步到 opencode agent skill 目录
+cp docs/project-vision/SKILL.md .opencode/skills/project-vision/
+cp docs/project-vision/references/*.md .opencode/skills/project-vision/references/
+# 同步到 opencode 全局配置
+cp docs/project-vision/SKILL.md ~/.config/opencode/skills/project-vision/
+cp docs/project-vision/references/*.md ~/.config/opencode/skills/project-vision/
 ```
 
 **更新纪律**：每次重大提交后，必须根据提交内容更新 `progress.md`（模块状态变更）、`decisions.md`（新决策）、`architecture.md`（架构变更），然后同步到所有位置。不要在代码变更后留下过期的 skill 文档。
