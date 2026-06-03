@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.panel import Panel
 
+from .security import SecurityChecker
+
 console = Console()
 logger = logging.getLogger("merco.guard")
 
@@ -118,9 +120,25 @@ class ToolGuard:
             return True
 
         command = arguments.get("command", "")
+        path = arguments.get("path", "")
+
+        # 文件工具：SecurityChecker 路径检测（硬拦截）
+        if path and tool_name != "bash":
+            ok, reason = SecurityChecker.check_file_path(path)
+            if not ok:
+                self._render_path_deny(path, reason)
+                return False
+
         return await self._check(tool_name, command)
 
     async def _check(self, tool: str, command: str) -> bool:
+        # ── SecurityChecker 正则兜底（硬拦截，先于用户规则链）──
+        if command:
+            ok, reason = SecurityChecker.check_command(command)
+            if not ok:
+                self._render_security_deny(command, reason)
+                return False
+
         for rule in self._rules:
             if not self._tool_match(rule.tool, tool):
                 continue
@@ -141,7 +159,7 @@ class ToolGuard:
     def _tool_match(rule_tool: str, actual_tool: str) -> bool:
         return rule_tool == "*" or rule_tool == actual_tool
 
-    # ── 交互 ──
+    # ── 渲染 ──
 
     @staticmethod
     def _render_deny(command: str, rule: GuardRule) -> None:
@@ -149,6 +167,24 @@ class ToolGuard:
             f"[red]{command}[/red]\n"
             f"[dim]匹配规则: {rule.pattern} → deny[/dim]",
             title="⛔ 已拦截",
+            border_style="red",
+        ))
+
+    @staticmethod
+    def _render_security_deny(command: str, reason: str) -> None:
+        console.print(Panel(
+            f"[red]{command}[/red]\n"
+            f"[dim]{reason}[/dim]",
+            title="⛔ SecurityChecker 拦截",
+            border_style="red",
+        ))
+
+    @staticmethod
+    def _render_path_deny(path: str, reason: str) -> None:
+        console.print(Panel(
+            f"[red]{path}[/red]\n"
+            f"[dim]{reason}[/dim]",
+            title="⛔ 路径拦截",
             border_style="red",
         ))
 

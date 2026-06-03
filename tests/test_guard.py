@@ -2,6 +2,7 @@
 
 import asyncio
 import sys
+import pytest
 sys.path.insert(0, ".")
 
 from merco.sandbox.guard import ToolGuard
@@ -57,11 +58,11 @@ async def test():
     check("npm install -g", await g._check("bash", "npm install -g pkg"))
 
     # ─────────────────────────────────────────────────────
-    print("\n── 模式匹配：精确命中 ──")
+    print("\n── 模式匹配：SecurityChecker 硬拦截 ──")
 
-    check("rm 不匹配 rmdir", await g._check("bash", "rmdir old_dir") is True)
-    check("rm 匹配 rm -rf /", await g._check("bash", "rm -rf /tmp"))
-    check("chmod 777 / 命中", await g._check("bash", "chmod 777 /etc"))
+    check("rm 匹配 rm -rf / → SecurityChecker 拦截", not await g._check("bash", "rm -rf /tmp"))
+    check("chmod 777 / → SecurityChecker 拦截", not await g._check("bash", "chmod 777 /etc"))
+    check("rm 不匹配 rmdir", await g._check("bash", "rmdir old_dir"))
 
     # ─────────────────────────────────────────────────────
     print("\n── 非 bash 工具 → 跳过 ──")
@@ -103,6 +104,75 @@ async def test():
     print(f"\n{'='*40}")
     print(f"结果: {passed} 通过, {failed} 失败")
     return failed == 0
+
+
+# ── SecurityChecker 集成测试 ─────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_security_checker_regex_denies_dangerous():
+    """SecurityChecker 正则命中 → 硬拒绝，即使 guard 规则是 ask"""
+    async def mock_confirm(command, rule):
+        return True
+
+    guard = ToolGuard()
+    guard._confirm = mock_confirm
+
+    # rm -rf /etc 被 guard "rm -rf /" 规则匹配 → ask
+    # SecurityChecker 集成后应 → deny（正则匹配 rm\s+-rf\s+/）
+    result = await guard._check("bash", "rm -rf /etc")
+    assert not result, "SecurityChecker 应拦截 rm -rf /etc"
+
+
+@pytest.mark.asyncio
+async def test_security_checker_allows_safe_command():
+    """SecurityChecker 不命中的命令正常通过"""
+    async def mock_confirm(command, rule):
+        return True
+
+    guard = ToolGuard()
+    guard._confirm = mock_confirm
+
+    result = await guard._check("bash", "ls -la /home")
+    assert result, "安全的命令应通过"
+
+
+@pytest.mark.asyncio
+async def test_guard_check_file_path_traversal():
+    """Guard.check 检测 file 工具的 path 参数——路径穿越"""
+    async def mock_confirm(command, rule):
+        return True
+
+    guard = ToolGuard()
+    guard._confirm = mock_confirm
+
+    result = await guard.check("write_file", {"path": "../../etc/passwd", "content": "x"})
+    assert not result, "路径穿越应拦截"
+
+
+@pytest.mark.asyncio
+async def test_guard_check_file_path_system_path():
+    """Guard.check 检测 file 工具的 path 参数——系统路径"""
+    async def mock_confirm(command, rule):
+        return True
+
+    guard = ToolGuard()
+    guard._confirm = mock_confirm
+
+    result = await guard.check("read_file", {"path": "/proc/cpuinfo"})
+    assert not result, "系统路径应拦截"
+
+
+@pytest.mark.asyncio
+async def test_guard_check_file_path_safe():
+    """Guard.check 放行安全的 file 路径"""
+    async def mock_confirm(command, rule):
+        return True
+
+    guard = ToolGuard()
+    guard._confirm = mock_confirm
+
+    result = await guard.check("read_file", {"path": "/home/user/file.txt"})
+    assert result, "安全路径应通过"
 
 
 if __name__ == "__main__":
