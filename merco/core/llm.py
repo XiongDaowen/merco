@@ -1,10 +1,12 @@
 """LLM 客户端 - OpenAI 兼容接口"""
+import asyncio
 import json
 import logging
 import re
+import tempfile
 import time
-import asyncio
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, Optional, AsyncIterator
 
 logger = logging.getLogger("merco.llm")
@@ -334,15 +336,16 @@ class LLMClient:
                      self.model, len(params.get("messages", [])),
                      len(params.get("tools", [])))
 
-        # ── 临时日志：捕获完整请求体用于 debug vs non-debug 对比 ──
+        # ── 临时日志：完整请求体写入文件用于对比 ──
         safe = {k: v for k, v in params.items() if k != "messages"}
         safe["messages"] = [
             {k: v for k, v in m.items() if k != "reasoning"}
             for m in params.get("messages", [])
         ]
         body = json.dumps(safe, ensure_ascii=False, indent=2)
-        logger.warning("→ 临时请求日志 (%d bytes): %s", len(body),
-                      body[:2000] if len(body) > 2000 else body)
+        f = Path(tempfile.gettempdir()) / f"merco_req_{int(time.time()*1000)}.json"
+        f.write_text(body)
+        logger.warning("→ 请求已写入 %s (%d bytes)", f, len(body))
 
         if self.cooldown > 0:
             elapsed = time.monotonic() - self._last_request_time
