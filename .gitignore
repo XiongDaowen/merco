@@ -52,3 +52,4 @@ references/
 .reasonix/
 .merco/
 .pytest_cache/
+.hermes/
