@@ -285,7 +285,7 @@ await self._ensure_client_ready()
 3. **永远先找根因再修**——三次误判消耗大量时间，最终只是一个 event loop yield
 4. **heisenbug 排查方法**：可以故意在不同位置插入 `time.sleep()` 或 `await asyncio.sleep(0)` 来缩小竞态窗口范围
 
-### 案例 2: 上下文持久化 Bug（2026-06-04 定位，未修复）
+### 案例 2: 上下文持久化 Bug（2026-06-04 定位 / 2026-06-05 部分修复）
 
 #### 现象
 
@@ -294,21 +294,20 @@ await self._ensure_client_ready()
 3. **模型遗忘前面对话** — history、report 完整，但 LLM 输出显示不记得
 4. **快速 Ctrl+C 退出后重进，聊天报错**：`<400> messages with role "tool" must be a response to a preceeding message with "tool_calls"`
 
-#### 根因 A、B、C：`last_actual_tokens` 过期 + `_overhead_tokens` 未持久化
+#### 根因 1：进度条"反降"是 cache 命中导致口径切换
 
-`context.py:44` — `ContextManager.total_tokens` 优先返回 `last_actual_tokens`（上次 API 返回的 prompt_tokens），但该值在以下场景变为过期值：
+启动时进度条显示 17K（估算：估算公式 1.5 token/字 + 200 token/工具，**对中文偏估**），第一次 API 响应后覆盖成 6.7K（实测，含 cache 命中打折）。**估算 17K 不是 bug——merco 没 API 数据只能估算；6.7K 才是真实。**用户看到"反降"是事实不是 bug，但体验差。
 
-| 场景 | `last_actual_tokens` | 实际 `current_tokens + _overhead_tokens` |
-|------|---------------------|------------------------------------------|
-| `context.add()` 新消息后 | 上轮 API 的值（不含新消息） | 含新消息 |
-| 退出重进（`_restore_context` 新建 ContextManager） | 0 | 含所有恢复消息的估算值 |
+**修法**（commit 57ccb83 + c137185）：第一次 API 响应前**显示占位** `—/62.5K` 而非估算值，避免误导。复用 `get_context_stats()` 已有的 `is_estimate` 字段；`_fmt` 加默认参数保持向后兼容。
 
-`get_context_stats()` (`agent.py:800`) 返回过期的 `last_actual_tokens` → 上下文显示骤降。
-当该过期值低于真实 token 数、但 API 下次调用时真实 token 超过 `max_input_tokens` 阈值 → 触发压缩 → `compress_checkpoint` 保存 summary + tail → 重启后只恢复压缩后片段 → **模型遗忘**。
+**根因 A/B/C（last_actual_tokens 过期 + _overhead_tokens 未持久化）当前未修**：
+- A/B 实际影响已被根因 1 修复屏蔽（进度条走估算口径时不再读 last_actual_tokens）
+- C 影响窗口仅限"启动到第一次 run 之间"几秒，run 入口已有 set_overhead 补救
+- 严格修需把 `_restore_context` 改 async，影响 6 处调用点，**当前不建议**
 
-#### 根因 D：空 `tool_call_id` 被 falsy 过滤导致消息链断裂
+#### 根因 D：空 `tool_call_id` 被 falsy 过滤导致消息链断裂（2026-06-05 修复）
 
-`agent.py:403` — `_restore_context` 恢复消息时：
+`agent.py:391, 404` — `_restore_context` 恢复消息时：
 
 ```python
 if msg.get("tool_call_id"):              # "" 是 falsy → 跳过
@@ -317,8 +316,14 @@ if msg.get("tool_call_id"):              # "" 是 falsy → 跳过
 
 触发条件：provider（如 scnet.cn）流式首 chunk 不发送 `tool_call.id`，若 Ctrl+C 中断在 id 到达前，`StreamingProvider` 取消检查点保存的 `tc_buf[idx]["id"]` 为 `""` → 清理管线注入 `"取消 (Ctrl+C)"` tool 消息的 `tool_call_id` 也是 `""` → `session.save()` 写入 SQLite → 重启后 `""` 被过滤 → tool 消息无 `tool_call_id` → 下轮 API 调用报 400。
 
-#### 修复方案
+**修法**（commit 1ebd698）：两行 `if msg.get("tool_call_id"):` → `if "tool_call_id" in msg:` —— key 存在就赋值，不管真假。空串字段在重启后保留，消息链不断。
 
-1. **`context.py` `ContextManager.add()`** — 每次新增消息后 `self.last_actual_tokens = 0`，强制后续 `total_tokens` 回到 `current_tokens + _overhead_tokens`
-2. **`agent.py` `_restore_context()` line 403** — `tool_call_id` 不判真假，直接赋值：`entry["tool_call_id"] = msg.get("tool_call_id", "")`
-3. **`agent.py` `_restore_context()` 末尾** — 重建 `_overhead_tokens`（当前 system prompt + tool 定义 token 估算）
+**未修方案**（按"只修 D"原则搁置）：
+1. `context.py` `ContextManager.add()` 末尾 `self.last_actual_tokens = 0`（根因 A）
+2. `agent.py` `_restore_context()` 末尾重建 `_overhead_tokens`（根因 C，需 async 化）
+
+## 修复提交索引
+
+- `c137185` fix(cli): 进度条估算态一律占位（根因 1，第二版修对）
+- `57ccb83` fix(cli): 进度条首次 API 响应前显示占位（根因 1，第一版修错）
+- `1ebd698` fix(agent): _restore_context 保留空 tool_call_id 字段（根因 D）

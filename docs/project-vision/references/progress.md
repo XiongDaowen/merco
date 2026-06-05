@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-04
+> 最后更新: 2026-06-05
 
 ## 目标对标
 
@@ -16,6 +16,23 @@
 - **Memory 召回（新功能）**: `Recaller` 协议 (`BaseRecaller` ABC) → `FTS5Recaller`（调 SessionSearch）+ `MemoryRecaller`（调 MemoryStore）→ `HybridRecaller` 聚合/排序/去重/截断/缓存。`Agent._build_system_prompt()` 末尾自动注入召回（3条×300字≈600 tokens）。`/recall` CLI 命令手动搜索。配置项：`memory.recall_enabled/limit/max_chars/threshold`。测试 23+7+16=46 个。
 - **memory config 重构**: `memory_enabled/memory_path` 移入 `memory` 嵌套对象，与 recall 配置统一。`_from_dict` 加 isinstance 守卫防非 dict 值 crash。
 - **会话 Fork/分支（新功能）**: `SessionStore.clone_session()` 原子深克隆 + `get_children()` 子会话查询。`Session.fork()` 工厂方法。`Agent._compress_context` 压缩前自动 fork 归档。`/fork` CLI 命令手动分支 + `/tree` 分支树查看。配置：`session.fork_enabled` + `session.fork_auto_on_compress`。测试 15 个。
+
+### 本次会话更新 (2026-06-05)
+
+- **SKILL 案例 2 根因 1 修复（进度条"反降"）**:
+  - 启动时进度条显示估算值（17K），第一次 API 响应后切换成实测（6.7K），用户看到"反降"
+  - 修法：第一次 API 响应前显示占位 `—/62.5K` 而非估算值
+  - 实现：复用 `get_context_stats()` 已有的 `is_estimate` 字段；`_fmt` 加默认参数保持向后兼容
+  - 提交：`57ccb83`（第一版修错：只判 n==0）+ `c137185`（第二版修对：is_estimate 一律占位）
+
+- **SKILL 案例 2 根因 D 修复（_restore_context 保留空 tool_call_id）**:
+  - provider（如 scnet.cn）流式首 chunk 不发 `tool_call.id`，Ctrl+C 在 id 到达前中断 → tc_buf[id]=""
+  - InterruptCleanupPipeline 注入"取消 (Ctrl+C)" tool 消息时把 `""` 写进 session
+  - 重启后 `_restore_context` 用 `if msg.get("tool_call_id"):` 过滤掉 `""` → 消息链断 → 下轮 API 报 400
+  - 修法：两行 `if "tool_call_id" in msg:` 替换 truthy 过滤 —— key 存在就赋值，不管真假
+  - 提交：`1ebd698`
+
+- **遗留未修**：根因 A (`context.add()` 不清零 last_actual_tokens) + 根因 C (`_restore_context` 不重建 _overhead_tokens) —— A/B 实际影响已被根因 1 修复屏蔽，C 窗口仅限"启动到第一次 run"几秒，run 入口已有 set_overhead 补救。严格修需把 `_restore_context` async 化，影响 6 处调用点，搁置
 
 ### 本次会话更新 (2026-06-04)
 
