@@ -99,6 +99,11 @@ class TimeContextChunk(PromptChunk):
         )
 
 
+def _build_reasoning_panel(text: str) -> Panel:
+    return Panel(f"[dim]{text.rstrip()}[/dim]", border_style="dim",
+                 title="🧠 Thinking", title_align="left", padding=(0, 1))
+
+
 class ResponseProvider(ABC):
     """响应策略基类 — 工厂模式，Agent 不感知流/非流"""
 
@@ -135,6 +140,8 @@ class StreamingProvider(ResponseProvider):
         tc_buf: dict[int, dict] = {}
 
         stream_think = agent.config.stream_thinking
+        render_interval = agent.config.stream_render_interval
+        _last_render = 0.0
 
         # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
         panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
@@ -183,10 +190,10 @@ class StreamingProvider(ResponseProvider):
                 if r:
                     reasoning_buf += r
                     if stream_think:
-                        live.update(Panel(
-                            f"[dim]{reasoning_buf.rstrip()}[/dim]",
-                            border_style="dim", title="🧠 Thinking",
-                            title_align="left", padding=(0, 1)))
+                        now = time.monotonic()
+                        if render_interval <= 0 or now - _last_render >= render_interval:
+                            _last_render = now
+                            live.update(_build_reasoning_panel(reasoning_buf))
                 content_buf += chunk.get("content", "")
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
@@ -207,10 +214,7 @@ class StreamingProvider(ResponseProvider):
                 live.stop()
             # 用普通 console.print 留最后面板，避免 Live 残留干扰键盘输入
             if reasoning_buf:
-                console.print(Panel(
-                    f"[dim]{reasoning_buf.rstrip()}[/dim]",
-                    border_style="dim", title="🧠 Thinking",
-                    title_align="left", padding=(0, 1)))
+                console.print(_build_reasoning_panel(reasoning_buf))
 
         assembled["reasoning"] = reasoning_buf
         assembled["content"] = content_buf
@@ -791,8 +795,7 @@ class Agent:
         text = reasoning.strip()
         if not text:
             return
-        console.print(Panel(f"[dim]{text}[/dim]", border_style="dim",
-                      title="🧠 Thinking", title_align="left", padding=(0, 1)))
+        console.print(_build_reasoning_panel(text))
 
     def get_context_stats(self) -> dict:
         """上下文窗口使用统计，供 REPL 进度条渲染"""

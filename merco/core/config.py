@@ -134,6 +134,7 @@ class MercoConfig:
     streaming: bool = False
     stream_thinking: bool = True
     stream_content: bool = False
+    stream_render_interval: float = 0.05  # 流式 reasoning 面板最小渲染间隔（秒），0=不限制
     diff_view: str = "unified"
     memory_recall_enabled: bool = True
     memory_recall_limit: int = 3
@@ -193,6 +194,7 @@ class MercoConfig:
             "streaming": self.streaming,
             "stream_thinking": self.stream_thinking,
             "stream_content": self.stream_content,
+            "stream_render_interval": self.stream_render_interval,
             "diff_view": self.diff_view,
             "memory": {
                 "enabled": self.memory_enabled,
@@ -247,6 +249,7 @@ class MercoConfig:
             streaming=data.get("streaming", False),
             stream_thinking=data.get("stream_thinking", True),
             stream_content=data.get("stream_content", False),
+            stream_render_interval=data.get("stream_render_interval", 0.05),
             diff_view=data.get("diff_view", "unified"),
             memory_recall_enabled=memory_data.get("recall_enabled", True),
             memory_recall_limit=memory_data.get("recall_limit", 3),

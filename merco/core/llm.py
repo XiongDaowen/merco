@@ -262,6 +262,7 @@ class LLMClient:
         self.extra_params = extra_params or {}
         self.stream_options = stream_options
         self._last_request_time = 0.0
+        self._client_ready = False
 
         import httpx
         from openai import AsyncOpenAI
@@ -333,6 +334,13 @@ class LLMClient:
         params.update(self.extra_params)
         return params
 
+    async def _ensure_client_ready(self):
+        """确保 httpx 异步连接池初始化完成（首次请求前执行一次）。"""
+        if self._client_ready:
+            return
+        await asyncio.sleep(0)
+        self._client_ready = True
+
     async def _request(self, params: dict):
         """发送请求（含 cooldown），不重试。错误原样上抛交 Agent RecoveryPipeline。"""
         logger.debug("→ API 请求: model=%s messages=%d tools=%d",
@@ -347,7 +355,7 @@ class LLMClient:
                 await asyncio.sleep(wait)
 
         try:
-            await asyncio.sleep(0)
+            await self._ensure_client_ready()
             response = await self.client.chat.completions.create(**params)
         except asyncio.CancelledError:
             logger.debug("⚠ 请求被取消")

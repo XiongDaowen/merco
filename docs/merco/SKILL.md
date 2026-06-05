@@ -247,3 +247,78 @@ merco -m Qwen3-235B-A22B   # 指定模型
 - `merco.mcp` — MCP 连接/工具注册
 - `merco.context` — context.add reasoning 泄漏 WARNING
 - `merco.session` — 会话 add_message/持久化
+
+## 调试案例
+
+### 案例 1: MiniMax 400 "function.arguments must be in JSON format" (2026-06-04)
+
+**现象**：某些进程启动后首次流式 API 调用，MiniMax 返回 400，`message: "function.arguments must be in JSON format"`。同一请求再次运行可能正常。加 `--debug` 后稳定正常。
+
+**三次误判**：
+1. `json.loads → json.dumps` 往返导致 arguments 格式变化 → **已退还**
+2. `stream_options: {"include_usage": true}` 硬编码导致不支持 provider 400 → **已退还**（改为 ModelConfig 显式字段）
+3. 会话恢复时 reasoning 泄漏到历史消息 → **不匹配证据**
+
+**根因**：`httpx.AsyncClient` 在 `LLMClient.__init__()`（同步）中通过 `AsyncOpenAI()` 构造，但异步连接池的初始化还未被事件循环调度过。首次 `chat.completions.create()` 调用时，httpx 内部状态未就绪，造成连接建立竞态——API 收到不完整的请求体。`asyncio.sleep(0)` 让出一次事件循环即可解决。
+
+**为何是 heisenbug**：任何导致首次 API 调用前出现同步操作的行为（debug 日志写入、文件 IO、多余的 json.dumps）都会改变事件循环的调度时机，从而掩盖竞态窗口。`--debug` 模式的额外日志输出恰好提供了足够的 yield 点。
+
+**最终方案**：
+```python
+# __init__
+self._client_ready = False
+
+# 新方法
+async def _ensure_client_ready(self):
+    if self._client_ready:
+        return
+    await asyncio.sleep(0)
+    self._client_ready = True
+
+# _request 顶部
+await self._ensure_client_ready()
+```
+
+**教训**：
+1. **`--debug` 改变行为的 bug 往往是异步调度问题**——不是日志级别本身的问题，而是日志导致的 IO 操作改变了事件循环顺序
+2. **裸 `sleep(0)` 是补丁，应该提取为命名方法 + flag**——`_ensure_client_ready` 自解释、只跑一次、好扩展
+3. **永远先找根因再修**——三次误判消耗大量时间，最终只是一个 event loop yield
+4. **heisenbug 排查方法**：可以故意在不同位置插入 `time.sleep()` 或 `await asyncio.sleep(0)` 来缩小竞态窗口范围
+
+### 案例 2: 上下文持久化 Bug（2026-06-04 定位，未修复）
+
+#### 现象
+
+1. **对完一轮对话后，上下文 token 数反降** — before 12000，after 8000
+2. **退出重进，上下文 token 数骤减** — 与退出前差距可达 50%
+3. **模型遗忘前面对话** — history、report 完整，但 LLM 输出显示不记得
+4. **快速 Ctrl+C 退出后重进，聊天报错**：`<400> messages with role "tool" must be a response to a preceeding message with "tool_calls"`
+
+#### 根因 A、B、C：`last_actual_tokens` 过期 + `_overhead_tokens` 未持久化
+
+`context.py:44` — `ContextManager.total_tokens` 优先返回 `last_actual_tokens`（上次 API 返回的 prompt_tokens），但该值在以下场景变为过期值：
+
+| 场景 | `last_actual_tokens` | 实际 `current_tokens + _overhead_tokens` |
+|------|---------------------|------------------------------------------|
+| `context.add()` 新消息后 | 上轮 API 的值（不含新消息） | 含新消息 |
+| 退出重进（`_restore_context` 新建 ContextManager） | 0 | 含所有恢复消息的估算值 |
+
+`get_context_stats()` (`agent.py:800`) 返回过期的 `last_actual_tokens` → 上下文显示骤降。
+当该过期值低于真实 token 数、但 API 下次调用时真实 token 超过 `max_input_tokens` 阈值 → 触发压缩 → `compress_checkpoint` 保存 summary + tail → 重启后只恢复压缩后片段 → **模型遗忘**。
+
+#### 根因 D：空 `tool_call_id` 被 falsy 过滤导致消息链断裂
+
+`agent.py:403` — `_restore_context` 恢复消息时：
+
+```python
+if msg.get("tool_call_id"):              # "" 是 falsy → 跳过
+    entry["tool_call_id"] = msg["tool_call_id"]
+```
+
+触发条件：provider（如 scnet.cn）流式首 chunk 不发送 `tool_call.id`，若 Ctrl+C 中断在 id 到达前，`StreamingProvider` 取消检查点保存的 `tc_buf[idx]["id"]` 为 `""` → 清理管线注入 `"取消 (Ctrl+C)"` tool 消息的 `tool_call_id` 也是 `""` → `session.save()` 写入 SQLite → 重启后 `""` 被过滤 → tool 消息无 `tool_call_id` → 下轮 API 调用报 400。
+
+#### 修复方案
+
+1. **`context.py` `ContextManager.add()`** — 每次新增消息后 `self.last_actual_tokens = 0`，强制后续 `total_tokens` 回到 `current_tokens + _overhead_tokens`
+2. **`agent.py` `_restore_context()` line 403** — `tool_call_id` 不判真假，直接赋值：`entry["tool_call_id"] = msg.get("tool_call_id", "")`
+3. **`agent.py` `_restore_context()` 末尾** — 重建 `_overhead_tokens`（当前 system prompt + tool 定义 token 估算）

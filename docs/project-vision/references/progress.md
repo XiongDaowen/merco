@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-03
+> 最后更新: 2026-06-04
 
 ## 目标对标
 
@@ -16,6 +16,11 @@
 - **Memory 召回（新功能）**: `Recaller` 协议 (`BaseRecaller` ABC) → `FTS5Recaller`（调 SessionSearch）+ `MemoryRecaller`（调 MemoryStore）→ `HybridRecaller` 聚合/排序/去重/截断/缓存。`Agent._build_system_prompt()` 末尾自动注入召回（3条×300字≈600 tokens）。`/recall` CLI 命令手动搜索。配置项：`memory.recall_enabled/limit/max_chars/threshold`。测试 23+7+16=46 个。
 - **memory config 重构**: `memory_enabled/memory_path` 移入 `memory` 嵌套对象，与 recall 配置统一。`_from_dict` 加 isinstance 守卫防非 dict 值 crash。
 - **会话 Fork/分支（新功能）**: `SessionStore.clone_session()` 原子深克隆 + `get_children()` 子会话查询。`Session.fork()` 工厂方法。`Agent._compress_context` 压缩前自动 fork 归档。`/fork` CLI 命令手动分支 + `/tree` 分支树查看。配置：`session.fork_enabled` + `session.fork_auto_on_compress`。测试 15 个。
+
+### 本次会话更新 (2026-06-04)
+
+- **LLMClient 延迟初始化优化**: `asyncio.sleep(0)` 从 `_request()` 裸补丁提取为独立 `_ensure_client_ready()` 方法 + `_client_ready` flag，首次请求前执行一次，后续零开销。httpx 连接池竞态修复不再污染请求主线。
+- **流式 reasoning 渲染限流 + 重构**: 新增 `stream_render_interval` 配置项（默认 0.05s），控制 Panel 最小渲染间隔，解决长推理卡顿。提取 `_build_reasoning_panel()` 模块级函数，消除 `NonStreamingProvider` / `StreamingProvider` / `Agent._render_reasoning` 三处 Panel 构建重复。
 
 ### 本次会话更新 (2026-06-03)
 
@@ -81,11 +86,11 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `agent.py` | 🟢 POLISHED | Full agent loop。LLM retry 归零（交 RecoveryPipeline）。_wrap_up 收尾。Interrupt pipeline 策略/处理器模式（中断恢复 + partial state 保存到 context/session）。Observer integration（snapshot/restore/report）。**但**: hooks 未接入、sandbox 未调用。 |
+| `agent.py` | 🟢 POLISHED | Full agent loop。LLM retry 归零（交 RecoveryPipeline）。_wrap_up 收尾。Interrupt pipeline 策略/处理器模式（中断恢复 + partial state 保存到 context/session）。Observer integration（snapshot/restore/report）。**但**: hooks 未接入、sandbox 未调用。`_build_reasoning_panel` 统一 Panel 构建 + `stream_render_interval` 限流。 |
 | `config.py` | 🟢 POLISHED | `ProviderInfo` dataclass 含 name/models/key_help。5 个预置平台，一条记录驱动 setup 向导。 |
 | `setup.py` | 🟢 NEW | 交互式 API 配置向导，5步流程。`merco setup` 命令。 |
 | `observer.py` | 🟢 NEW | hooks 驱动可观察性门面，`/report` 命令，live+acc 双计数器。 |
-| `llm.py` | 🟢 POLISHED | 纯传输层 + `_strip_think_tags` + `_extract_usage` 多 provider 缓存采集 + `_normalize_tool_calls` None 防护（id/name/arguments/function 任一 None 不崩）+ `extra_params`/`headers` 透传 + `stream_options`。 |
+| `llm.py` | 🟢 POLISHED | 纯传输层 + `_strip_think_tags` + `_extract_usage` 多 provider 缓存采集 + `_normalize_tool_calls` None 防护（id/name/arguments/function 任一 None 不崩）+ `extra_params`/`headers` 透传 + `stream_options` + `_ensure_client_ready` 延迟初始化。 |
 | `session.py` | 🟢 POLISHED | Session 数据类 + save/load/resume_or_create，增量写 SQLite，tool call 完整链路持久化。 |
 | `message.py` | 🟢 REAL | `Message` dataclass + `to_dict()` + `MessageProcessor`。|
 | `context.py` | 🟢 REAL | `ContextManager` + `estimate_tokens()`/`msg_tokens()`（含 tool_calls 计数）+ `total_tokens` 优先 API 实测。死壳已删。|
@@ -190,7 +195,7 @@
 | # | 位置 | 问题 | 修复方案 | 优先级 |
 |---|------|------|----------|--------|
 | 1 | `core/agent.py` StreamingProvider checkpoint | `__anext__()` I/O 等待时 CancelledError 不执行 checkpoint，partial content 丢失 | 改用 `except CancelledError` 统一拦截 | 低 |
-| 2 | `core/agent.py` StreamingProvider reasoning 渲染 | 大段推理文本每次 chunk 重建 Panel，卡顿后跳出一堆 | 限流 50ms + 截断 3000 字符显示 | 低 |
+| 2 | `core/agent.py` StreamingProvider reasoning 渲染 | ~大段推理文本每次 chunk 重建 Panel，卡顿后跳出一堆~ | ✅ 已修复：`stream_render_interval` 限流 + `_build_reasoning_panel` 统一构建 | — |
 | 3 | `core/llm.py` / `agent.py` reasoning 泄漏怀疑 | 用户观察到历史 reasoning 出现在 thinking 面板，代码审查未发现客户端泄漏路径 | 已在 5 处加日志打桩，`--debug` 观察 | — |
 
 ## 下一步（按优先级）
