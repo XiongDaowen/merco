@@ -276,7 +276,7 @@ class ContextBar(PromptDecorator):
         cur, mx = stats["current"], stats["max"]
 
         # left: 进度条 + token 数（bar 本身已含 ▐▌）
-        left = f"  [{color}]{bar}[/{color}]  [dim]{_fmt(cur)}/{_fmt(mx)}[/dim]"
+        left = f"  [{color}]{bar}[/{color}]  [dim]{_fmt(cur, stats['is_estimate'])}/{_fmt(mx)}[/dim]"
 
         # 当前会话标题
         session_title = agent.session.title or f"会话 {agent.session.id}"
@@ -294,7 +294,9 @@ class ContextBar(PromptDecorator):
         return "▸ "
 
 
-def _fmt(n: int) -> str:
+def _fmt(n: int, is_estimate: bool = False) -> str:
+    if is_estimate and n == 0:
+        return "—"
     if n < 1000:
         return str(n)
     return f"{n / 1024:.1f}K"
