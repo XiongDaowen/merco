@@ -388,7 +388,7 @@ class Agent:
                 self.context.add({"role": "system", "content": summary})
             for msg in tail:
                 entry = {"role": msg["role"], "content": msg.get("content", "")}
-                if msg.get("tool_call_id"):
+                if "tool_call_id" in msg:
                     entry["tool_call_id"] = msg["tool_call_id"]
                 if msg.get("tool_calls"):
                     entry["tool_calls"] = msg["tool_calls"]
@@ -401,7 +401,7 @@ class Agent:
                 logger.debug("_restore_context: session 消息含 reasoning (%d chars, 已丢弃)",
                             len(r))
             entry = {"role": msg["role"], "content": msg.get("content", "")}
-            if msg.get("tool_call_id"):
+            if "tool_call_id" in msg:
                 entry["tool_call_id"] = msg["tool_call_id"]
             if msg.get("tool_calls"):
                 entry["tool_calls"] = msg["tool_calls"]

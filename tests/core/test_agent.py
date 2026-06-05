@@ -270,3 +270,57 @@ def test_agent_has_mcp_manager(test_agent):
     assert hasattr(test_agent, 'mcp_manager')
     from merco.mcp.manager import MCPServerManager
     assert isinstance(test_agent.mcp_manager, MCPServerManager)
+
+
+class TestRestorePreservesEmptyToolCallId:
+    """修复根因 D：_restore_context 中 `msg.get("tool_call_id")` 的 truthy 过滤
+    会丢弃空字符串 tool_call_id 字段。改用 `"tool_call_id" in msg` 保留字段。
+    """
+
+    def test_restore_context_preserves_empty_tool_call_id_main_branch(self, test_agent):
+        """主分支：无 checkpoint 时，空 tool_call_id 必须保留在 context。"""
+        agent = test_agent
+        agent.session.add_message("tool", "取消", tool_call_id="")
+        agent._restore_context()
+        msgs = agent.context.messages
+        assert len(msgs) == 1
+        # 关键断言：tool_call_id 字段存在且为空字符串（不被 falsy 过滤）
+        assert "tool_call_id" in msgs[-1]
+        assert msgs[-1]["tool_call_id"] == ""
+        assert msgs[-1]["role"] == "tool"
+        assert msgs[-1]["content"] == "取消"
+
+    def test_restore_context_preserves_empty_tool_call_id_checkpoint_branch(self, test_agent):
+        """压缩分支：有 checkpoint 时，tail 中的空 tool_call_id 必须保留。"""
+        agent = test_agent
+        # 设 tail_count=2 → 拉最近 2*2=4 条消息
+        agent.session.metadata["compress_checkpoint"] = {
+            "summary": "[summary] user asked about X",
+            "tail_count": 2,
+            "original_count": 100,
+            "compressed_at": 12345,
+        }
+        # 准备 4 条消息 + 1 条 tool 消息；最后一条 assistant 带 tool_calls
+        agent.session.add_message("user", "msg1")
+        agent.session.add_message("assistant", "msg2")
+        agent.session.add_message("user", "msg3")
+        agent.session.add_message(
+            "assistant",
+            "calling tool",
+            tool_calls=[{"id": "tc1", "type": "function",
+                         "function": {"name": "echo", "arguments": "{}"}}],
+        )
+        agent.session.add_message("tool", "tool result", tool_call_id="")
+
+        agent._restore_context()
+        msgs = agent.context.messages
+
+        # 第一条应该是 summary system 消息
+        assert msgs[0]["role"] == "system"
+        assert "user asked about X" in msgs[0]["content"]
+
+        # 找 tool 消息，断言 tool_call_id 字段保留为空字符串
+        tool_msgs = [m for m in msgs if m.get("role") == "tool"]
+        assert len(tool_msgs) == 1
+        assert "tool_call_id" in tool_msgs[0]
+        assert tool_msgs[0]["tool_call_id"] == ""
