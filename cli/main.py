@@ -295,7 +295,7 @@ class ContextBar(PromptDecorator):
 
 
 def _fmt(n: int, is_estimate: bool = False) -> str:
-    if is_estimate and n == 0:
+    if is_estimate:
         return "—"
     if n < 1000:
         return str(n)
