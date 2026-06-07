@@ -131,6 +131,7 @@ class StreamingProvider(ResponseProvider):
                            tools: list | None) -> dict:
         import sys, json as _json
         from rich.live import Live
+        from rich.console import Group
 
         assembled: dict = {
             "role": "assistant", "content": "", "reasoning": "",
@@ -144,32 +145,37 @@ class StreamingProvider(ResponseProvider):
         _last_render = 0.0
 
         # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
-        panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
+        thinking_panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
                       title="🧠 Thinking", title_align="left", padding=(0, 1))
-        live = Live(panel, console=console, refresh_per_second=10,
+
+        # ── 准备 content 面板（使用 Group 与 thinking 面板共用单个 Live）──
+        content_panel = None
+        if agent.config.stream_content:
+            content_panel = Panel("", title="💬 Response", border_style="blue")
+
+        # 使用单个 Live + Group 来同时显示 thinking 和 content 面板
+        if content_panel is not None:
+            group = Group(thinking_panel, content_panel)
+        else:
+            group = Group(thinking_panel)
+
+        live = Live(group, console=console, refresh_per_second=10,
                     transient=agent.config.stream_thinking_transient)
         live.start()
 
         # ── 定时刷新任务：防止 API 返回慢时 thinking 面板卡顿 ──
+        nonlocal_thinking_panel = [thinking_panel]  # mutable ref for closure
+
         async def _refresh_thinking():
             while True:
                 await asyncio.sleep(0.5)
                 if reasoning_buf:
-                    live.update(_build_reasoning_panel(reasoning_buf))
+                    nonlocal_thinking_panel[0] = _build_reasoning_panel(reasoning_buf)
+                    if content_panel is not None:
+                        live.update(Group(nonlocal_thinking_panel[0], content_panel))
+                    else:
+                        live.update(Group(nonlocal_thinking_panel[0]))
         refresh_task = asyncio.create_task(_refresh_thinking())
-
-        # ── 准备 content 流式输出 ──
-        content_live = None
-        content_panel = None
-        if agent.config.stream_content:
-            content_panel = Panel("", title="💬 Response", border_style="blue")
-            content_live = Live(
-                content_panel,
-                console=console,
-                refresh_per_second=10,
-                transient=agent.config.stream_thinking_transient
-            )
-            content_live.start()
 
         try:
             stream = agent.llm.chat_stream(messages, tools=tools)
@@ -178,8 +184,6 @@ class StreamingProvider(ResponseProvider):
                 current = asyncio.current_task()
                 if current and current.cancelled():
                     live.stop()
-                    if content_live:
-                        content_live.stop()
                     # TODO: 此 checkpoint 无法覆盖「Cancel 在 __anext__ I/O 等待中到达」的情况
                     #      补救方案：加 except asyncio.CancelledError 兜底 handler，抽离保存逻辑。
                     #      优先级：低——窗口极小且用户主动取消，丢失的 partial content 是预期行为。
@@ -216,11 +220,15 @@ class StreamingProvider(ResponseProvider):
                         now = time.monotonic()
                         if render_interval <= 0 or now - _last_render >= render_interval:
                             _last_render = now
-                            live.update(_build_reasoning_panel(reasoning_buf))
+                            nonlocal_thinking_panel[0] = _build_reasoning_panel(reasoning_buf)
+                            if content_panel is not None:
+                                live.update(Group(nonlocal_thinking_panel[0], content_panel))
+                            else:
+                                live.update(Group(nonlocal_thinking_panel[0]))
                 content_buf += chunk.get("content", "")
-                if content_live is not None and content_panel is not None and content_buf:
+                if content_panel is not None and content_buf:
                     content_panel.renderable = Markdown(content_buf)
-                    content_live.update(content_panel)
+                    live.update(Group(nonlocal_thinking_panel[0], content_panel))
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
                     if idx not in tc_buf:
@@ -244,8 +252,6 @@ class StreamingProvider(ResponseProvider):
                     pass
             if live:
                 live.stop()
-            if content_live:
-                content_live.stop()
             # When transient=True the Live panel was cleared on stop(),
             # so print a static copy. When transient=False the Live panel
             # already remains visible — printing again would duplicate it.
