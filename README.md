@@ -48,6 +48,26 @@ merco
 /exit      退出
 ```
 
+## 配置项
+
+配置文件路径: `~/.config/merco/config.json` 或项目目录 `./merco.json`
+
+### 流式输出配置
+
+- `stream_thinking`: 是否启用 thinking 流式输出（默认: `true`）
+- `stream_content`: 是否启用 content 流式输出（默认: `true`）
+- `stream_thinking_transient`: thinking 框是否在结束后消失（默认: `false`，即保留思考面板）
+- `stream_render_interval`: 流式 reasoning 面板最小渲染间隔，单位秒（默认: `0.05`，0 = 不限制）
+
+示例:
+
+```json
+{
+  "stream_content": true,
+  "stream_thinking_transient": false
+}
+```
+
 ## 架构
 
 | 层 | 状态 | 说明 |
