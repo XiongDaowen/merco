@@ -158,6 +158,19 @@ class StreamingProvider(ResponseProvider):
                     live.update(_build_reasoning_panel(reasoning_buf))
         refresh_task = asyncio.create_task(_refresh_thinking())
 
+        # ── 准备 content 流式输出 ──
+        content_live = None
+        content_panel = None
+        if agent.config.stream_content:
+            content_panel = Panel("", title="💬 Response", border_style="blue")
+            content_live = Live(
+                content_panel,
+                console=console,
+                refresh_per_second=10,
+                transient=agent.config.stream_thinking_transient
+            )
+            content_live.start()
+
         try:
             stream = agent.llm.chat_stream(messages, tools=tools)
             async for chunk in stream:
@@ -165,6 +178,8 @@ class StreamingProvider(ResponseProvider):
                 current = asyncio.current_task()
                 if current and current.cancelled():
                     live.stop()
+                    if content_live:
+                        content_live.stop()
                     # TODO: 此 checkpoint 无法覆盖「Cancel 在 __anext__ I/O 等待中到达」的情况
                     #      补救方案：加 except asyncio.CancelledError 兜底 handler，抽离保存逻辑。
                     #      优先级：低——窗口极小且用户主动取消，丢失的 partial content 是预期行为。
@@ -203,6 +218,9 @@ class StreamingProvider(ResponseProvider):
                             _last_render = now
                             live.update(_build_reasoning_panel(reasoning_buf))
                 content_buf += chunk.get("content", "")
+                if content_live is not None and content_panel is not None and content_buf:
+                    content_panel.renderable = Markdown(content_buf)
+                    content_live.update(content_panel)
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
                     if idx not in tc_buf:
@@ -226,6 +244,8 @@ class StreamingProvider(ResponseProvider):
                     pass
             if live:
                 live.stop()
+            if content_live:
+                content_live.stop()
             # When transient=True the Live panel was cleared on stop(),
             # so print a static copy. When transient=False the Live panel
             # already remains visible — printing again would duplicate it.
