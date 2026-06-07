@@ -148,33 +148,30 @@ class StreamingProvider(ResponseProvider):
         thinking_panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
                       title="🧠 Thinking", title_align="left", padding=(0, 1))
 
-        # ── 准备 content 面板（使用 Group 与 thinking 面板共用单个 Live）──
-        content_panel = None
-        if agent.config.stream_content:
-            content_panel = Panel("", title="💬 Response", border_style="blue")
+        # ── content 面板延迟创建：收到第一个 content chunk 时才创建 ──
+        content_panel = None  # lazy: created on first content chunk
 
-        # 使用单个 Live + Group 来同时显示 thinking 和 content 面板
-        if content_panel is not None:
-            group = Group(thinking_panel, content_panel)
-        else:
-            group = Group(thinking_panel)
-
-        live = Live(group, console=console, refresh_per_second=10,
+        # ── 使用单个 Live 来显示 thinking 面板（content 面板延迟加入 Group）──
+        live = Live(Group(thinking_panel), console=console, refresh_per_second=10,
                     transient=agent.config.stream_thinking_transient)
         live.start()
 
         # ── 定时刷新任务：防止 API 返回慢时 thinking 面板卡顿 ──
         nonlocal_thinking_panel = [thinking_panel]  # mutable ref for closure
+        nonlocal_content_panel: list[Panel | None] = [None]  # mutable ref for closure (lazy init)
+
+        def _rebuild_group():
+            """Rebuild Group with current panels"""
+            if nonlocal_content_panel[0] is not None:
+                return Group(nonlocal_thinking_panel[0], nonlocal_content_panel[0])
+            return Group(nonlocal_thinking_panel[0])
 
         async def _refresh_thinking():
             while True:
                 await asyncio.sleep(0.5)
                 if reasoning_buf:
                     nonlocal_thinking_panel[0] = _build_reasoning_panel(reasoning_buf)
-                    if content_panel is not None:
-                        live.update(Group(nonlocal_thinking_panel[0], content_panel))
-                    else:
-                        live.update(Group(nonlocal_thinking_panel[0]))
+                    live.update(_rebuild_group())
         refresh_task = asyncio.create_task(_refresh_thinking())
 
         try:
@@ -221,14 +218,18 @@ class StreamingProvider(ResponseProvider):
                         if render_interval <= 0 or now - _last_render >= render_interval:
                             _last_render = now
                             nonlocal_thinking_panel[0] = _build_reasoning_panel(reasoning_buf)
-                            if content_panel is not None:
-                                live.update(Group(nonlocal_thinking_panel[0], content_panel))
-                            else:
-                                live.update(Group(nonlocal_thinking_panel[0]))
+                            live.update(_rebuild_group())
                 content_buf += chunk.get("content", "")
-                if content_panel is not None and content_buf:
-                    content_panel.renderable = Markdown(content_buf)
-                    live.update(Group(nonlocal_thinking_panel[0], content_panel))
+                if content_buf and agent.config.stream_content:
+                    # Lazy init: create content_panel on first content chunk
+                    if content_panel is None:
+                        content_panel = Panel("", border_style="dim",
+                                              title_align="left", padding=(0, 1))
+                        nonlocal_content_panel[0] = content_panel
+                    # Limit display to last 500 chars to prevent stuttering
+                    display_content = content_buf[-500:] if len(content_buf) > 500 else content_buf
+                    content_panel.renderable = Markdown(display_content)
+                    live.update(_rebuild_group())
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
                     if idx not in tc_buf:
@@ -258,7 +259,8 @@ class StreamingProvider(ResponseProvider):
             if reasoning_buf and agent.config.stream_thinking_transient:
                 console.print(_build_reasoning_panel(reasoning_buf))
             if content_buf and agent.config.stream_thinking_transient:
-                console.print(Panel(Markdown(content_buf), title="💬 Response", border_style="blue"))
+                console.print(Panel(Markdown(content_buf), border_style="dim",
+                                    title_align="left", padding=(0, 1)))
 
         assembled["reasoning"] = reasoning_buf
         assembled["content"] = content_buf
