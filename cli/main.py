@@ -457,7 +457,9 @@ def run_repl(agent, dashboard=None, config_source=""):
                     response = await agent.run(user_input)
                     current_task = None
 
-                    console.print(Panel(Markdown(response), border_style="dim"))
+                    # 只在未开启流式输出时打印
+                    if not agent.config.stream_content:
+                        console.print(Panel(Markdown(response), border_style="dim"))
                     console.rule(style="dim")
 
                 except InputInterrupt:
