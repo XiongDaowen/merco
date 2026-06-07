@@ -147,8 +147,16 @@ class StreamingProvider(ResponseProvider):
         panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
                       title="🧠 Thinking", title_align="left", padding=(0, 1))
         live = Live(panel, console=console, refresh_per_second=10,
-                    transient=True)
+                    transient=agent.config.stream_thinking_transient)
         live.start()
+
+        # ── 定时刷新任务：防止 API 返回慢时 thinking 面板卡顿 ──
+        async def _refresh_thinking():
+            while True:
+                await asyncio.sleep(0.5)
+                if reasoning_buf:
+                    live.update(_build_reasoning_panel(reasoning_buf))
+        refresh_task = asyncio.create_task(_refresh_thinking())
 
         try:
             stream = agent.llm.chat_stream(messages, tools=tools)
@@ -210,6 +218,12 @@ class StreamingProvider(ResponseProvider):
                 if chunk.get("usage"):
                     assembled["usage"] = chunk["usage"]
         finally:
+            if 'refresh_task' in locals():
+                refresh_task.cancel()
+                try:
+                    await refresh_task
+                except asyncio.CancelledError:
+                    pass
             if live:
                 live.stop()
             # 用普通 console.print 留最后面板，避免 Live 残留干扰键盘输入
