@@ -457,8 +457,8 @@ def run_repl(agent, dashboard=None, config_source=""):
                     response = await agent.run(user_input)
                     current_task = None
 
-                    # 只在未开启流式输出时打印
-                    if not agent.config.stream_content:
+                    # 只在响应未被流式显示时打印（需要 streaming=True 且 stream_content=True 才会流式显示）
+                    if not (agent.config.streaming and agent.config.stream_content):
                         console.print(Panel(Markdown(response), border_style="dim"))
                     console.rule(style="dim")
 
