@@ -251,6 +251,8 @@ class StreamingProvider(ResponseProvider):
             # already remains visible — printing again would duplicate it.
             if reasoning_buf and agent.config.stream_thinking_transient:
                 console.print(_build_reasoning_panel(reasoning_buf))
+            if content_buf and agent.config.stream_thinking_transient:
+                console.print(Panel(Markdown(content_buf), title="💬 Response", border_style="blue"))
 
         assembled["reasoning"] = reasoning_buf
         assembled["content"] = content_buf
