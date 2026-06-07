@@ -226,8 +226,10 @@ class StreamingProvider(ResponseProvider):
                     pass
             if live:
                 live.stop()
-            # 用普通 console.print 留最后面板，避免 Live 残留干扰键盘输入
-            if reasoning_buf:
+            # When transient=True the Live panel was cleared on stop(),
+            # so print a static copy. When transient=False the Live panel
+            # already remains visible — printing again would duplicate it.
+            if reasoning_buf and agent.config.stream_thinking_transient:
                 console.print(_build_reasoning_panel(reasoning_buf))
 
         assembled["reasoning"] = reasoning_buf
