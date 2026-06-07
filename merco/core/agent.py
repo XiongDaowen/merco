@@ -258,7 +258,7 @@ class StreamingProvider(ResponseProvider):
             # already remains visible — printing again would duplicate it.
             if reasoning_buf and agent.config.stream_thinking_transient:
                 console.print(_build_reasoning_panel(reasoning_buf))
-            if content_buf and agent.config.stream_thinking_transient:
+            if content_buf and agent.config.stream_thinking_transient and agent.config.stream_content:
                 console.print(Panel(Markdown(content_buf), border_style="dim",
                                     title_align="left", padding=(0, 1)))
 
