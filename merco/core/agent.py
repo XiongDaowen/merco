@@ -232,7 +232,9 @@ class StreamingProvider(ResponseProvider):
                     now = time.monotonic()
                     if now - _last_content_update >= _content_update_interval:
                         _last_content_update = now
-                        content_panel.renderable = Markdown(content_buf)
+                        # Show last 1000 chars during streaming to avoid Rich freeze on long content
+                        visible = content_buf[-1000:] if len(content_buf) > 1000 else content_buf
+                        content_panel.renderable = Markdown(visible)
                         live.update(_rebuild_group())
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
