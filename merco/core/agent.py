@@ -144,7 +144,7 @@ class StreamingProvider(ResponseProvider):
         render_interval = agent.config.stream_render_interval
         _last_render = 0.0
         _last_content_update = 0.0
-        _content_update_interval = 0.1  # 100ms throttle for content panel
+        _content_update_interval = 0.3  # 300ms throttle for content panel
 
         # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
         thinking_panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
@@ -154,7 +154,7 @@ class StreamingProvider(ResponseProvider):
         content_panel = None  # lazy: created on first content chunk
 
         # ── 使用单个 Live 来显示 thinking 面板（content 面板延迟加入 Group）──
-        live = Live(Group(thinking_panel), console=console, refresh_per_second=10,
+        live = Live(Group(thinking_panel), console=console, refresh_per_second=4,
                     transient=agent.config.stream_thinking_transient)
         live.start()
 
