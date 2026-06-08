@@ -144,6 +144,7 @@ class StreamingProvider(ResponseProvider):
         render_interval = agent.config.stream_render_interval
         _last_render = 0.0
         _last_content_update = 0.0
+        _content_update_interval = 0.1  # 100ms throttle for content panel
 
         # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
         thinking_panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
@@ -229,12 +230,9 @@ class StreamingProvider(ResponseProvider):
                         nonlocal_content_panel[0] = content_panel
                     # Throttle updates to prevent excessive re-rendering
                     now = time.monotonic()
-                    if render_interval <= 0 or now - _last_content_update >= render_interval:
+                    if now - _last_content_update >= _content_update_interval:
                         _last_content_update = now
-                        # Only render last N lines to avoid Markdown parsing overhead on long content
-                        lines = content_buf.rsplit("\n", 20)
-                        visible = "\n".join(lines[-20:]) if len(lines) > 20 else content_buf
-                        content_panel.renderable = Markdown(visible)
+                        content_panel.renderable = Markdown(content_buf)
                         live.update(_rebuild_group())
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
@@ -252,9 +250,7 @@ class StreamingProvider(ResponseProvider):
                     assembled["usage"] = chunk["usage"]
             # Final update to ensure all content is displayed
             if content_panel and content_buf:
-                lines = content_buf.rsplit("\n", 20)
-                visible = "\n".join(lines[-20:]) if len(lines) > 20 else content_buf
-                content_panel.renderable = Markdown(visible)
+                content_panel.renderable = Markdown(content_buf)
                 live.update(_rebuild_group())
         finally:
             if 'refresh_task' in locals():
