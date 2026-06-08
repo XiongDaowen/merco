@@ -143,8 +143,6 @@ class StreamingProvider(ResponseProvider):
         stream_think = agent.config.stream_thinking
         render_interval = agent.config.stream_render_interval
         _last_render = 0.0
-        _last_content_update = 0.0
-        _content_update_interval = 0.1  # 100ms throttle for content panel
 
         # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
         thinking_panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
@@ -223,20 +221,17 @@ class StreamingProvider(ResponseProvider):
                             live.update(_rebuild_group())
                 content_buf += chunk.get("content", "")
                 if content_buf and agent.config.stream_content:
-                    # Lazy init: create content_panel on first content chunk
                     if content_panel is None:
-                        content_panel = Panel("", border_style="dim",
-                                              title_align="left", padding=(0, 1))
-                        nonlocal_content_panel[0] = content_panel
-                    # Throttle updates to prevent excessive re-rendering
-                    now = time.monotonic()
-                    if now - _last_content_update >= _content_update_interval:
-                        _last_content_update = now
-                        # Show last 15 lines during streaming to avoid Rich freeze on long content
-                        lines = content_buf.rsplit("\n", 15)
-                        visible = "\n".join(lines[-15:]) if len(lines) > 15 else content_buf
-                        content_panel.renderable = Markdown(visible)
-                        live.update(_rebuild_group())
+                        # First content chunk: stop Live, print reasoning if transient
+                        live.stop()
+                        if reasoning_buf and agent.config.stream_thinking_transient:
+                            console.print(_build_reasoning_panel(reasoning_buf))
+                        content_panel = True  # flag: plain text streaming started
+                    # Plain text output — no Rich rendering, no truncation
+                    text = chunk.get("content", "")
+                    if text:
+                        sys.stdout.write(text)
+                        sys.stdout.flush()
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
                     if idx not in tc_buf:
@@ -251,10 +246,11 @@ class StreamingProvider(ResponseProvider):
                     assembled["finish_reason"] = chunk["finish_reason"]
                 if chunk.get("usage"):
                     assembled["usage"] = chunk["usage"]
-            # Final update to ensure all content is displayed
-            if content_panel and content_buf:
-                content_panel.renderable = Markdown(content_buf)
-                live.update(_rebuild_group())
+            # After plain text stream: print full Markdown Panel
+            if content_panel is True:
+                console.print()
+                console.print(Panel(Markdown(content_buf), border_style="dim",
+                                    title_align="left", padding=(0, 1)))
         finally:
             if 'refresh_task' in locals():
                 refresh_task.cancel()
@@ -262,16 +258,14 @@ class StreamingProvider(ResponseProvider):
                     await refresh_task
                 except asyncio.CancelledError:
                     pass
-            if live:
+            if live and content_panel is None:
+                # Content never started: Live still running
                 live.stop()
-            # When transient=True the Live panel was cleared on stop(),
-            # so print a static copy. When transient=False the Live panel
-            # already remains visible — printing again would duplicate it.
-            if reasoning_buf and agent.config.stream_thinking_transient:
-                console.print(_build_reasoning_panel(reasoning_buf))
-            if content_buf and agent.config.stream_thinking_transient and agent.config.stream_content:
-                console.print(Panel(Markdown(content_buf), border_style="dim",
-                                    title_align="left", padding=(0, 1)))
+                if reasoning_buf and agent.config.stream_thinking_transient:
+                    console.print(_build_reasoning_panel(reasoning_buf))
+                if content_buf and agent.config.stream_thinking_transient and agent.config.stream_content:
+                    console.print(Panel(Markdown(content_buf), border_style="dim",
+                                        title_align="left", padding=(0, 1)))
 
         assembled["reasoning"] = reasoning_buf
         assembled["content"] = content_buf
