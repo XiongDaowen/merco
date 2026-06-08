@@ -144,7 +144,6 @@ class StreamingProvider(ResponseProvider):
         render_interval = agent.config.stream_render_interval
         _last_render = 0.0
         _last_content_update = 0.0
-        _content_update_interval = 0.1  # 100ms throttle for content panel
 
         # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
         thinking_panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
@@ -230,11 +229,9 @@ class StreamingProvider(ResponseProvider):
                         nonlocal_content_panel[0] = content_panel
                     # Throttle updates to prevent excessive re-rendering
                     now = time.monotonic()
-                    if now - _last_content_update >= _content_update_interval:
+                    if render_interval <= 0 or now - _last_content_update >= render_interval:
                         _last_content_update = now
-                        # Limit display to last 500 chars to prevent stuttering
-                        display_content = content_buf[-500:] if len(content_buf) > 500 else content_buf
-                        content_panel.renderable = Markdown(display_content)
+                        content_panel.renderable = Markdown(content_buf)
                         live.update(_rebuild_group())
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
@@ -252,8 +249,7 @@ class StreamingProvider(ResponseProvider):
                     assembled["usage"] = chunk["usage"]
             # Final update to ensure all content is displayed
             if content_panel and content_buf:
-                display_content = content_buf[-500:] if len(content_buf) > 500 else content_buf
-                content_panel.renderable = Markdown(display_content)
+                content_panel.renderable = Markdown(content_buf)
                 live.update(_rebuild_group())
         finally:
             if 'refresh_task' in locals():
