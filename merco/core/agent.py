@@ -101,7 +101,7 @@ class TimeContextChunk(PromptChunk):
 
 def _build_reasoning_panel(text: str) -> Panel:
     return Panel(f"[dim]{text.rstrip()}[/dim]", border_style="dim",
-                 title="🧠 Thinking", title_align="left", padding=(0, 1))
+                 title="🧠 思考中…", title_align="left", padding=(0, 1))
 
 
 class ResponseProvider(ABC):
@@ -132,6 +132,7 @@ class StreamingProvider(ResponseProvider):
         import sys, json as _json
         from rich.live import Live
         from rich.console import Group
+        from rich.text import Text
 
         assembled: dict = {
             "role": "assistant", "content": "", "reasoning": "",
@@ -143,10 +144,12 @@ class StreamingProvider(ResponseProvider):
         stream_think = agent.config.stream_thinking
         render_interval = agent.config.stream_render_interval
         _last_render = 0.0
+        _last_content_update = 0.0
+        _content_update_interval = 0.1  # 100ms throttle for content panel
 
         # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
         thinking_panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
-                      title="🧠 Thinking", title_align="left", padding=(0, 1))
+                      title="🧠 思考中…", title_align="left", padding=(0, 1))
 
         # ── content 面板延迟创建：收到第一个 content chunk 时才创建 ──
         content_panel = None  # lazy: created on first content chunk
@@ -222,16 +225,17 @@ class StreamingProvider(ResponseProvider):
                 content_buf += chunk.get("content", "")
                 if content_buf and agent.config.stream_content:
                     if content_panel is None:
-                        # First content chunk: stop Live, print reasoning if transient
-                        live.stop()
-                        if reasoning_buf and agent.config.stream_thinking_transient:
-                            console.print(_build_reasoning_panel(reasoning_buf))
-                        content_panel = True  # flag: plain text streaming started
-                    # Plain text output — no Rich rendering, no truncation
-                    text = chunk.get("content", "")
-                    if text:
-                        sys.stdout.write(text)
-                        sys.stdout.flush()
+                        # First content chunk: create panel with dim text
+                        content_panel = Panel(Text(content_buf, style="dim"),
+                                              border_style="dim", title="📝 组织语言中…",
+                                              title_align="left", padding=(0, 1))
+                        nonlocal_content_panel[0] = content_panel
+                    # Throttle updates — Text rendering is cheap, but still limit refresh rate
+                    now = time.monotonic()
+                    if now - _last_content_update >= _content_update_interval:
+                        _last_content_update = now
+                        content_panel.renderable = Text(content_buf, style="dim")
+                        live.update(_rebuild_group())
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
                     if idx not in tc_buf:
@@ -246,11 +250,11 @@ class StreamingProvider(ResponseProvider):
                     assembled["finish_reason"] = chunk["finish_reason"]
                 if chunk.get("usage"):
                     assembled["usage"] = chunk["usage"]
-            # After plain text stream: print full Markdown Panel
-            if content_panel is True:
-                console.print()
-                console.print(Panel(Markdown(content_buf), border_style="dim",
-                                    title_align="left", padding=(0, 1)))
+            # Replace Text with full Markdown render on completion
+            if content_panel and content_buf:
+                content_panel.title = "✅ 完成"
+                content_panel.renderable = Markdown(content_buf)
+                live.update(_rebuild_group())
         finally:
             if 'refresh_task' in locals():
                 refresh_task.cancel()
@@ -258,14 +262,16 @@ class StreamingProvider(ResponseProvider):
                     await refresh_task
                 except asyncio.CancelledError:
                     pass
-            if live and content_panel is None:
-                # Content never started: Live still running
+            if live:
                 live.stop()
-                if reasoning_buf and agent.config.stream_thinking_transient:
-                    console.print(_build_reasoning_panel(reasoning_buf))
-                if content_buf and agent.config.stream_thinking_transient and agent.config.stream_content:
-                    console.print(Panel(Markdown(content_buf), border_style="dim",
-                                        title_align="left", padding=(0, 1)))
+            # When transient=True the Live panel was cleared on stop(),
+            # so print a static copy. When transient=False the Live panel
+            # already remains visible — printing again would duplicate it.
+            if reasoning_buf and agent.config.stream_thinking_transient:
+                console.print(_build_reasoning_panel(reasoning_buf))
+            if content_buf and agent.config.stream_thinking_transient and agent.config.stream_content:
+                console.print(Panel(Markdown(content_buf), border_style="dim",
+                                    title_align="left", padding=(0, 1)))
 
         assembled["reasoning"] = reasoning_buf
         assembled["content"] = content_buf
