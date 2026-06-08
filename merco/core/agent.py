@@ -231,7 +231,10 @@ class StreamingProvider(ResponseProvider):
                     now = time.monotonic()
                     if render_interval <= 0 or now - _last_content_update >= render_interval:
                         _last_content_update = now
-                        content_panel.renderable = Markdown(content_buf)
+                        # Only render last N lines to avoid Markdown parsing overhead on long content
+                        lines = content_buf.rsplit("\n", 20)
+                        visible = "\n".join(lines[-20:]) if len(lines) > 20 else content_buf
+                        content_panel.renderable = Markdown(visible)
                         live.update(_rebuild_group())
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
@@ -249,7 +252,9 @@ class StreamingProvider(ResponseProvider):
                     assembled["usage"] = chunk["usage"]
             # Final update to ensure all content is displayed
             if content_panel and content_buf:
-                content_panel.renderable = Markdown(content_buf)
+                lines = content_buf.rsplit("\n", 20)
+                visible = "\n".join(lines[-20:]) if len(lines) > 20 else content_buf
+                content_panel.renderable = Markdown(visible)
                 live.update(_rebuild_group())
         finally:
             if 'refresh_task' in locals():
