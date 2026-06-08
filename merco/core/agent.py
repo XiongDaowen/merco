@@ -144,7 +144,7 @@ class StreamingProvider(ResponseProvider):
         render_interval = agent.config.stream_render_interval
         _last_render = 0.0
         _last_content_update = 0.0
-        _content_update_interval = 0.2  # 200ms throttle for content panel
+        _content_update_interval = 0.1  # 100ms throttle for content panel
 
         # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
         thinking_panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
@@ -223,15 +223,16 @@ class StreamingProvider(ResponseProvider):
                             live.update(_rebuild_group())
                 content_buf += chunk.get("content", "")
                 if content_buf and agent.config.stream_content:
+                    # Lazy init: create content_panel on first content chunk
                     if content_panel is None:
-                        content_panel = Panel(f"[dim]{content_buf}[/dim]",
-                                              border_style="dim", title="📝 组织语言中…",
+                        content_panel = Panel("", border_style="dim",
                                               title_align="left", padding=(0, 1))
                         nonlocal_content_panel[0] = content_panel
+                    # Throttle updates to prevent excessive re-rendering
                     now = time.monotonic()
                     if now - _last_content_update >= _content_update_interval:
                         _last_content_update = now
-                        content_panel.renderable = f"[dim]{content_buf}[/dim]"
+                        content_panel.renderable = Markdown(content_buf)
                         live.update(_rebuild_group())
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
@@ -247,9 +248,8 @@ class StreamingProvider(ResponseProvider):
                     assembled["finish_reason"] = chunk["finish_reason"]
                 if chunk.get("usage"):
                     assembled["usage"] = chunk["usage"]
-            # Replace dim text with full Markdown render on completion
+            # Final update to ensure all content is displayed
             if content_panel and content_buf:
-                content_panel.title = "✅ 完成"
                 content_panel.renderable = Markdown(content_buf)
                 live.update(_rebuild_group())
         finally:
