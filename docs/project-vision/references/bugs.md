@@ -49,6 +49,8 @@
 | 2026-05-31 | think tag 残留 content | DirectFieldStrategy 命中后 ThinkTagStrategy 没跑 | `_strip_think_tags` 兜底清理 |
 | 2026-05-31 | read_file 大文件阻塞 | `f.readlines()` 一次读完 100MB 文件 | 流式逐行迭代，读到 limit 即停 |
 | 2026-05-31 | diff 全量并排+全量染色噪音 | 1 行改动显示 1000 行 diff | SequenceMatcher 对齐 + 上下文裁剪 ±3 行 + 仅变色变更行 |
+| 2026-06-07 | 流式输出闪烁卡顿 | Live 刷新率过高（20fps），Markdown 渲染开销大 | 纯文本流式 + 300ms 节流 + 完成后切 Markdown |
+| 2026-06-07 | 空 content 重复打印 | `stream_content=False` 时最终 content 打印两次 | 检查 streaming flag 避免重复 |
 
 ## 待修复
 
@@ -72,6 +74,8 @@
 | 2026-05-22 | 工具调用日志过多刷屏 | 15+ 调用占满终端 | 低 |
 | 2026-05-22 | Ctrl+C 提示打断输入流 | 警告在当前行上方遮住 input() | 低 |
 | 2026-05-29 | **Context 压缩丢上下文** | 触发压缩后 LLM 丢失大量历史。`_build_summary` fallback 只有纯计数无信息量；LLM 摘要结果未持久化到 session message。需：摘要存 session + fallback 保留最近 N 轮原文而非纯计数 | **高** |
+| 2026-06-07 | **孤儿 tool_calls 导致 LLM 400** | 工具执行异常时，assistant 消息（带 tool_calls）已保存，但 tool result 未保存。下次启动恢复 context → LLM 报 `tool result's tool id not found`。修法：`_execute_tool_calls` 加 try-except，确保 tool result 总是被保存；启动时 `_restore_context` 检测并注入"取消"消息修复孤儿 | **高** |
+| 2026-06-07 | **Session 保存中途被打断** | Ctrl+C 快速按可能在 `session.save()` 执行中途被杀，导致数据不一致。修法：原子写入（先写 .tmp 再 rename）+ 启动时清理残留 .tmp | **中** |
 
 
 ---

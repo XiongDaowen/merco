@@ -2,6 +2,8 @@
 
 | 日期 | 决策 | 原因 |
 |------|------|------|
+| 2026-06-07 | 流式 Content 纯文本 + 完成后切 Markdown | Rich Markdown 每次 chunk 重新解析全文，长内容卡顿。纯文本 `[dim]...[/dim]` 零解析开销，流式结束后一次性切 Markdown Panel。用户感知：流式时灰色文字，完成后变彩色 Markdown。 |
+| 2026-06-07 | 渲染节流统一 300ms（4fps） | 原 50ms（20fps）闪烁严重，人眼感知 4fps 足够流畅。content 和 reasoning 共用 `stream_render_interval`，避免各自节流逻辑分散。 |
 | 2026-06-03 | Skill 三状态计数 (REAL/PARTIAL/SKELETON + NOT WIRED) | 原五状态 (POLISHED/NEW/REAL/PARTIAL/SKELETON) 难以维护，三状态够用。Skill 副本与代码状态重对齐。 |
 | 2026-06-03 | Recaller 协议/Session Fork 标记为 Phase 5 计划中 | `.merco/skills` 副本曾描述但代码未实现，避免误导用户。 |
 | 2026-05-31 | Hooks 驱动可观察性（Observer + HookRegistry） | 原 metrics 直接埋点侵入式，新增指标改 5+ 文件。Hooks 解耦：业务代码只 emit，Observer/Metrics 订阅。Phase 6 加 MetricsCollector/AuditLogger 订阅点。 |

@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-05
+> 最后更新: 2026-06-07
 
 ## 目标对标
 
@@ -16,6 +16,15 @@
 - **Memory 召回（新功能）**: `Recaller` 协议 (`BaseRecaller` ABC) → `FTS5Recaller`（调 SessionSearch）+ `MemoryRecaller`（调 MemoryStore）→ `HybridRecaller` 聚合/排序/去重/截断/缓存。`Agent._build_system_prompt()` 末尾自动注入召回（3条×300字≈600 tokens）。`/recall` CLI 命令手动搜索。配置项：`memory.recall_enabled/limit/max_chars/threshold`。测试 23+7+16=46 个。
 - **memory config 重构**: `memory_enabled/memory_path` 移入 `memory` 嵌套对象，与 recall 配置统一。`_from_dict` 加 isinstance 守卫防非 dict 值 crash。
 - **会话 Fork/分支（新功能）**: `SessionStore.clone_session()` 原子深克隆 + `get_children()` 子会话查询。`Session.fork()` 工厂方法。`Agent._compress_context` 压缩前自动 fork 归档。`/fork` CLI 命令手动分支 + `/tree` 分支树查看。配置：`session.fork_enabled` + `session.fork_auto_on_compress`。测试 15 个。
+
+### 本次会话更新 (2026-06-07)
+
+- **流式 Content 输出（新功能）**: `stream_content` 配置项控制是否流式输出 content。流式时使用纯文本（`[dim]...[/dim]`），完成后切换为 Markdown Panel。解决了长内容输出时 Rich Markdown 渲染卡顿问题。
+- **渲染节流优化**: `stream_render_interval` 从 50ms 改为 300ms（4fps），content 和 reasoning 统一节流。消除终端闪烁，长文本流式更流畅。
+- **Content Panel 懒初始化**: content_panel 在首个 content chunk 到达时才创建，避免空面板闪烁。
+- **Live+Group 单实例架构**: 统一使用一个 Live 实例管理 thinking_panel + content_panel，避免双 Live 冲突。
+- **空回复处理**: `stream_content=False` 时正确打印最终 content，不重复、不丢失。
+- **集成测试**: 新增 10+ 个流式输出边界测试（空回复、工具调用、transient 模式等）。
 
 ### 本次会话更新 (2026-06-05)
 
