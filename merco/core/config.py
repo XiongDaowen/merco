@@ -135,7 +135,7 @@ class MercoConfig:
     stream_thinking: bool = True
     stream_content: bool = True
     stream_thinking_transient: bool = False  # 流式思考内容是否仅临时显示（不保留思考面板）
-    stream_render_interval: float = 0.05  # 流式 reasoning 面板最小渲染间隔（秒），0=不限制
+    stream_render_interval: float = 0.3  # 流式 reasoning 面板最小渲染间隔（秒），0=不限制
     diff_view: str = "unified"
     memory_recall_enabled: bool = True
     memory_recall_limit: int = 3
