@@ -222,10 +222,10 @@ class ThinkingExtractor:
             if result is not None:
                 if "content" not in result:
                     raw = getattr(delta, "content", None) or ""
-                    result["content"] = raw
+                    result["content"] = _strip_think_tags(raw)
                 return result
         raw = getattr(delta, "content", None) or ""
-        return {"content": raw}
+        return {"content": _strip_think_tags(raw)}
 
     def extract_from_message(self, message: Any) -> dict:
         """非流式响应提取。"""
@@ -326,8 +326,10 @@ class LLMClient:
         }
         if stream:
             params["stream"] = True
+            options = {"include_usage": True}
             if self.stream_options:
-                params["stream_options"] = self.stream_options
+                options.update(self.stream_options)
+            params["stream_options"] = options
         if tools:
             params["tools"] = tools
             params["tool_choice"] = tool_choice
@@ -433,7 +435,7 @@ class LLMClient:
         ex = extractor if extractor is not None else ThinkingExtractor()
         extracted = ex.extract_from_delta(delta)
         if extracted.get("content"):
-            result["content"] = extracted["content"]
+            result["content"] = _strip_think_tags(extracted["content"])
         if extracted.get("reasoning"):
             result["reasoning"] = extracted["reasoning"]
         if delta.tool_calls:

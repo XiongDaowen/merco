@@ -222,7 +222,7 @@ class StreamingProvider(ResponseProvider):
                             nonlocal_thinking_panel[0] = _build_reasoning_panel(reasoning_buf)
                             live.update(_rebuild_group())
                 content_buf += chunk.get("content", "")
-                if content_buf and agent.config.stream_content:
+                if content_buf.strip() and agent.config.stream_content:
                     # Lazy init: create content_panel on first content chunk
                     if content_panel is None:
                         content_panel = Panel("", border_style="dim",
@@ -249,8 +249,11 @@ class StreamingProvider(ResponseProvider):
                 if chunk.get("usage"):
                     assembled["usage"] = chunk["usage"]
             # Final update to ensure all content is displayed
-            if content_panel and content_buf:
+            if reasoning_buf:
+                nonlocal_thinking_panel[0] = _build_reasoning_panel(reasoning_buf)
+            if content_panel and content_buf.strip():
                 content_panel.renderable = Markdown(content_buf)
+            if reasoning_buf or (content_panel and content_buf.strip()):
                 live.update(_rebuild_group())
         finally:
             if 'refresh_task' in locals():
@@ -434,20 +437,29 @@ class Agent:
         if checkpoint:
             # Restore from checkpoint: summary + tail only
             summary = checkpoint.get("summary", "")
-            tail_count = checkpoint.get("tail_count", 2)
+            tail_count = checkpoint.get("tail_count", 5)
+            original_count = checkpoint.get("original_count", 0)
             all_msgs = self.session.messages
-            tail = all_msgs[-tail_count * 2:] if len(all_msgs) > tail_count * 2 else all_msgs  # ~2 msgs per turn
 
-            if summary:
-                self.context.add({"role": "system", "content": summary})
-            for msg in tail:
-                entry = {"role": msg["role"], "content": msg.get("content", "")}
-                if "tool_call_id" in msg:
-                    entry["tool_call_id"] = msg["tool_call_id"]
-                if msg.get("tool_calls"):
-                    entry["tool_calls"] = msg["tool_calls"]
-                self.context.add(entry)
-            return
+            # 如果之后新增了大量消息，checkpoint 已过时 → 全量恢复后重新压缩
+            if original_count > 0 and len(all_msgs) > original_count + 20:
+                logger.debug("_restore_context: checkpoint 过时 (original=%d now=%d)，全量恢复",
+                            original_count, len(all_msgs))
+                del self.session.metadata["compress_checkpoint"]
+                # fall through to full restore below
+            else:
+                tail = all_msgs[-tail_count * 2:] if len(all_msgs) > tail_count * 2 else all_msgs
+
+                if summary:
+                    self.context.add({"role": "system", "content": summary})
+                for msg in tail:
+                    entry = {"role": msg["role"], "content": msg.get("content", "")}
+                    if "tool_call_id" in msg:
+                        entry["tool_call_id"] = msg["tool_call_id"]
+                    if msg.get("tool_calls"):
+                        entry["tool_calls"] = msg["tool_calls"]
+                    self.context.add(entry)
+                return
 
         for msg in self.session.messages:
             r = msg.get("reasoning", "")
@@ -838,7 +850,7 @@ class Agent:
             "summary": summary_result or "",
             "compressed_at": time.time(),
             "original_count": len(self.session.messages),
-            "tail_count": 2,  # same as TAIL_TURNS in compressor
+            "tail_count": 5,
         }
         console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
         console.print("[dim]→ 用 /history 查看完整记录[/dim]")

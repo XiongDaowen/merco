@@ -23,12 +23,13 @@ merco
 
 ## 当前功能
 
-- **REPL 交互**: 进度条、上下文用量、会话管理、历史恢复
+- **REPL 交互**: 上下文用量进度条（估算值 `~8.5K/62.5K`，含阈值提示）、会话管理、历史恢复
 - **Agent 循环**: 用户输入 → LLM → 工具调用 → 循环，tool call + result 完整链路持久化
 - **工具**: `bash`、`read_file`(流式+翻页)、`write_file`、`edit_file`(SEARCH/REPLACE+diff)、`web_fetch`
 - **LLM 客户端**: OpenAI 兼容接口，5 平台预置(MiniMax/OpenAI/Anthropic/OpenRouter/DeepSeek)，自定义 base_url
+- **流式输出**: thinking/content 双面板实时显示，thinking 标签自动分离，防空白面板，防思考内容泄漏
 - **交互式配置**: `merco setup` 引导选平台→填 key→选模型
-- **Session 持久化**: SQLite WAL，启动自动恢复，`/sessions` 列表+切换，`/new` 新会话
+- **Session 持久化**: SQLite WAL，启动自动恢复，`/sessions` 列表+切换，`/new` 新会话；压缩 checkpoint 过时自动刷新
 - **安全守卫**: `ToolGuard` 敏感命令执行前确认，30 条默认规则，可自定义
 - **可观察性**: `/report` 显示 token 统计、LLM 延迟、工具分布、缓存命中率
 - **Skill 系统**: 自动注入相关项目文档，手动 `skill_view` 加载

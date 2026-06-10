@@ -296,7 +296,9 @@ class ContextBar(PromptDecorator):
 
 def _fmt(n: int, is_estimate: bool = False) -> str:
     if is_estimate:
-        return "—"
+        if n < 1000:
+            return f"~{n}"
+        return f"~{n / 1024:.1f}K"
     if n < 1000:
         return str(n)
     return f"{n / 1024:.1f}K"

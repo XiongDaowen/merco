@@ -49,8 +49,12 @@
 | 2026-05-31 | think tag 残留 content | DirectFieldStrategy 命中后 ThinkTagStrategy 没跑 | `_strip_think_tags` 兜底清理 |
 | 2026-05-31 | read_file 大文件阻塞 | `f.readlines()` 一次读完 100MB 文件 | 流式逐行迭代，读到 limit 即停 |
 | 2026-05-31 | diff 全量并排+全量染色噪音 | 1 行改动显示 1000 行 diff | SequenceMatcher 对齐 + 上下文裁剪 ±3 行 + 仅变色变更行 |
-| 2026-06-07 | 流式输出闪烁卡顿 | Live 刷新率过高（20fps），Markdown 渲染开销大 | 纯文本流式 + 300ms 节流 + 完成后切 Markdown |
-| 2026-06-07 | 空 content 重复打印 | `stream_content=False` 时最终 content 打印两次 | 检查 streaming flag 避免重复 |
+| 2026-06-11 | 思考内容渐进泄漏到 content，重启多次后模型空回复 | 流式路径 `_parse_chunk` 缺 `_strip_think_tags`（非流式有），`extract_from_delta` 的 fallback 在策略返回 reasoning 但无 content 时，盲取 `delta.content` 导致思考文本被当作 content 存入 session。重启后污染上下文反馈给模型，渐进退化至完全空回复 | 三处加 `_strip_think_tags`：`extract_from_delta` fallback（2 处）+ `_parse_chunk` content 提取（1 处） |
+| 2026-06-11 | 流式思考内容截断 | `Live.stop()` 前只刷新 content panel 不刷新 thinking panel，最后一帧思考文本未渲染 | `live.stop()` 前用最终 `reasoning_buf` 刷新 thinking panel |
+| 2026-06-11 | 流式空 content panel 闪烁 | 模型 `</think>` 后产出的 `\n\n\n\n` 触发 content panel 懒创建但无可渲染文本 | `content_buf` 判断改为 `content_buf.strip()` |
+| 2026-06-11 | 上下文用量始终显示 `—` | 流式 API 默认不返回 usage；`is_estimate=True` 时 `_fmt` 直接返回 `"—"` 丢弃了估算值 | 1) `include_usage: true` 默认传入；2) 估算时显示 `~8.5K` |
+| 2026-06-11 | 压缩 checkpoint 过时导致重启丢失大量上下文 | checkpoint 创建后永不过期，session 从 283 条增长到 630 条，但每次重启只恢复旧的 summary + 4 条 tail，中间 340+ 条全丢 | 1) `_restore_context` 检测过时（新增 >20 条）→ 删除旧 checkpoint → 全量恢复 → 重新压缩；2) tail_count 从 2 提到 5 |
+| 2026-06-11 | `ContextCompressRecovery` 压缩恢复永不生效 | `RecoveryContext` 有 `max_compress` 但缺少 `compress_count` 字段，访问抛出 AttributeError 被 `except Exception` 吞掉 | `RecoveryContext` 加 `compress_count: int = 0`，`RecoveryPipeline.attempt` 递增 |
 
 ## 待修复
 
@@ -73,7 +77,7 @@
 | 2026-05-22 | cooldown 硬编码在 agent.py | 应走配置层 | 中 |
 | 2026-05-22 | 工具调用日志过多刷屏 | 15+ 调用占满终端 | 低 |
 | 2026-05-22 | Ctrl+C 提示打断输入流 | 警告在当前行上方遮住 input() | 低 |
-| 2026-05-29 | **Context 压缩丢上下文** | 触发压缩后 LLM 丢失大量历史。`_build_summary` fallback 只有纯计数无信息量；LLM 摘要结果未持久化到 session message。需：摘要存 session + fallback 保留最近 N 轮原文而非纯计数 | **高** |
+| 2026-06-11 | **Context 压缩 checkpoint 过时** | 压缩 checkpoint 永久有效不更新；session 从 283→630 条，每次重启只恢复旧 summary + 4 条 tail，中间 340+ 条全丢。修法：1) `_restore_context` 检测过时（新增 >20 条）→ 全量恢复 → 重新压缩；2) tail_count 从 2 提到 5 | **已修复** |
 | 2026-06-07 | **孤儿 tool_calls 导致 LLM 400** | 工具执行异常时，assistant 消息（带 tool_calls）已保存，但 tool result 未保存。下次启动恢复 context → LLM 报 `tool result's tool id not found`。修法：`_execute_tool_calls` 加 try-except，确保 tool result 总是被保存；启动时 `_restore_context` 检测并注入"取消"消息修复孤儿 | **高** |
 | 2026-06-07 | **Session 保存中途被打断** | Ctrl+C 快速按可能在 `session.save()` 执行中途被杀，导致数据不一致。修法：原子写入（先写 .tmp 再 rename）+ 启动时清理残留 .tmp | **中** |
 
