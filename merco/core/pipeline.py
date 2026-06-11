@@ -347,6 +347,7 @@ class RecoveryContext:
     extra_wait: float = 0.0               # 额外等待时间（秒），0 = 不等
 
     # ── 限制 ────────────────────────────
+    compress_count: int = 0               # 已执行压缩的次数
     max_compress: int = 2                 # 允许的最大压缩次数
     max_reduce: int = 1                   # 允许的最大精简次数
 
@@ -396,6 +397,8 @@ class RecoveryPipeline:
             try:
                 if await r.attempt(ctx):
                     ctx.attempt_count += 1
+                    if ctx.compress:
+                        ctx.compress_count += 1
                     return True
             except Exception:
                 logger.warning("恢复策略 '%s' 异常", r.name, exc_info=True)
