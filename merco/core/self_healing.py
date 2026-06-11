@@ -108,7 +108,7 @@ def tool_error(
 def _is_retryable_llm_error(exc: Exception) -> bool:
     """判断 LLM API 错误是否可重试。
 
-    按 HTTP 状态码大类判断（429 限流 + 5xx 服务端），
+    按 HTTP 状态码大类判断（413 超长 + 429 限流 + 5xx 服务端），
     辅以错误消息关键字匹配覆盖非标准 provider。
     """
     try:
@@ -119,6 +119,9 @@ def _is_retryable_llm_error(exc: Exception) -> bool:
         return False
 
     status = exc.status_code
+    # 413 请求体过大 — 压缩后可重试
+    if status == 413:
+        return True
     # 429 限流 — 所有 provider 通用
     if status == 429:
         return True
@@ -130,6 +133,8 @@ def _is_retryable_llm_error(exc: Exception) -> bool:
     return any(kw in body for kw in (
         "rate limit", "too many requests", "overloaded",
         "capacity", "throttl", "temporarily unavailable",
+        "context length", "too long", "maximum context",
+        "reduce the length", "prompt too long",
     ))
 
 
