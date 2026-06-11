@@ -191,6 +191,10 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
 
     # tools auto-registered via discover_tools()
 
+    # ── 安装内置技能到全局目录（首次运行或版本更新时自动执行）──
+    from merco.skills.builtin import install_builtin_skills
+    install_builtin_skills()
+
     # ── 技能注册 ──
     from merco.skills.registry import SkillRegistry
     skill_registry = SkillRegistry()

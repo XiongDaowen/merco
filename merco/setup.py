@@ -189,4 +189,11 @@ def _confirm_and_save(provider: "ProviderInfo", api_key: str, model: str, base_u
 
     cfg.save(OUTPUT_PATH)
     console.print(f"\n[green]✅ 配置已保存到 {OUTPUT_PATH}[/green]")
-    console.print("[dim]运行 uv run merco run 开始使用[/dim]")
+
+    # ── 安装内置技能 ──
+    from merco.skills.builtin import install_builtin_skills
+    installed = install_builtin_skills()
+    if installed:
+        console.print(f"[green]✅ 已安装内置技能: {', '.join(installed)}[/green]")
+
+    console.print("[dim]运行 merco 开始使用[/dim]")
