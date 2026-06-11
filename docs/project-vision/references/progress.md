@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-07
+> 最后更新: 2026-06-11
 
 ## 目标对标
 
@@ -9,7 +9,16 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: Memory 召回已完成 | **对标差距**: hermes 10 / openclaw 10 / merco → 8
+**阶段**: Phase 2 深入 | **焦点**: 流式输出稳定 + Recovery 完善 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+
+### 本次会话更新 (2026-06-11)
+
+- **流式 think tag 泄漏修复**: 流式路径 `_parse_chunk` 和 `extract_from_delta` 共 3 处缺 `_strip_think_tags` 清理（非流式有），导致思考文本泄漏到 content → 存入 session → 重启后污染上下文 → 渐进退化至空回复。修复：三处加 `_strip_think_tags()`，流式/非流式 content 清理一致。
+- **压缩 checkpoint 过时检测**: checkpoint 创建后永不过期，session 从 283→630 条但每次重启只恢复旧 summary+4 条 tail。修复：`_restore_context` 检测 `len(all_msgs) > original_count + 20` → 删除旧 checkpoint → 全量恢复 → 重新压缩。`tail_count` 从 2 提到 5（保留 10 条消息）。
+- **流式 UI 修复**: 空白 content panel（`content_buf.strip()` 过滤）、思考截断（`live.stop()` 前最终刷新 thinking panel）、上下文用量显示 `~8.5K` 而非 `—`。
+- **RecoveryPipeline 修复**: `RecoveryContext` 缺 `compress_count` 字段导致 `ContextCompressRecovery` 永不生效 + `_is_retryable_llm_error` 新增 413 + context-too-large 关键字 + `WaitRecovery` 跳过 413（等待无法缩小上下文）。测试 11 个。
+- **内置 Skill 自动安装**: `merco/skills/builtin/merco/SKILL.md` 随 wheel 分发，`install_builtin_skills()` 在 `merco setup` 和首次启动时复制到 `~/.config/merco/skills/`。
+- **Superpowers 技能集成**: 安装 14 个 superpowers 技能（TDD、debugging、subagent、code review 等）。
 
 ### 本次会话更新 (2026-05-29)
 
