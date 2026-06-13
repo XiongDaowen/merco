@@ -319,3 +319,39 @@ await self._ensure_client_ready()
 **根因**：`RecoveryContext` dataclass 有 `max_compress` 字段但缺少 `compress_count` 字段。`ContextCompressRecovery.attempt()` 访问 `ctx.compress_count` 抛 AttributeError，被 `RecoveryPipeline.attempt()` 的 `except Exception` 吞掉。
 
 **修复**：`RecoveryContext` 加 `compress_count: int = 0`；`RecoveryPipeline.attempt()` 在 `ctx.compress=True` 时递增。
+
+### 案例 6: Thinking 提取策略链的边缘场景 (2026-06-13)
+
+**现象**：某些模型同时使用 think 标签 + reasoning_content/reasoning 字段。
+
+**架构**（`merco/core/llm.py`）：
+```
+API 返回的 chunk/message
+    ├── content: "正文[^think]思考[/think]更多正文"
+    ├── reasoning_content: "这是模型的思考"  ← 某些模型使用
+    └── reasoning: "这是模型的思考"         ← 某些模型使用
+
+策略链：
+1. DirectFieldStrategy — 提取 reasoning_content/reasoning 字段
+2. ModelExtraStrategy — 提取 model_extra 中的思考
+3. ThinkTagStrategy — 提取 content 中的 <think>...[/think] 标签
+```
+
+**当前逻辑**：
+```python
+# ThinkingExtractor.extract_from_delta()
+for s in self._strategies:
+    result = s.extract_from_delta(delta)
+    if result is not None:
+        if "content" not in result:
+            raw = getattr(delta, "content", None) or ""
+            result["content"] = _strip_think_tags(raw)
+        return result  # ← 首个命中直接返回
+```
+
+**边缘情况**：如果模型同时使用 think 标签 + reasoning 字段，两者的思考内容都会丢失（一个被策略消费，一个被 strip_think_tags 清理）。
+
+**结论**：这是架构的遗漏不完善，不影响主流使用。大多数模型是二选一：
+- DeepSeek/MiniMax → 用 reasoning_content/reasoning 字段
+- Claude → 用 think 标签
+- 同时使用的情况极少，可以后续完善策略合并逻辑。
