@@ -11,7 +11,7 @@ from merco.tools import bash_tools  # noqa: F401
 from merco.tools import file_tools  # noqa: F401
 from merco.tools import edit  # noqa: F401
 
-from merco.sandbox.guard import ToolGuard
+from merco.sandbox.guard import ToolGuard, GuardResult, GuardAction, GuardConfirmationRequired
 from merco.tools.registry import tool_registry
 
 
@@ -21,30 +21,8 @@ def registry():
     return tool_registry
 
 
-@pytest.fixture
-def mock_confirm_allow():
-    """模拟用户确认"""
-    async def mock(self, command, rule):
-        return True
-    original = ToolGuard._confirm
-    ToolGuard._confirm = mock
-    yield
-    ToolGuard._confirm = original
-
-
-@pytest.fixture
-def mock_confirm_deny():
-    """模拟用户拒绝"""
-    async def mock(self, command, rule):
-        return False
-    original = ToolGuard._confirm
-    ToolGuard._confirm = mock
-    yield
-    ToolGuard._confirm = original
-
-
 @pytest.mark.asyncio
-async def test_registry_calls_guard(mock_confirm_allow, registry):
+async def test_registry_calls_guard(registry):
     """Registry.execute 调用 ToolGuard"""
     from unittest.mock import AsyncMock, patch
 
@@ -60,7 +38,7 @@ async def test_registry_calls_guard(mock_confirm_allow, registry):
 
     try:
         with patch("merco.sandbox.tool_guard") as mock_guard:
-            mock_guard.check = AsyncMock(return_value=True)
+            mock_guard.check = AsyncMock(return_value=GuardResult(action=GuardAction.ALLOW, command=""))
             result = await registry.execute("mock_tool_test")
 
         mock_guard.check.assert_called_once_with("mock_tool_test", {})
@@ -85,39 +63,37 @@ async def test_registry_blocks_when_guard_denies(registry):
 
     try:
         with patch("merco.sandbox.tool_guard") as mock_guard:
-            mock_guard.check = AsyncMock(return_value=False)
+            mock_guard.check = AsyncMock(return_value=GuardResult(action=GuardAction.DENY, command="", reason="测试拒绝"))
             result = await registry.execute("mock_tool_deny")
 
         # 工具不应被执行
         MockTool().execute.assert_not_awaited()
         # 应返回拦截错误
         assert "error" in result
-        assert "安全守卫拦截" in result["error"]
+        assert "安全守卫拒绝" in result["error"]
     finally:
         registry.unregister("mock_tool_deny")
 
 
 @pytest.mark.asyncio
-async def test_registry_dangerous_command_blocked(registry):
-    """危险命令 rm -rf / 被拦截"""
-    async def mock_reject(command, rule):
-        return False
-    original = ToolGuard._confirm
-    ToolGuard._confirm = mock_reject
+async def test_registry_dangerous_command_asks(registry):
+    """危险命令 rm -rf / 触发 ASK 确认"""
+    from unittest.mock import AsyncMock, patch
 
-    try:
-        result = await registry.execute("bash", command="rm -rf /")
-        assert "error" in result
-        assert "安全守卫拦截" in result["error"]
-    finally:
-        ToolGuard._confirm = original
+    # rm -rf / 在默认规则中匹配，action 为 ASK
+    with patch("merco.sandbox.tool_guard") as mock_guard:
+        mock_guard.check = AsyncMock(return_value=GuardResult(
+            action=GuardAction.ASK, command="rm -rf /", reason="危险命令"
+        ))
+        with pytest.raises(GuardConfirmationRequired):
+            await registry.execute("bash", command="rm -rf /")
 
 
 @pytest.mark.asyncio
-async def test_registry_safe_command_allowed(mock_confirm_allow, registry):
+async def test_registry_safe_command_allowed(registry):
     """安全命令 ls 放行"""
     result = await registry.execute("bash", command="ls -la")
-    # ls 是安全命令，_check 返回 True
+    # ls 是安全命令，应返回 ALLOW
     assert result.get("returncode") == 0 or "error" not in result
 
 
@@ -127,7 +103,7 @@ async def test_registry_path_traversal_blocked(registry):
     result = await registry.execute("write_file", path="../../../etc/passwd", content="x")
 
     assert "error" in result
-    assert "安全守卫拦截" in result["error"]
+    assert "安全守卫" in result["error"]
 
 
 @pytest.mark.asyncio
@@ -136,11 +112,11 @@ async def test_registry_system_path_blocked(registry):
     result = await registry.execute("read_file", path="/proc/cpuinfo")
 
     assert "error" in result
-    assert "安全守卫拦截" in result["error"]
+    assert "安全守卫" in result["error"]
 
 
 @pytest.mark.asyncio
-async def test_registry_auto_mode_bypasses(mock_confirm_allow, registry):
+async def test_registry_auto_mode_bypasses(registry):
     """sandbox_mode=auto 跳过所有确认"""
     from unittest.mock import patch
 
@@ -149,7 +125,8 @@ async def test_registry_auto_mode_bypasses(mock_confirm_allow, registry):
     with patch("merco.sandbox.tool_guard", auto_guard):
         result = await registry.execute("bash", command="rm -rf /")
 
-    assert result.get("returncode") == 0 or "error" not in result
+    # auto 模式返回 ALLOW，命令被放行
+    assert "error" not in result or result.get("returncode") == 0
 
 
 @pytest.mark.asyncio

@@ -13,16 +13,36 @@
     ]
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass
-from rich.console import Console
-from rich.panel import Panel
+from enum import Enum
 
 from .security import SecurityChecker
 
-console = Console()
 logger = logging.getLogger("merco.guard")
+
+
+# ── 枚举和结果 ──────────────────────────────────────────────
+
+class GuardAction(Enum):
+    ALLOW = "allow"      # 直接放行
+    DENY = "deny"        # 直接拒绝
+    ASK = "ask"          # 需要用户确认
+
+@dataclass
+class GuardResult:
+    action: GuardAction
+    command: str
+    rule: "GuardRule | None" = None
+    reason: str = ""
+
+
+class GuardConfirmationRequired(Exception):
+    """需要用户确认才能继续执行"""
+
+    def __init__(self, result: GuardResult):
+        self.result = result
+        super().__init__(f"需要确认: {result.command} - {result.reason}")
 
 
 # ── 规则 ──────────────────────────────────────────────────
@@ -89,8 +109,9 @@ class ToolGuard:
         guard = ToolGuard()
         guard.rule("bash", "DROP TABLE", "deny")
 
-        if not await guard.check("bash", {"command": "rm file.txt"}):
-            return  # 已拦截/取消
+        result = await guard.check("bash", {"command": "rm file.txt"})
+        if result.action == GuardAction.DENY:
+            return  # 已拦截
     """
 
     def __init__(self, mode: str = "ask", user_rules: list[dict] | None = None):
@@ -114,89 +135,51 @@ class ToolGuard:
 
     # ── 检查 ──
 
-    async def check(self, tool_name: str, arguments: dict) -> bool:
-        """检查工具是否可以执行。返回 True=放行。"""
+    async def check(self, tool_name: str, arguments: dict) -> GuardResult:
+        """检查工具是否可以执行。返回 GuardResult。"""
         if self.mode == "auto":
-            return True
+            return GuardResult(action=GuardAction.ALLOW, command="")
 
         command = arguments.get("command", "")
         path = arguments.get("path", "")
 
-        # 文件工具：SecurityChecker 路径检测（硬拦截）
+        # 文件工具：SecurityChecker 路径检测
         if path and tool_name != "bash":
             ok, reason = SecurityChecker.check_file_path(path)
             if not ok:
-                self._render_path_deny(path, reason)
-                return False
+                return GuardResult(
+                    action=GuardAction.DENY,
+                    command=path,
+                    reason=reason
+                )
 
-        return await self._check(tool_name, command)
-
-    async def _check(self, tool: str, command: str) -> bool:
-        # ── SecurityChecker 正则兜底（硬拦截，先于用户规则链）──
+        # SecurityChecker 正则兜底
         if command:
             ok, reason = SecurityChecker.check_command(command)
             if not ok:
-                self._render_security_deny(command, reason)
-                return False
+                return GuardResult(
+                    action=GuardAction.DENY,
+                    command=command,
+                    reason=reason
+                )
 
+        # 规则链匹配
         for rule in self._rules:
-            if not self._tool_match(rule.tool, tool):
+            if not self._tool_match(rule.tool, tool_name):
                 continue
             if rule.pattern not in command:
                 continue
 
             if rule.action == "allow":
-                return True
+                return GuardResult(action=GuardAction.ALLOW, command=command, rule=rule)
             if rule.action == "deny":
-                self._render_deny(command, rule)
-                return False
+                return GuardResult(action=GuardAction.DENY, command=command, rule=rule)
             if rule.action == "ask":
-                return await self._confirm(command, rule)
+                return GuardResult(action=GuardAction.ASK, command=command, rule=rule)
 
-        return True  # 无命中 → 放行
+        return GuardResult(action=GuardAction.ALLOW, command=command)
 
     @staticmethod
     def _tool_match(rule_tool: str, actual_tool: str) -> bool:
+        """检查规则工具是否匹配实际工具。"""
         return rule_tool == "*" or rule_tool == actual_tool
-
-    # ── 渲染 ──
-
-    @staticmethod
-    def _render_deny(command: str, rule: GuardRule) -> None:
-        console.print(Panel(
-            f"[red]{command}[/red]\n"
-            f"[dim]匹配规则: {rule.pattern} → deny[/dim]",
-            title="⛔ 已拦截",
-            border_style="red",
-        ))
-
-    @staticmethod
-    def _render_security_deny(command: str, reason: str) -> None:
-        console.print(Panel(
-            f"[red]{command}[/red]\n"
-            f"[dim]{reason}[/dim]",
-            title="⛔ SecurityChecker 拦截",
-            border_style="red",
-        ))
-
-    @staticmethod
-    def _render_path_deny(path: str, reason: str) -> None:
-        console.print(Panel(
-            f"[red]{path}[/red]\n"
-            f"[dim]{reason}[/dim]",
-            title="⛔ 路径拦截",
-            border_style="red",
-        ))
-
-    @staticmethod
-    async def _confirm(command: str, rule: GuardRule) -> bool:
-        console.print(Panel(
-            f"[yellow]{command}[/yellow]\n"
-            f"[dim]匹配: {rule.pattern}[/dim]",
-            title="⚠️ 敏感命令",
-            border_style="yellow",
-        ))
-        console.print(
-            "[bold yellow]确认执行？[/bold yellow] [dim]y/N [/dim]", end="")
-        resp = await asyncio.to_thread(input, "")
-        return resp.strip().lower() in ("y", "yes")

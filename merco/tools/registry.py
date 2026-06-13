@@ -2,6 +2,7 @@
 
 from typing import Optional
 from .base import BaseTool
+from merco.sandbox.guard import GuardAction
 
 
 class ToolRegistry:
@@ -66,22 +67,29 @@ class ToolRegistry:
         """执行指定工具（异常自动转为结构化错误，喂回 LLM 自愈）
 
         执行前通过 ToolGuard 安全检查：
-        - SecurityChecker 正则兜底，硬拦截危险命令
-        - 用户自定义规则链匹配，ask/deny/allow
+        - GuardAction.DENY → 返回错误
+        - GuardAction.ASK → 抛出 GuardConfirmationRequired 异常
+        - GuardAction.ALLOW → 直接执行
         """
         tool = self.get(tool_name)
         if tool is None:
             return {"error": f"工具 '{tool_name}' 不存在"}
 
-        # 安全守卫检查
         from merco.sandbox import tool_guard
-        if not await tool_guard.check(tool_name, kwargs):
+        result = await tool_guard.check(tool_name, kwargs)
+
+        if result.action == GuardAction.DENY:
             return {
-                "error": "操作被安全守卫拦截",
+                "error": f"操作被安全守卫拒绝: {result.reason}",
                 "tool": tool_name,
-                "args": kwargs,
             }
 
+        if result.action == GuardAction.ASK:
+            # 抛异常让 Agent 层处理确认
+            from merco.sandbox.guard import GuardConfirmationRequired
+            raise GuardConfirmationRequired(result)
+
+        # ALLOW: 直接执行
         try:
             return await tool.execute(**kwargs)
         except Exception as e:

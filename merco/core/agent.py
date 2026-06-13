@@ -23,6 +23,7 @@ from .interrupt import (
     InjectCancelMessages, TerminateSubprocesses,
     CloseMCPConnections, EmitInterruptHooks, SavePartialState
 )
+from merco.sandbox.guard import GuardConfirmationRequired, GuardAction
 
 console = Console()
 logger = logging.getLogger("merco.agent")
@@ -686,7 +687,19 @@ class Agent:
                 _INTERACTIVE_TOOLS = {"edit_file"}  # 会弹确认提示的工具，不能用 spinner（会覆盖终端）
                 if tool_name in _INTERACTIVE_TOOLS:
                     console.print(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]")
-                    result = await self.tool_registry.execute(tool_name, **arguments)
+                    try:
+                        result = await self.tool_registry.execute(tool_name, **arguments)
+                    except GuardConfirmationRequired as e:
+                        # 需要用户确认
+                        if not await self._ask_guard_confirmation(e.result):
+                            result = {"error": "用户取消了敏感操作", "tool": tool_name}
+                        else:
+                            # 用户确认后，直接执行（跳过 guard）
+                            tool = self.tool_registry.get(tool_name)
+                            if tool is None:
+                                result = {"error": f"工具 '{tool_name}' 不存在"}
+                            else:
+                                result = await tool.execute(**arguments)
                     elapsed = time.monotonic() - t0
                     console.print(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]")
                 else:
@@ -696,11 +709,22 @@ class Agent:
                     with Live(Text.from_markup(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]"), refresh_per_second=8, transient=False) as live:
                         spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
                         async def _run_with_spinner():
-                            task = asyncio.create_task(self.tool_registry.execute(tool_name, **arguments))
-                            while not task.done():
-                                live.update(Text.from_markup(f"[bright_black]  {next(spinner)} {tool_name} ({progress}) {arg_str}[/bright_black]"))
-                                await asyncio.sleep(0.1)
-                            return await task
+                            try:
+                                task = asyncio.create_task(self.tool_registry.execute(tool_name, **arguments))
+                                while not task.done():
+                                    live.update(Text.from_markup(f"[bright_black]  {next(spinner)} {tool_name} ({progress}) {arg_str}[/bright_black]"))
+                                    await asyncio.sleep(0.1)
+                                return await task
+                            except GuardConfirmationRequired as e:
+                                # 需要用户确认
+                                live.stop()
+                                if not await self._ask_guard_confirmation(e.result):
+                                    return {"error": "用户取消了敏感操作", "tool": tool_name}
+                                # 用户确认后，直接执行（跳过 guard）
+                                tool = self.tool_registry.get(tool_name)
+                                if tool is None:
+                                    return {"error": f"工具 '{tool_name}' 不存在"}
+                                return await tool.execute(**arguments)
                         result = await _run_with_spinner()
                         elapsed = time.monotonic() - t0
                         live.update(Text.from_markup(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]"))
@@ -854,6 +878,30 @@ class Agent:
         }
         console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
         console.print("[dim]→ 用 /history 查看完整记录[/dim]")
+
+    async def _ask_guard_confirmation(self, result) -> bool:
+        """展示安全确认 Panel 并获取用户确认
+
+        Args:
+            result: GuardResult 对象，包含 command, rule 等信息
+
+        Returns:
+            True=用户确认执行, False=用户拒绝
+        """
+        rule = result.rule
+
+        console.print(Panel(
+            f"[yellow]{result.command}[/yellow]\n"
+            f"[dim]匹配规则: {rule.pattern if rule else '?'}[/dim]",
+            title="敏感命令",
+            border_style="yellow",
+        ))
+
+        console.print(
+            "[bold yellow]确认执行？[/bold yellow] [dim]y/N [/dim]", end=""
+        )
+        resp = await asyncio.to_thread(input, "")
+        return resp.strip().lower() in ("y", "yes")
 
     @staticmethod
     def _render_reasoning(reasoning: str) -> None:
