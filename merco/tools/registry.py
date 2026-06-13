@@ -11,6 +11,7 @@ class ToolRegistry:
     - toolset 分组：通过 set_enabled_toolsets() 控制启用哪些分组
     - check_fn 过滤：工具不可用时自动从 LLM 列表中移除
     - 动态描述：get_definitions(context) 可传入运行时上下文增强工具描述
+    - 安全守卫：所有工具执行前通过 ToolGuard 检查
     """
 
     def __init__(self):
@@ -62,10 +63,24 @@ class ToolRegistry:
         return definitions
 
     async def execute(self, tool_name: str, **kwargs) -> dict:
-        """执行指定工具（异常自动转为结构化错误，喂回 LLM 自愈）"""
+        """执行指定工具（异常自动转为结构化错误，喂回 LLM 自愈）
+
+        执行前通过 ToolGuard 安全检查：
+        - SecurityChecker 正则兜底，硬拦截危险命令
+        - 用户自定义规则链匹配，ask/deny/allow
+        """
         tool = self.get(tool_name)
         if tool is None:
             return {"error": f"工具 '{tool_name}' 不存在"}
+
+        # 安全守卫检查
+        from merco.sandbox import tool_guard
+        if not await tool_guard.check(tool_name, kwargs):
+            return {
+                "error": "操作被安全守卫拦截",
+                "tool": tool_name,
+                "args": kwargs,
+            }
 
         try:
             return await tool.execute(**kwargs)

@@ -29,12 +29,34 @@ def _clean_surrogates(obj):
 
 # ── Thinking 提取策略体系 ─────────────────────────────────────────
 
-_THINK_TAG_RE = re.compile(r"</?(?:think|thinking)>", re.IGNORECASE)
-_THINK_BLOCK_RE = re.compile(r"<think(?:ing)?>.*?</think(?:ing)?>", re.DOTALL | re.IGNORECASE)
+# 统一的 think 标签对配置（开标签 → 闭标签）
+# 新增 provider 只需在此添加一对标签
+THINK_TAG_PAIRS: tuple[tuple[str, str], ...] = (
+    ("<think>", "[/think]"),      # MiniMax 等
+    ("<think>", "</think>"),       # 标准格式
+    ("<thinking>", "</thinking>"), # XML 格式
+)
+
+
+def _build_think_block_re() -> re.Pattern:
+    """根据 THINK_TAG_PAIRS 构建匹配所有 think 块的正则"""
+    patterns = []
+    for open_tag, close_tag in THINK_TAG_PAIRS:
+        # 转义特殊字符，构造匹配块的正则
+        escaped_open = re.escape(open_tag)
+        escaped_close = re.escape(close_tag)
+        patterns.append(f"{escaped_open}.*?{escaped_close}")
+        # 也清理单独的标签（块已被上面匹配，这里处理残留的单独标签）
+        patterns.append(escaped_open)
+        patterns.append(escaped_close)
+    return re.compile("|".join(f"({p})" for p in patterns), re.IGNORECASE)
+
+
+_THINK_BLOCK_RE = _build_think_block_re()
 
 
 def _strip_think_tags(text: str) -> str:
-    """移除 content 中残留的 <thinking>...</thinking> 块及其标签"""
+    """移除 content 中残留的所有 think 块及其标签"""
     return _THINK_BLOCK_RE.sub("", text).strip()
 
 
@@ -128,12 +150,12 @@ class ModelExtraStrategy(ThinkingStrategy):
         return None
 
 
-_THINK_TAGS = ("<think>", "</think>", "<thinking>", "</thinking>")
-
-
 class ThinkTagStrategy(ThinkingStrategy):
-    """从 <think>...</think> / <thinking>...</thinking> 标签中提取思考内容。
-    流式场景用状态机处理标签跨 chunk 的情况。"""
+    """从 think 标签中提取思考内容。
+
+    使用统一的 THINK_TAG_PAIRS 配置，流式场景用状态机处理标签跨 chunk 的情况。
+    新增标签格式只需修改 THINK_TAG_PAIRS。
+    """
 
     def __init__(self):
         self._in_thinking = False
@@ -151,6 +173,7 @@ class ThinkTagStrategy(ThinkingStrategy):
             return None
 
         if self._in_thinking:
+            # 继续处理跨 chunk 的 think 块
             if self._close_tag in content:
                 before_close, after_close = content.split(self._close_tag, 1)
                 self._in_thinking = False
@@ -162,9 +185,8 @@ class ThinkTagStrategy(ThinkingStrategy):
             else:
                 return {"reasoning": content, "content": ""}
         else:
-            # 检测开标签（优先匹配较长的）
-            for pair in (("<thinking>", "</thinking>"), ("<think>", "</think>")):
-                ot, ct = pair
+            # 检测开标签（使用 THINK_TAG_PAIRS，优先匹配较长的）
+            for ot, ct in THINK_TAG_PAIRS:
                 if ot in content:
                     before_open, rest = content.split(ot, 1)
                     if ct in rest:
@@ -172,10 +194,10 @@ class ThinkTagStrategy(ThinkingStrategy):
                         result: dict = {}
                         if thinking:
                             result["reasoning"] = thinking
-                        cleaned = before_open + after_close
-                        result["content"] = cleaned
+                        result["content"] = before_open + after_close
                         return result
                     else:
+                        # think 块跨 chunk，进入状态机
                         self._in_thinking = True
                         self._open_tag = ot
                         self._close_tag = ct
@@ -184,19 +206,22 @@ class ThinkTagStrategy(ThinkingStrategy):
             return {"content": content}
 
     def extract_from_message(self, message: Any) -> dict | None:
-        """非流式：完整 content 一次性提取所有 think/thinking 标签。"""
+        """非流式：完整 content 一次性提取所有 think 块。"""
         content = getattr(message, "content", None) or ""
-        for tag in ("<thinking>", "<think>"):
-            if tag in content:
-                close_tag = tag.replace("<", "</")
-                pattern = re.compile(re.escape(tag) + r"(.*?)" + re.escape(close_tag), re.DOTALL)
-                cleaned = pattern.sub("", content).strip()
+        for open_tag, close_tag in THINK_TAG_PAIRS:
+            if open_tag in content:
+                pattern = re.compile(
+                    re.escape(open_tag) + r"(.*?)" + re.escape(close_tag),
+                    re.DOTALL
+                )
                 thinking_parts = pattern.findall(content)
-                thinking = "\n\n".join(t.strip() for t in thinking_parts)
-                result: dict = {"reasoning": thinking}
-                if cleaned:
-                    result["content"] = cleaned
-                return result
+                if thinking_parts:
+                    cleaned = pattern.sub("", content).strip()
+                    thinking = "\n\n".join(t.strip() for t in thinking_parts)
+                    result: dict = {"reasoning": thinking}
+                    if cleaned:
+                        result["content"] = cleaned
+                    return result
         return None
 
 
@@ -437,7 +462,7 @@ class LLMClient:
         if extracted.get("content"):
             result["content"] = _strip_think_tags(extracted["content"])
         if extracted.get("reasoning"):
-            result["reasoning"] = extracted["reasoning"]
+            result["reasoning"] = _strip_think_tags(extracted["reasoning"])
         if delta.tool_calls:
             result["tool_calls"] = self._normalize_tool_calls(delta.tool_calls)
             tcs = result["tool_calls"]

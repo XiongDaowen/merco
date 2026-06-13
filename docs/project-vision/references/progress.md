@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-11
+> 最后更新: 2026-06-13
 
 ## 目标对标
 
@@ -9,7 +9,17 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: 流式输出稳定 + Recovery 完善 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+**阶段**: Phase 2 深入 | **焦点**: Sandbox → Tools 打通 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+
+### 本次会话更新 (2026-06-13)
+
+- **Sandbox → ToolRegistry 打通**: 在 `ToolRegistry.execute()` 统一调用 ToolGuard，所有工具（bash/file/edit）执行前先过守卫。SecurityChecker 正则兜底硬拦截危险命令（`rm -rf /`），用户规则链支持 ask/deny/allow 三种动作，ask 模式弹窗确认后放行。
+- **sandbox/__init__.py 重构**: 添加 `create_tool_guard()` 工厂函数，从 `MercoConfig` 加载 `sandbox_mode` 和 `sandbox_rules` 创建守卫单例。
+- **集成测试**: 新增 `tests/test_registry_guard.py`，8 个测试覆盖守卫调用/拦截/放行/路径穿越/auto 模式。
+- **think tag 泄漏根因修复 + 架构重构**: 
+  - `_strip_think_tags` 增加单独标签清理（闭标签 `</think>`、开标签 `<think>` 等残留）
+  - `_parse_chunk` 中 reasoning 也调用 `_strip_think_tags` 清理
+  - 定义统一配置 `THINK_TAG_PAIRS`
 
 ### 本次会话更新 (2026-06-11)
 
@@ -188,7 +198,7 @@
 | Skills → Agent | ⚠️ PARTIAL | `SkillRegistry` + `SkillViewTool` + `SkillViewProcessor` + `SkillsHintChunk` 全链路完整。`get_relevant()` 未接线。 |
 | Retry → RecoveryPipeline | ✅ WIRED | LLM 不重试，错误上抛 → RecoveryPipeline。 |
 | Hooks → Agent | ❌ NOT WIRED | 无 import，无 emit。 |
-| Sandbox → Tools | ❌ NOT WIRED | Tools 未调 SecurityChecker。 |
+| Sandbox → Tools | ✅ WIRED | `Registry.execute()` 调 `ToolGuard.check()`，SecurityChecker 正则兜底 + 规则链 ask/deny/allow。 |
 | Observability → Agent | ⚠️ PARTIAL | Observer 已实例化并用于中断快照/恢复/Report。LLM 调用/Tool 执行点通过 hooks emit（需先打通 Hooks → Agent）。中断管线 SavePartialState 使用 Observer snapshot。 |
 | MCP → Agent | ✅ WIRED | MCPServerManager 接管 MCP config 加载 + 工具注册 + 沙箱守卫。 |
 | Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
