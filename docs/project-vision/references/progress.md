@@ -13,13 +13,13 @@
 
 ### 本次会话更新 (2026-06-13)
 
-- **Sandbox → ToolRegistry 打通**: 在 `ToolRegistry.execute()` 统一调用 ToolGuard，所有工具（bash/file/edit）执行前先过守卫。SecurityChecker 正则兜底硬拦截危险命令（`rm -rf /`），用户规则链支持 ask/deny/allow 三种动作，ask 模式弹窗确认后放行。
-- **sandbox/__init__.py 重构**: 添加 `create_tool_guard()` 工厂函数，从 `MercoConfig` 加载 `sandbox_mode` 和 `sandbox_rules` 创建守卫单例。
-- **集成测试**: 新增 `tests/test_registry_guard.py`，8 个测试覆盖守卫调用/拦截/放行/路径穿越/auto 模式。
-- **think tag 泄漏根因修复 + 架构重构**: 
-  - `_strip_think_tags` 增加单独标签清理（闭标签 `</think>`、开标签 `<think>` 等残留）
-  - `_parse_chunk` 中 reasoning 也调用 `_strip_think_tags` 清理
-  - 定义统一配置 `THINK_TAG_PAIRS`
+- **ToolGuard 架构重构（职责分离）**: 解决双重确认和 stdin 竞争问题。
+  - ToolGuard 只做决策，返回 `GuardResult(action=ALLOW/DENY/ASK)`
+  - 移除 `_confirm`、`_render_*` 等交互方法（职责移到 Agent 层）
+  - Registry 抛出 `GuardConfirmationRequired` 异常
+  - Agent 层处理确认交互，展示 Panel + 获取用户输入
+- **Sandbox → ToolRegistry 打通**: 在 `ToolRegistry.execute()` 统一调用 ToolGuard。
+- **think tag 泄漏根因修复**: `_strip_think_tags` 增加单独标签清理，`THINK_TAG_PAIRS` 统一配置。
 
 ### 本次会话更新 (2026-06-11)
 
