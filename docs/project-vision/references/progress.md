@@ -9,11 +9,24 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: Sandbox → Tools 打通 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+**阶段**: Phase 2 深入 | **焦点**: Memory → Sessions 打通 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
 
 ### 本次会话更新 (2026-06-15)
 
-- **Session 持久化容错增强（新功能）**: 4 项增强解决 3 类问题（消息丢失 / 数据库损坏 / 写入失败无提示）：
+- **Memory → Sessions 打通（新功能）**: 解决"存"和"什么时候存"两个空缺。召回链路早已通（HybridRecaller + FTS5 + MemoryRecaller），本次补齐保存侧。
+  - **保存链（MemorySavePipeline）**: `merco/memory/save_pipeline.py` — 统一保存链，处理器模式 `SourceEnricher → DedupProcessor → Store`。`SOURCE_PRIORITY` (user=3 > extracted=2 > system=1) 保证显式 /remember 永远不被自动抽取覆盖。`SaveItem` dataclass + `MemorySource` Literal。
+  - **触发策略（MemorySaveStrategy）**: `merco/memory/strategy.py` — 监听 Hook 事件，构造 SaveItem 喂 Pipeline。
+    - `ExplicitRememberStrategy` 监听 `command.remember` — 同步，CLI 触发即存
+    - `SessionEndExtractStrategy` 监听 `session.destroy` — opt-in，LLM 抽取 1-3 条 insight，fail-soft（LLM 失败/JSON 非法不抛）
+  - **Agent 装配**: `merco/core/agent.py` 启动时构造 `memory_save_pipeline` + strategies，按 config opt-in 注入 extract 策略
+  - **Observer 接入**: 订阅 `memory.saved` 事件 → `_live.increment("memories_saved")`，`/report` 显示
+  - **CLI 命令（group="memory"）**:
+    - `/remember <text>` — 显式存记忆（支持 `key=xxx` 显式 key 和 `key=value` 简写）
+    - `/memories [tag]` — 列出所有记忆（可选 tag 过滤）
+    - `/forget <key>` — 删除记忆（不存在静默 no-op）
+  - **Config 字段**: `memory.auto_extract_on_session_end` (默认 False) + `memory.extract_max_per_session` (3) + `memory.extract_min_messages` (5)
+  - **测试覆盖**: 16 个新单测 + 3 个端到端集成测试（Hook → Strategy → Pipeline → Store → Observer 全链路 + dedup 优先级验证）
+  - **设计模式**: 策略模式（Strategy ABC）+ 管道模式（Pipeline + Processor 链）+ 事件订阅（HookRegistry 已成熟）
   - **写入重试机制**: `save_message` 对 `sqlite3.OperationalError` 重试 3 次（0.1s/0.2s/0.3s 递增退避），全部失败抛 `SessionWriteError` + 日志告警
   - **备份恢复机制**: `backup()` / `restore_from_backup()` / `delete_backup()`，WAL checkpoint 一致性保证，压缩前自动备份+成功删备份
   - **启动完整性检查**: `check_integrity()` (PRAGMA integrity_check) + `startup_check()`，损坏自动从备份恢复
@@ -179,7 +192,9 @@
 | `recall.py` | 🟢 POLISHED | `BaseRecaller` ABC + `FTS5Recaller` + `MemoryRecaller` + `HybridRecaller`（聚合/去重/截断/缓存）+ 旧版 `MemoryRecall` 兼容。已接入 Agent。 |
 | `compressor.py` | 🟢 REAL | Token 滑动窗口 + 链完整 + LLM 摘要。Token 函数统一从 `core/context` 导入。 |
 | `search.py` | 🟢 REAL | SQLite FTS5。|
-| `session_store.py` | 🟢 NEW | SQLite 会话持久化，sessions + messages 表，WAL 模式。 |
+| `session_store.py` | 🟢 REAL | SQLite 会话持久化，sessions + messages 表，WAL 模式。 |
+| `save_pipeline.py` | 🟢 NEW | MemorySavePipeline + SaveItem + SourceEnricher + DedupProcessor。`SOURCE_PRIORITY` 保护 user > extracted > system。 |
+| `strategy.py` | 🟢 NEW | MemorySaveStrategy ABC + ExplicitRememberStrategy + SessionEndExtractStrategy (LLM 抽取 fail-soft)。|
 
 ### Other Modules
 
@@ -212,6 +227,7 @@
 | Observability → Agent | ✅ WIRED | Observer 订阅所有事件：llm.chat, tool.after_execute, tool.error, conversation.turn, agent.interrupted, agent.start/stop, context.compact |
 | MCP → Agent | ✅ WIRED | MCPServerManager 接管 MCP config 加载 + 工具注册 + 沙箱守卫。 |
 | Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
+| Memory Save → Agent | ✅ WIRED | Agent 启动装配 MemorySavePipeline + Strategies，/remember 触发保存，session.destroy 触发 LLM 抽取。 |
 
 ---
 
@@ -263,7 +279,7 @@
 6. **实现 WebSearch** — 对接搜索 API
 7. **实现 MCP 客户端协议** — 接入外部 MCP server（已实现 MCPServerManager）
 8. **补充集成测试** — mock LLM 的 Agent-Loop 全覆盖测试
-9. **打通 Memory → Sessions** — Agent 存储/召回会话记忆
+9. **Memory 写入（SavePipeline 双向打通）** — Agent 存记忆（已实现：/remember + session 结束 LLM 抽取）
 10. **打通 Scheduler → Runtime** — CLI/Web 启动时激活
 11. **通一个 Gateway** — Telegram 端到端
 12. **TUI 实现** — Textual 替换 `"coming soon"`
