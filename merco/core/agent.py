@@ -703,6 +703,7 @@ class Agent:
                 if tool_name in _INTERACTIVE_TOOLS:
                     console.print(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]")
                     try:
+                        await self.hooks.emit("tool.before_execute", tool_name=tool_name, args=arguments)
                         result = await self.tool_registry.execute(tool_name, **arguments)
                     except GuardConfirmationRequired as e:
                         # 需要用户确认
@@ -714,6 +715,7 @@ class Agent:
                             if tool is None:
                                 result = {"error": f"工具 '{tool_name}' 不存在"}
                             else:
+                                await self.hooks.emit("tool.before_execute", tool_name=tool_name, args=arguments)
                                 result = await tool.execute(**arguments)
                     elapsed = time.monotonic() - t0
                     console.print(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]")
@@ -725,6 +727,7 @@ class Agent:
                         spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
                         async def _run_with_spinner():
                             try:
+                                await self.hooks.emit("tool.before_execute", tool_name=tool_name, args=arguments)
                                 task = asyncio.create_task(self.tool_registry.execute(tool_name, **arguments))
                                 while not task.done():
                                     live.update(Text.from_markup(f"[bright_black]  {next(spinner)} {tool_name} ({progress}) {arg_str}[/bright_black]"))
@@ -739,6 +742,7 @@ class Agent:
                                 tool = self.tool_registry.get(tool_name)
                                 if tool is None:
                                     return {"error": f"工具 '{tool_name}' 不存在"}
+                                await self.hooks.emit("tool.before_execute", tool_name=tool_name, args=arguments)
                                 return await tool.execute(**arguments)
                         result = await _run_with_spinner()
                         elapsed = time.monotonic() - t0
