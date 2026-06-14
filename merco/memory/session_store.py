@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import shutil
 import sqlite3
 import time
 import uuid
@@ -67,6 +68,54 @@ class SessionStore:
         conn.execute("PRAGMA foreign_keys=ON")
         conn.row_factory = sqlite3.Row
         return conn
+
+    # ── 备份与恢复 ──────────────────────────────────────
+
+    @property
+    def _backup_path(self) -> str:
+        """备份文件路径"""
+        return self.db_path + ".backup"
+
+    def backup(self) -> bool:
+        """创建数据库备份，返回 True=成功
+
+        Note: 先执行 WAL checkpoint 确保所有 pending 事务都刷入主数据库文件
+        """
+        try:
+            # 强制 WAL 刷盘，避免备份丢失未提交的事务
+            with self._conn() as conn:
+                conn.execute("PRAGMA wal_checkpoint(FULL)")
+            shutil.copy2(self.db_path, self._backup_path)
+            logger.debug(f"Session 数据库已备份到 {self._backup_path}")
+            return True
+        except Exception as e:
+            logger.warning(f"备份 Session 数据库失败: {e}")
+            return False
+
+    def restore_from_backup(self) -> bool:
+        """从备份恢复数据库，返回 True=成功"""
+        if not os.path.exists(self._backup_path):
+            logger.warning("无备份文件，无法恢复")
+            return False
+        try:
+            shutil.copy2(self._backup_path, self.db_path)
+            logger.info("从备份恢复 Session 数据库成功")
+            return True
+        except Exception as e:
+            logger.error(f"从备份恢复失败: {e}")
+            return False
+
+    def delete_backup(self) -> bool:
+        """删除备份文件，返回 True=成功"""
+        if not os.path.exists(self._backup_path):
+            return True  # 文件不存在，视为成功
+        try:
+            os.remove(self._backup_path)
+            logger.debug("备份文件已删除")
+            return True
+        except Exception as e:
+            logger.warning(f"删除备份文件失败: {e}")
+            return False
 
     # ── Session CRUD ──────────────────────────────────────
 
