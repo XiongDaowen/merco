@@ -79,3 +79,48 @@ class DedupProcessor(MemorySaveProcessor):
                 if inner in SOURCE_PRIORITY:
                     return inner
         return "system"
+
+
+class MemorySavePipeline:
+    """统一的 Memory 保存链 — Strategy 通过它写入"""
+
+    def __init__(self, store, hooks):
+        self.store = store
+        self.hooks = hooks
+        self._processors: list[MemorySaveProcessor] = [
+            SourceEnricher(),
+            DedupProcessor(store),
+        ]
+
+    def use(self, processor: MemorySaveProcessor) -> "MemorySavePipeline":
+        self._processors.append(processor)
+        return self
+
+    async def save(self, item: SaveItem) -> bool:
+        """返回 True=写入成功，False=被 dedup skip"""
+        for p in self._processors:
+            try:
+                item = await p.process(item)
+            except Exception as e:
+                logger.warning("MemorySaveProcessor '%s' 异常: %s", p.name, e)
+                return False
+            if item is None:
+                return False
+        try:
+            self.store.save(item.key, item.value, tags=item.tags)
+        except Exception as e:
+            logger.warning("MemoryStore.save 失败 [%s]: %s", item.key, e)
+            try:
+                await self.hooks.emit("memory.failed", key=item.key, error=str(e))
+            except Exception:
+                pass
+            return False
+        try:
+            await self.hooks.emit(
+                "memory.saved",
+                key=item.key, value=item.value,
+                source=item.source, tags=item.tags,
+            )
+        except Exception:
+            pass
+        return True

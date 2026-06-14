@@ -99,3 +99,82 @@ async def test_dedup_infer_source_from_tags():
     item = SaveItem(key="k1", value="new", source="extracted")
     result = await proc.process(item)
     assert result is not None
+
+
+from merco.memory.save_pipeline import MemorySavePipeline, MemorySaveProcessor
+
+
+class FakeHooks:
+    """最小 HookRegistry mock"""
+    def __init__(self):
+        self.events = []
+
+    async def emit(self, event, **kwargs):
+        self.events.append((event, kwargs))
+
+
+class FakeMemoryStore:
+    """最小 MemoryStore mock — save + load"""
+    def __init__(self):
+        self._data = {}
+
+    def save(self, key, value, tags=None):
+        self._data[key] = {"value": value, "tags": tags or []}
+
+    def load(self, key):
+        return self._data.get(key)
+
+
+@pytest.mark.asyncio
+async def test_pipeline_saves_and_emits_event():
+    """Pipeline 成功时 emit memory.saved"""
+    store = FakeMemoryStore()
+    hooks = FakeHooks()
+    pipeline = MemorySavePipeline(store, hooks)
+
+    item = SaveItem(key="k1", value="hello", source="user", tags=["custom"])
+    result = await pipeline.save(item)
+    assert result is True
+    assert store._data["k1"]["value"] == "hello"
+    assert "[user]" in store._data["k1"]["tags"]
+    assert "custom" in store._data["k1"]["tags"]
+
+    # 验证 emit
+    assert len(hooks.events) == 1
+    event, kwargs = hooks.events[0]
+    assert event == "memory.saved"
+    assert kwargs["key"] == "k1"
+    assert kwargs["source"] == "user"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_dedup_skip_returns_false():
+    """Dedup 命中 → 返回 False，不发 memory.saved"""
+    store = FakeMemoryStore()
+    store._data["k1"] = {"value": "old", "tags": ["[user]"]}
+    hooks = FakeHooks()
+    pipeline = MemorySavePipeline(store, hooks)
+
+    item = SaveItem(key="k1", value="new", source="extracted")
+    result = await pipeline.save(item)
+    assert result is False
+    assert store._data["k1"]["value"] == "old"  # 未覆盖
+    assert hooks.events == []
+
+
+@pytest.mark.asyncio
+async def test_pipeline_use_adds_processor():
+    """use() 追加 processor 到链尾"""
+    store = FakeMemoryStore()
+    hooks = FakeHooks()
+    pipeline = MemorySavePipeline(store, hooks)
+
+    class TagProcessor(MemorySaveProcessor):
+        name = "test_tag"
+        async def process(self, item):
+            item.tags.append("from_test")
+            return item
+
+    pipeline.use(TagProcessor())
+    await pipeline.save(SaveItem(key="k1", value="v", source="user"))
+    assert "from_test" in store._data["k1"]["tags"]
