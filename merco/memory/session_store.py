@@ -84,23 +84,43 @@ class SessionStore:
     def save_message(self, session_id: str, role: str, content: str = "",
                      tool_call_id: str = "", tool_calls: list | None = None,
                      reasoning: str = "") -> int:
+        """保存消息，支持重试"""
         now = _now()
         tc_json = json.dumps(tool_calls or [], ensure_ascii=False)
-        with self._conn() as conn:
-            cur = conn.execute(
-                "INSERT INTO messages (session_id, role, content, tool_call_id, "
-                "tool_calls, reasoning, timestamp) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (session_id, role, content, tool_call_id, tc_json, reasoning, now),
-            )
-            conn.execute(
-                "UPDATE sessions SET updated_at = ?, "
-                "message_count = message_count + 1 "
-                "WHERE id = ?",
-                (now, session_id),
-            )
-            conn.commit()
-            return cur.lastrowid
+        last_error = None
+
+        for attempt in range(3):
+            try:
+                with self._conn() as conn:
+                    cur = conn.execute(
+                        "INSERT INTO messages (session_id, role, content, tool_call_id, "
+                        "tool_calls, reasoning, timestamp) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (session_id, role, content, tool_call_id, tc_json, reasoning, now),
+                    )
+                    conn.execute(
+                        "UPDATE sessions SET updated_at = ?, "
+                        "message_count = message_count + 1 "
+                        "WHERE id = ?",
+                        (now, session_id),
+                    )
+                    conn.commit()
+                    return cur.lastrowid
+            except sqlite3.OperationalError as e:
+                last_error = e
+                if attempt < 2:
+                    time.sleep(0.1 * (attempt + 1))
+            except Exception as e:
+                # 非瞬时错误，不重试
+                raise SessionWriteError(f"写入失败（非重试错误）: {e}") from e
+
+        # 3 次全部失败
+        logger.warning(
+            f"⚠️ Session 写入失败（已重试 3 次）\n"
+            f"   可能是磁盘满或权限问题\n"
+            f"   建议：检查 ~/.merco/ 目录"
+        )
+        raise SessionWriteError(f"写入失败: {last_error}")
 
     def load_session(self, session_id: str) -> dict | None:
         with self._conn() as conn:
