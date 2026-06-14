@@ -829,6 +829,9 @@ class Agent:
     async def _compress_context(self):
         """压缩上下文"""
         # 压缩前备份 Session 数据库
+        # Note: DB-level backup and session-level auto-fork are independent
+        # safeguards, not fallbacks for each other. Backup covers any DB
+        # corruption/restore; auto-fork preserves the full session history.
         backup_ok = self._session_store.backup()
 
         # Auto-fork: save complete copy before compressing
@@ -848,6 +851,8 @@ class Agent:
         )
 
         summary_result = None
+        # Capture original count before context.messages is reassigned
+        original_count = len(self.session.messages)
 
         async def llm_summary(messages: list[dict]) -> str:
             """LLM 生成语义摘要——保留用户意图 + 关键决策"""
@@ -882,28 +887,32 @@ class Agent:
                 summary_result = fallback
                 return fallback
 
-        await self.hooks.emit("context.compact", strategy="sliding_window")
-        compressed = await compressor.compress(
-            self.context.messages,
-            strategy="sliding",
-            summary_fn=llm_summary,
-        )
-        self.context.messages = compressed
-        self.context.current_tokens = sum(
-            msg_tokens(m) for m in compressed
-        )
-        # Store compression checkpoint so restart doesn't re-expand
-        self.session.metadata["compress_checkpoint"] = {
-            "summary": summary_result or "",
-            "compressed_at": time.time(),
-            "original_count": len(self.session.messages),
-            "tail_count": 5,
-        }
-        console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
-        console.print("[dim]→ 用 /history 查看完整记录[/dim]")
-
-        # 压缩成功，删除备份
-        if backup_ok:
+        try:
+            await self.hooks.emit("context.compact", strategy="sliding_window")
+            compressed = await compressor.compress(
+                self.context.messages,
+                strategy="sliding",
+                summary_fn=llm_summary,
+            )
+            self.context.messages = compressed
+            self.context.current_tokens = sum(
+                msg_tokens(m) for m in compressed
+            )
+            # Store compression checkpoint so restart doesn't re-expand
+            self.session.metadata["compress_checkpoint"] = {
+                "summary": summary_result or "",
+                "compressed_at": time.time(),
+                "original_count": original_count,
+                "tail_count": 5,
+            }
+            console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
+            console.print("[dim]→ 用 /history 查看完整记录[/dim]")
+        except Exception:
+            # Compression failed — keep backup so user can manually recover
+            logger.exception("Context compression failed; backup retained")
+            raise
+        else:
+            # 压缩成功，删除备份
             self._session_store.delete_backup()
 
     async def _ask_guard_confirmation(self, result) -> bool:
