@@ -178,3 +178,24 @@ async def test_pipeline_use_adds_processor():
     pipeline.use(TagProcessor())
     await pipeline.save(SaveItem(key="k1", value="v", source="user"))
     assert "from_test" in store._data["k1"]["tags"]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_processor_exception_returns_false():
+    """Processor 抛异常 → save() 返回 False 且不发 memory.saved"""
+    store = FakeMemoryStore()
+    hooks = FakeHooks()
+    pipeline = MemorySavePipeline(store, hooks)
+
+    class FailingProcessor(MemorySaveProcessor):
+        name = "failing"
+        async def process(self, item):
+            raise RuntimeError("boom")
+
+    pipeline.use(FailingProcessor())
+    result = await pipeline.save(SaveItem(key="k1", value="v", source="user"))
+    assert result is False
+    # store 未写入
+    assert "k1" not in store._data
+    # 未 emit memory.saved
+    assert hooks.events == []

@@ -112,8 +112,8 @@ class MemorySavePipeline:
             logger.warning("MemoryStore.save 失败 [%s]: %s", item.key, e)
             try:
                 await self.hooks.emit("memory.failed", key=item.key, error=str(e))
-            except Exception:
-                pass
+            except Exception as hook_err:
+                logger.debug("hooks.emit('memory.failed') 失败: %s", hook_err)
             return False
         try:
             await self.hooks.emit(
@@ -121,6 +121,6 @@ class MemorySavePipeline:
                 key=item.key, value=item.value,
                 source=item.source, tags=item.tags,
             )
-        except Exception:
-            pass
+        except Exception as hook_err:
+            logger.debug("hooks.emit('memory.saved') 失败: %s", hook_err)
         return True
