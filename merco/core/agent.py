@@ -828,6 +828,9 @@ class Agent:
 
     async def _compress_context(self):
         """压缩上下文"""
+        # 压缩前备份 Session 数据库
+        backup_ok = self._session_store.backup()
+
         # Auto-fork: save complete copy before compressing
         if self.config.fork_enabled and self.config.fork_auto_on_compress:
             try:
@@ -898,6 +901,10 @@ class Agent:
         }
         console.print("[dim]→ Context compressed (LLM summarized)[/dim]")
         console.print("[dim]→ 用 /history 查看完整记录[/dim]")
+
+        # 压缩成功，删除备份
+        if backup_ok:
+            self._session_store.delete_backup()
 
     async def _ask_guard_confirmation(self, result) -> bool:
         """展示安全确认 Panel 并获取用户确认
