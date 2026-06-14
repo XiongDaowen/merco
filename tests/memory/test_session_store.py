@@ -189,16 +189,50 @@ class TestSaveMessageRetry:
             msg_id = store.save_message("test-session", "user", "Hello")
             assert msg_id > 0
 
-    def test_save_message_with_retry(self):
-        """瞬时错误应该重试"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = os.path.join(tmpdir, "test.db")
-            store = SessionStore(db_path)
-            store.create_session("test-session")
+    def test_save_message_retries_on_operational_error(self, monkeypatch, tmp_path):
+        """瞬时 OperationalError 应被重试，最终写入成功。"""
+        import sqlite3
 
-            # 正常应该成功
-            msg_id = store.save_message("test-session", "user", "Hello")
-            assert msg_id > 0
+        db_path = str(tmp_path / "retry_test.db")
+        store = SessionStore(db_path)
+        store.create_session("test-session")
+
+        call_count = {"n": 0}
+        real_connect = sqlite3.connect
+
+        def flaky_connect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise sqlite3.OperationalError("database is locked")
+            return real_connect(*args, **kwargs)
+
+        monkeypatch.setattr(
+            "merco.memory.session_store.sqlite3.connect", flaky_connect
+        )
+
+        msg_id = store.save_message("test-session", "user", "Hello")
+        assert msg_id > 0
+        assert call_count["n"] >= 2  # 至少重试了一次
+
+    def test_save_message_raises_session_write_error_after_max_retries(
+        self, monkeypatch, tmp_path
+    ):
+        """连续 OperationalError 超过 3 次后应抛出 SessionWriteError。"""
+        import sqlite3
+
+        db_path = str(tmp_path / "retry_exhaust_test.db")
+        store = SessionStore(db_path)
+        store.create_session("test-session")
+
+        def always_fail(*args, **kwargs):
+            raise sqlite3.OperationalError("database is locked")
+
+        monkeypatch.setattr(
+            "merco.memory.session_store.sqlite3.connect", always_fail
+        )
+
+        with pytest.raises(SessionWriteError):
+            store.save_message("test-session", "user", "Hello")
 
 
 class TestBackupRestore:
