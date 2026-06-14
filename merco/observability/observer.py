@@ -125,6 +125,9 @@ class Observer:
         tokens_in = live.get_counter("tokens_in")
         tokens_out = live.get_counter("tokens_out")
         cache_hit = live.get_counter("cache_hit_tokens")
+        agent_starts = live.get_counter("agent_starts")
+        agent_stops = live.get_counter("agent_stops")
+        context_compactions = live.get_counter("context_compactions")
 
         acc_turns = acc.get("turns", 0)
         acc_llm = acc.get("llm_calls", 0)
@@ -132,6 +135,9 @@ class Observer:
         acc_errors = acc.get("errors", 0)
         acc_tokens_in = acc.get("tokens_in", 0)
         acc_tokens_out = acc.get("tokens_out", 0)
+        acc_agent_starts = acc.get("agent_starts", 0)
+        acc_agent_stops = acc.get("agent_stops", 0)
+        acc_compactions = acc.get("context_compactions", 0)
 
         lines = ["[bold]📊 会话报告[/bold]", ""]
 
@@ -162,6 +168,17 @@ class Observer:
         if errors:
             lines.append(f"       [red]错误: {errors}[/red]")
 
+        # Agent 启动/停止 & 上下文压缩
+        agent_parts = []
+        if agent_starts:
+            agent_parts.append(f"启动 {agent_starts}")
+        if agent_stops:
+            agent_parts.append(f"停止 {agent_stops}")
+        if context_compactions:
+            agent_parts.append(f"上下文压缩 {context_compactions}")
+        if agent_parts:
+            lines.append(f"       Agent: {', '.join(agent_parts)}")
+
         # 累计 — acc 里已含上次 merge 的 live 值，只加「未合并增量」避免重复计数
         lm = self._last_merged
         u_turns = turns - lm.get("turns", 0)
@@ -170,6 +187,9 @@ class Observer:
         u_tokens_in = tokens_in - lm.get("tokens_in", 0)
         u_tokens_out = tokens_out - lm.get("tokens_out", 0)
         u_errors = errors - lm.get("errors", 0)
+        u_agent_starts = agent_starts - lm.get("agent_starts", 0)
+        u_agent_stops = agent_stops - lm.get("agent_stops", 0)
+        u_compactions = context_compactions - lm.get("context_compactions", 0)
 
         if acc_turns or acc_llm or acc_tools:
             lines.append("")
@@ -180,6 +200,20 @@ class Observer:
                 f"{acc_tools + u_tools} 次工具"
                 + (f"  [red]{acc_errors + u_errors} 错误[/red]" if acc_errors + u_errors else "")
             )
+
+        # 累计 Agent 启动/停止 & 上下文压缩
+        acc_agent_parts = []
+        total_starts = acc_agent_starts + u_agent_starts
+        total_stops = acc_agent_stops + u_agent_stops
+        total_compactions = acc_compactions + u_compactions
+        if total_starts:
+            acc_agent_parts.append(f"启动 {total_starts}")
+        if total_stops:
+            acc_agent_parts.append(f"停止 {total_stops}")
+        if total_compactions:
+            acc_agent_parts.append(f"上下文压缩 {total_compactions}")
+        if acc_agent_parts:
+            lines.append(f"  累计: Agent {', '.join(acc_agent_parts)}")
 
         if not turns and not acc_turns:
             lines.append("  [dim]暂无数据[/dim]")
