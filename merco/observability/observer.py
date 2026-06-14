@@ -18,7 +18,6 @@ class Observer:
         self._last_merged: dict[str, int] = {}  # 记录上次合并时的 live 值
 
         hooks.on("llm.chat", self._on_llm)
-        hooks.on("tool.before_execute", self._on_tool_before)
         hooks.on("tool.after_execute", self._on_tool)
         hooks.on("tool.error", self._on_error)
         hooks.on("conversation.turn", self._on_turn)
@@ -38,10 +37,6 @@ class Observer:
         cache = cached_tokens or cache_read_tokens
         if cache:
             self._live.increment("cache_hit_tokens", cache)
-
-    def _on_tool_before(self, tool_name: str, args: dict = None, **kwargs):
-        """工具执行前，记录开始时间"""
-        self._live.start_tool_timer(tool_name)
 
     def _on_tool(self, tool_name: str = "", duration: float = 0, **kwargs):
         self._live.increment("tool_calls")

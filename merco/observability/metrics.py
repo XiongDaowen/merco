@@ -11,7 +11,6 @@ class MetricsCollector:
         self._counters: dict[str, int] = defaultdict(int)
         self._timings: dict[str, list[float]] = defaultdict(list)
         self._events: list[dict] = []
-        self._tool_timers: dict[str, list[float]] = defaultdict(list)
 
     def increment(self, name: str, value: int = 1):
         """增加计数器"""
@@ -60,7 +59,3 @@ class MetricsCollector:
             },
             "total_events": len(self._events),
         }
-
-    def start_tool_timer(self, tool_name: str):
-        """记录工具开始执行时间"""
-        self._tool_timers[tool_name].append(time.monotonic())
