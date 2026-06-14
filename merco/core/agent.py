@@ -408,6 +408,9 @@ class Agent:
         self.session.add_message("user", prompt)
         self.context.add({"role": "user", "content": prompt})
 
+        # ── 消息事件：message.receive ──
+        await self.hooks.emit("message.receive", message=prompt)
+
         tools = self.tool_registry.get_definitions() if self.tool_registry else []
         self.context.set_overhead(await self._build_system_prompt(), len(tools))
         if self.context.needs_compression():
