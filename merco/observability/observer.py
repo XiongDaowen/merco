@@ -25,6 +25,7 @@ class Observer:
         hooks.on("agent.interrupted", self._on_interrupt)
         hooks.on("agent.start", self._on_agent_start)
         hooks.on("agent.stop", self._on_agent_stop)
+        hooks.on("context.compact", self._on_context_compact)
 
     # ── 事件处理 ──────────────────────────────────────────
 
@@ -70,6 +71,10 @@ class Observer:
     def _on_agent_stop(self, session_id: str, **kwargs):
         """Agent 停止"""
         self._live.increment("agent_stops")
+
+    def _on_context_compact(self, strategy: str, **kwargs):
+        """上下文压缩"""
+        self._live.increment("context_compactions")
 
     # ── 生命周期 ──────────────────────────────────────────
 
