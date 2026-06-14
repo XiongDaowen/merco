@@ -1,7 +1,8 @@
 """会话管理测试"""
 
 import pytest
-from merco.core.session import Session, SessionStore
+from merco.core.session import Session
+from merco.memory.session_store import SessionStore
 
 
 class TestSession:

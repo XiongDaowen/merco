@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m pytest tests/test_guard.py -v)"
+      "Bash(python -m pytest tests/test_guard.py -v)",
+      "Bash(pytest tests/ -v --tb=short)"
     ]
   }
 }
