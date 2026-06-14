@@ -26,6 +26,7 @@ class Observer:
         hooks.on("agent.start", self._on_agent_start)
         hooks.on("agent.stop", self._on_agent_stop)
         hooks.on("context.compact", self._on_context_compact)
+        hooks.on("memory.saved", self._on_memory_saved)
 
     # ── 事件处理 ──────────────────────────────────────────
 
@@ -75,6 +76,10 @@ class Observer:
     def _on_context_compact(self, strategy: str, **kwargs):
         """上下文压缩"""
         self._live.increment("context_compactions")
+
+    def _on_memory_saved(self, key: str = "", source: str = "", **kwargs):
+        """记忆保存"""
+        self._live.increment("memories_saved")
 
     # ── 生命周期 ──────────────────────────────────────────
 
