@@ -12,6 +12,11 @@ from pathlib import Path
 logger = logging.getLogger("merco.session_store")
 
 
+class SessionWriteError(Exception):
+    """Session 写入失败（重试 N 次后仍失败）"""
+    pass
+
+
 class SessionStore:
     """SQLite 会话存储 — 两张表，自动建表，增量写消息"""
 
