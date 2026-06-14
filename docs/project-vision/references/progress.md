@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-13
+> 最后更新: 2026-06-15
 
 ## 目标对标
 
@@ -10,6 +10,16 @@
 ## 当前状态
 
 **阶段**: Phase 2 深入 | **焦点**: Sandbox → Tools 打通 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+
+### 本次会话更新 (2026-06-15)
+
+- **Session 持久化容错增强（新功能）**: 4 项增强解决 3 类问题（消息丢失 / 数据库损坏 / 写入失败无提示）：
+  - **写入重试机制**: `save_message` 对 `sqlite3.OperationalError` 重试 3 次（0.1s/0.2s/0.3s 递增退避），全部失败抛 `SessionWriteError` + 日志告警
+  - **备份恢复机制**: `backup()` / `restore_from_backup()` / `delete_backup()`，WAL checkpoint 一致性保证，压缩前自动备份+成功删备份
+  - **启动完整性检查**: `check_integrity()` (PRAGMA integrity_check) + `startup_check()`，损坏自动从备份恢复
+  - **事务保证**: `INSERT messages` + `UPDATE sessions.message_count` 同一事务
+- **Agent 压缩前备份**: `_compress_context` 入口 `backup()`，try/except/else 包裹压缩体 — 失败保留备份，成功删备份
+- **测试覆盖**: `tests/memory/test_session_store.py` +5 个测试（retry 真实触发 / backup 创文件 / restore 恢复数据 / integrity 正常 / max retries 抛异常），全部通过
 
 ### 本次会话更新 (2026-06-13)
 
