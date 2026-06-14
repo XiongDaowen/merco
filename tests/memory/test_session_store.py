@@ -1,7 +1,9 @@
-"""Tests for SessionStore.clone_session() and SessionStore.set_title()"""
+"""Tests for SessionStore: clone/set_title, get_children, and fault tolerance."""
 
+import os
+import tempfile
 import pytest
-from merco.memory.session_store import SessionStore
+from merco.memory.session_store import SessionStore, SessionWriteError
 
 
 class TestSetTitle:
@@ -172,3 +174,82 @@ class TestGetChildren:
         assert len(children) >= 2
         assert any(c["id"] == child1_id for c in children)
         assert any(c["id"] == child2_id for c in children)
+
+
+class TestSaveMessageRetry:
+    """测试 save_message 重试机制"""
+
+    def test_save_message_success(self):
+        """正常写入应该成功"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+            store = SessionStore(db_path)
+            store.create_session("test-session")
+
+            msg_id = store.save_message("test-session", "user", "Hello")
+            assert msg_id > 0
+
+    def test_save_message_with_retry(self):
+        """瞬时错误应该重试"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+            store = SessionStore(db_path)
+            store.create_session("test-session")
+
+            # 正常应该成功
+            msg_id = store.save_message("test-session", "user", "Hello")
+            assert msg_id > 0
+
+
+class TestBackupRestore:
+    """测试备份恢复"""
+
+    def test_backup_creates_file(self):
+        """备份应该创建 .backup 文件"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+            store = SessionStore(db_path)
+            store.create_session("test-session")
+            store.save_message("test-session", "user", "Hello")
+
+            result = store.backup()
+            assert result is True
+            assert os.path.exists(db_path + ".backup")
+
+    def test_restore_from_backup(self):
+        """应该能从备份恢复"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+            store = SessionStore(db_path)
+            store.create_session("test-session")
+            store.save_message("test-session", "user", "Hello")
+
+            # 创建备份
+            store.backup()
+
+            # 删除原文件
+            os.remove(db_path)
+
+            # 恢复
+            result = store.restore_from_backup()
+            assert result is True
+            assert os.path.exists(db_path)
+
+            # 验证数据
+            session = store.load_session("test-session")
+            assert session is not None
+            assert len(session["messages"]) == 1
+
+
+class TestIntegrityCheck:
+    """测试完整性检查"""
+
+    def test_check_integrity_normal(self):
+        """正常的数据库应该通过检查"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+            store = SessionStore(db_path)
+            store.create_session("test-session")
+
+            result = store.check_integrity()
+            assert result is True
