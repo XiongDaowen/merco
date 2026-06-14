@@ -45,3 +45,57 @@ async def test_source_enricher_does_not_duplicate_prefix():
     result = await enricher.process(item)
     assert result is not None
     assert result.tags.count("[user]") == 1
+
+
+from merco.memory.save_pipeline import DedupProcessor
+
+
+class FakeStore:
+    """最小 MemoryStore mock"""
+    def __init__(self, existing=None):
+        self._data = existing or {}
+
+    def load(self, key):
+        return self._data.get(key)
+
+
+@pytest.mark.asyncio
+async def test_dedup_skip_when_existing_user_wins():
+    """已有 [user] 时 [extracted] 来 → skip（保护 user）"""
+    store = FakeStore({"k1": {"tags": ["[user]", "x"], "value": "old"}})
+    proc = DedupProcessor(store)
+    item = SaveItem(key="k1", value="new", source="extracted")
+    result = await proc.process(item)
+    assert result is None  # 被 skip
+
+
+@pytest.mark.asyncio
+async def test_dedup_overwrite_when_new_higher_priority():
+    """已有 [extracted] 时 [user] 来 → 覆盖"""
+    store = FakeStore({"k1": {"tags": ["[extracted]"], "value": "old"}})
+    proc = DedupProcessor(store)
+    item = SaveItem(key="k1", value="new", source="user")
+    result = await proc.process(item)
+    assert result is not None
+    assert result.value == "new"
+
+
+@pytest.mark.asyncio
+async def test_dedup_pass_through_when_key_not_exists():
+    """key 不存在 → 直接通过"""
+    store = FakeStore()
+    proc = DedupProcessor(store)
+    item = SaveItem(key="k1", value="v", source="user")
+    result = await proc.process(item)
+    assert result is not None
+
+
+@pytest.mark.asyncio
+async def test_dedup_infer_source_from_tags():
+    """旧记录无 [source] 标签时按 user 处理（向后兼容）"""
+    store = FakeStore({"k1": {"tags": [], "value": "old"}})
+    proc = DedupProcessor(store)
+    # extracted 来（优先级 2） vs 空（默认最低 0） → 覆盖
+    item = SaveItem(key="k1", value="new", source="extracted")
+    result = await proc.process(item)
+    assert result is not None

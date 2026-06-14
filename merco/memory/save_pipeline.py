@@ -49,3 +49,33 @@ class SourceEnricher(MemorySaveProcessor):
         if prefix not in item.tags:
             item.tags.insert(0, prefix)
         return item
+
+
+class DedupProcessor(MemorySaveProcessor):
+    """按 source 优先级 skip 已有 key"""
+    name = "dedup"
+
+    def __init__(self, store):
+        self._store = store
+
+    async def process(self, item: SaveItem) -> SaveItem | None:
+        existing = self._store.load(item.key)
+        if not existing:
+            return item
+        existing_tags = existing.get("tags", []) or []
+        existing_source = self._infer_source(existing_tags)
+        new_priority = SOURCE_PRIORITY.get(item.source, 0)
+        existing_priority = SOURCE_PRIORITY.get(existing_source, 0)
+        if new_priority <= existing_priority:
+            return None
+        return item
+
+    @staticmethod
+    def _infer_source(tags: list[str]) -> str:
+        """从 tags 推断 source。无 [source] 标记视为 system（最低，向后兼容旧记录）"""
+        for t in tags:
+            if t.startswith("[") and t.endswith("]"):
+                inner = t[1:-1]
+                if inner in SOURCE_PRIORITY:
+                    return inner
+        return "system"
