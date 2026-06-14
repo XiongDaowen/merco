@@ -267,18 +267,6 @@ stop
 @enduml
 ```
 
-**需要加的 emit 位置**：
-
-| 位置 | 事件 | 参数 |
-|------|------|------|
-| `__init__` 末尾 | `agent.start` | session_id |
-| `__init__` 末尾 | `session.create` | session_id |
-| `_agent_loop` 开始 | `message.receive` | message |
-| `_execute_tool_calls` 开始 | `tool.before_execute` | tool_name, args |
-| `_compress_context` | `context.compact` | strategy |
-| `run` 退出路径 | `agent.stop` | - |
-| `run` 退出路径 | `session.destroy` | session_id |
-
 **订阅者示例**（用于可观察性、审计等）：
 
 ```plantuml

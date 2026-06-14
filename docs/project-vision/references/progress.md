@@ -197,7 +197,7 @@
 |-------------|---------|---------|
 | Skills → Agent | ⚠️ PARTIAL | `SkillRegistry` + `SkillViewTool` + `SkillViewProcessor` + `SkillsHintChunk` 全链路完整。`get_relevant()` 未接线。 |
 | Retry → RecoveryPipeline | ✅ WIRED | LLM 不重试，错误上抛 → RecoveryPipeline。 |
-| Hooks → Agent | ❌ NOT WIRED | 无 import，无 emit。 |
+| Hooks → Agent | ✅ WIRED | agent.start/stop, session.create/destroy, message.receive, tool.before_execute, context.compact 已 emit |
 | Sandbox → Tools | ✅ WIRED | `Registry.execute()` 调 `ToolGuard.check()`，SecurityChecker 正则兜底 + 规则链 ask/deny/allow。 |
 | Observability → Agent | ⚠️ PARTIAL | Observer 已实例化并用于中断快照/恢复/Report。LLM 调用/Tool 执行点通过 hooks emit（需先打通 Hooks → Agent）。中断管线 SavePartialState 使用 Observer snapshot。 |
 | MCP → Agent | ✅ WIRED | MCPServerManager 接管 MCP config 加载 + 工具注册 + 沙箱守卫。 |
