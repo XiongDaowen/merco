@@ -193,6 +193,123 @@ for k, v in self._live.get_counters().items():
 - 旧：agent.py 导入 MetricsCollector，6+ 处 `metrics.increment("llm_calls")` 散落
 - 新：agent.py 只 `await self.hooks.emit(...)`，Observer 订阅。改 1 行加新指标
 
+### Hooks → Agent (事件发布订阅系统)
+
+Hooks 是一个**事件发布订阅系统**——业务代码在关键节点发出事件，其他模块订阅这些事件来响应。解耦核心业务和辅助功能（可观察性、审计、日志等）。
+
+**现状**：
+
+| 事件 | 定义位置 | agent.py emit 了？ |
+|------|----------|-------------------|
+| `agent.start` | lifecycle.py | ❌ 没有 |
+| `agent.stop` | lifecycle.py | ❌ 没有 |
+| `session.create` | lifecycle.py | ❌ 没有 |
+| `session.destroy` | lifecycle.py | ❌ 没有 |
+| `message.receive` | chat_hooks.py | ❌ 没有 |
+| `message.send` | chat_hooks.py | ❌ 没有 |
+| `context.compact` | chat_hooks.py | ❌ 没有 |
+| `tool.before_execute` | tool_hooks.py | ❌ 没有 |
+| `tool.after_execute` | tool_hooks.py | ✅ 有 |
+| `tool.error` | tool_hooks.py | ✅ 有 |
+| `llm.chat` | (inline) | ✅ 有 |
+| `conversation.turn` | (inline) | ✅ 有 |
+
+骨架有了，但大部分事件没发出去，订阅者收不到通知。
+
+**打通后的完整事件流**：
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam activity {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontSize 12
+}
+
+start
+
+:Agent 初始化;
+:HookRegistry 创建;
+:Observer 订阅事件;
+
+:emit("agent.start");
+:emit("session.create", session_id);
+
+:用户输入消息;
+:emit("message.receive", message);
+
+:LLM 调用;
+:emit("llm.chat", duration, tokens_in, tokens_out);
+
+:工具执行前;
+:emit("tool.before_execute", tool_name, args);
+
+if (ToolGuard 检查) then (ASK)
+  :用户确认;
+endif
+
+:emit("tool.after_execute", tool_name, result);
+note right: 目前只发了这个
+
+:emit("tool.error", tool_name, error);
+note right: 目前只发了这个
+
+:上下文压缩;
+:emit("context.compact", strategy);
+
+:Agent 退出;
+:emit("agent.stop");
+:emit("session.destroy", session_id);
+
+stop
+
+@enduml
+```
+
+**需要加的 emit 位置**：
+
+| 位置 | 事件 | 参数 |
+|------|------|------|
+| `__init__` 末尾 | `agent.start` | session_id |
+| `__init__` 末尾 | `session.create` | session_id |
+| `_agent_loop` 开始 | `message.receive` | message |
+| `_execute_tool_calls` 开始 | `tool.before_execute` | tool_name, args |
+| `_compress_context` | `context.compact` | strategy |
+| `run` 退出路径 | `agent.stop` | - |
+| `run` 退出路径 | `session.destroy` | session_id |
+
+**订阅者示例**（用于可观察性、审计等）：
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+
+rectangle "Agent Loop" as Agent {
+  :emit("llm.chat")
+  :emit("tool.before_execute")
+  :emit("tool.after_execute")
+  :emit("tool.error")
+}
+
+rectangle "HookRegistry" as Hooks {
+  database "事件表" as events
+}
+
+rectangle "订阅者" as Subscribers {
+  card "Observer\n(可观察性)" as Observer
+  card "AuditLogger\n(审计日志)" as Audit
+  card "TracingSpan\n(链路追踪)" as Tracing
+}
+
+Agent -> Hooks : emit(event)
+Hooks -> Observer : on(event)
+Hooks -> Audit : on(event)
+Hooks -> Tracing : on(event)
+
+@enduml
+```
+
 ### ToolGuard (规则链守卫)
 
 工具执行前的细粒度敏感命令守卫。每条规则 = `tool + pattern + action`，链式匹配首个命中生效。
@@ -311,3 +428,161 @@ self._restore_context()  # 从 SQLite 灌入历史消息 + observer.restore()
 **对比 JSON 文件**：
 - 旧：每轮 `json.dump` 全量，1MB 会话 = 1MB IO × N 轮
 - 新：增量写 1-2 条消息 = 几十字节 IO
+
+### Sandbox 扩展路线（从规则守卫到容器隔离）
+
+当前 `ToolGuard` 不是真正的沙箱——它只是**规则匹配 + 用户确认**，无法提供进程级隔离。
+
+**现状**：
+
+| 文件 | 状态 |
+|------|------|
+| `guard.py` | ✅ 规则守卫（已接通 Tools） |
+| `isolation.py` | 🟡 目录白名单（骨架，未接入） |
+| `permissions.py` | 🟡 权限管理（骨架） |
+| `security.py` | ✅ SecurityChecker 正则检测 |
+| `confirm.py` | ✅ 确认 UI |
+| `snapshot.py` | ✅ 快照（中断恢复用） |
+
+**扩展路线**：
+
+#### 阶段 1: 本地增强（轻量）
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+
+box "当前架构"
+  component "ToolGuard\n(规则匹配)" as Guard #LightGreen
+end box
+
+box "接上 SandboxIsolation"
+  component "SandboxIsolation\n(目录白名单)" as Isolation #LightYellow
+  component "work_dir = /tmp/merco_xxx" as TempDir
+end box
+
+Guard -> Isolation : 检查路径
+Isolation -> TempDir : 限制访问
+
+note top of Isolation
+  - 只允许读写 /home/user/project
+  - write_file 只在允许目录
+end note
+
+@enduml
+```
+
+实现：在 `ToolRegistry.execute()` 调目录检查。
+
+#### 阶段 2: 进程级隔离
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+
+card "Agent" as Agent
+
+card "bubblewrap /\nfirejail" as Bubblewrap #LightBlue
+note bottom of Bubblewrap
+  轻量容器
+  - 用户空间隔离
+  - 文件系统只读
+  - 网络过滤
+end note
+
+card "unshare /\nnamespace" as Unshare #LightYellow
+note bottom of Unshare
+  Linux 内核特性
+  - PID namespace
+  - Network namespace
+  - Mount namespace
+end note
+
+card "gVisor /\nsysbox" as Gvisor #LightGreen
+note bottom of Gvisor
+  安全运行时
+  - 用户态内核
+  - 系统调用拦截
+end note
+
+Agent -> Bubblewrap : 执行危险命令
+Bubblewrap -> Unshare : 隔离
+Bubblewrap -> Gvisor : 隔离
+
+@enduml
+```
+
+用 subprocess 调 bubblewrap 包装 bash 执行。
+
+#### 阶段 3: Docker 容器（本地/远程）
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+
+card "Docker Container" as Docker #LightBlue
+
+package "Merco Agent Pod" {
+  card "只读文件系统\n(除了 /workspace)" as FS
+  card "网络隔离\n(只允许必要出站)" as Net
+  card "资源限制\n(CPU/内存/磁盘)" as Resource
+  card "临时 root\n(执行后丢弃)" as Root
+}
+
+Docker -> FS
+Docker -> Net
+Docker -> Resource
+Docker -> Root
+
+note bottom of Docker
+  docker run --rm -v workspace:/workspace
+end note
+
+@enduml
+```
+
+#### 阶段 4: 云上容器
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+
+cloud "Cloud Provider" {
+  card "AWS ECS / GCP Cloud Run / Azure Container" as Cloud #LightBlue
+
+  package "临时容器池" {
+    card "Container 1" as C1 #LightGreen
+    card "Container 2" as C2 #LightGreen
+    card "Container N" as CN #LightGreen
+  }
+
+  Cloud --> C1 : 创建临时 Pod
+  Cloud --> C2 : 创建临时 Pod
+  Cloud --> CN : 创建临时 Pod
+}
+
+card "Merco Agent" as Agent #LightYellow
+
+Agent -> Cloud : API 调用
+Cloud -> Agent : 执行结果
+
+note bottom of Cloud
+  - 按需创建容器
+  - 执行完销毁
+  - 零持久化风险
+end note
+
+@enduml
+```
+
+对接 AWS/GCP 的容器服务 API，创建临时容器执行工具。
+
+**扩展点汇总**：
+
+| 扩展 | 实现方式 | 难度 |
+|------|----------|------|
+| 接上 SandboxIsolation | 在 ToolRegistry.execute() 调目录检查 | ⭐ |
+| bubblewrap 封装 | 用 subprocess 调 bubblewrap 包装 bash 执行 | ⭐⭐ |
+| Docker 容器 | 用 `docker run --rm -v workspace:/workspace` | ⭐⭐ |
+| 远程 Docker API | 对接 cloud provider API 创建临时容器 | ⭐⭐⭐ |
+| Kubernetes Pod | 临时 Pod + exec 到容器内执行 | ⭐⭐⭐ |
