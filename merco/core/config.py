@@ -141,6 +141,9 @@ class MercoConfig:
     memory_recall_limit: int = 3
     memory_recall_max_chars: int = 300
     memory_recall_threshold: float = 0.0
+    memory_auto_extract_on_session_end: bool = False
+    memory_extract_max_per_session: int = 3
+    memory_extract_min_messages: int = 5
     fork_enabled: bool = True
     fork_auto_on_compress: bool = True
     fork_reset_observer: bool = False  # default: inherit observer acc on fork
@@ -205,6 +208,9 @@ class MercoConfig:
                 "recall_limit": self.memory_recall_limit,
                 "recall_max_chars": self.memory_recall_max_chars,
                 "recall_threshold": self.memory_recall_threshold,
+                "auto_extract_on_session_end": self.memory_auto_extract_on_session_end,
+                "extract_max_per_session": self.memory_extract_max_per_session,
+                "extract_min_messages": self.memory_extract_min_messages,
             },
             "session": {
                 "fork_enabled": self.fork_enabled,
@@ -258,6 +264,9 @@ class MercoConfig:
             memory_recall_limit=memory_data.get("recall_limit", 3),
             memory_recall_max_chars=memory_data.get("recall_max_chars", 300),
             memory_recall_threshold=memory_data.get("recall_threshold", 0.0),
+            memory_auto_extract_on_session_end=memory_data.get("auto_extract_on_session_end", False),
+            memory_extract_max_per_session=memory_data.get("extract_max_per_session", 3),
+            memory_extract_min_messages=memory_data.get("extract_min_messages", 5),
             fork_enabled=sess.get("fork_enabled", True),
             fork_auto_on_compress=sess.get("fork_auto_on_compress", True),
             fork_reset_observer=isinstance(sess, dict) and sess.get("fork_reset_observer", False),

@@ -91,6 +91,32 @@ class TestConfig:
         assert cfg.memory_recall_max_chars == 300
         assert cfg.memory_recall_threshold == 0.0
 
+    def test_memory_auto_extract_defaults(self):
+        cfg = MercoConfig()
+        assert cfg.memory_auto_extract_on_session_end is False
+        assert cfg.memory_extract_max_per_session == 3
+        assert cfg.memory_extract_min_messages == 5
+
+    def test_memory_auto_extract_to_dict(self):
+        cfg = MercoConfig()
+        data = cfg._to_dict()
+        assert data["memory"]["auto_extract_on_session_end"] is False
+        assert data["memory"]["extract_max_per_session"] == 3
+        assert data["memory"]["extract_min_messages"] == 5
+
+    def test_memory_auto_extract_from_dict(self):
+        data = {
+            "memory": {
+                "auto_extract_on_session_end": True,
+                "extract_max_per_session": 7,
+                "extract_min_messages": 2,
+            }
+        }
+        cfg = MercoConfig._from_dict(data)
+        assert cfg.memory_auto_extract_on_session_end is True
+        assert cfg.memory_extract_max_per_session == 7
+        assert cfg.memory_extract_min_messages == 2
+
     def test_partial_memory_dict(self):
         """Only some memory keys provided — rest use defaults."""
         data = {
