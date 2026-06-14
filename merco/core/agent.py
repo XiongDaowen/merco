@@ -398,6 +398,10 @@ class Agent:
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
         self._current_prompt = prompt
+
+        # ── 生命周期事件：agent.start ──
+        await self.hooks.emit("agent.start", session_id=self.session.id)
+
         # 添加用户消息
         self.session.add_message("user", prompt)
         self.context.add({"role": "user", "content": prompt})
@@ -410,6 +414,12 @@ class Agent:
         # 执行 Agent 循环
         try:
             result = await self._agent_loop()
+            # 正常结束时：保存 session
+            self._auto_title(prompt)
+            self.session.metadata["observer"] = self.observer.snapshot()
+            self.session.save()
+            self._session_store.save_metadata(self.session.id, self.session.metadata)
+            await self.hooks.emit("conversation.turn")
         except asyncio.CancelledError:
             # 使用 InterruptCleanupPipeline 替换 _inject_interrupted_tool_results
             cancelled_tool_calls = self._find_orphan_tool_calls()
@@ -420,11 +430,9 @@ class Agent:
             )
             await self._cleanup_pipeline.process(cleanup_ctx)
             raise
-        self._auto_title(prompt)
-        self.session.metadata["observer"] = self.observer.snapshot()
-        self.session.save()
-        self._session_store.save_metadata(self.session.id, self.session.metadata)
-        await self.hooks.emit("conversation.turn")
+        finally:
+            # ── 生命周期事件：agent.stop（所有退出路径都触发）──
+            await self.hooks.emit("agent.stop", session_id=self.session.id)
         return result
 
     def _restore_context(self):
