@@ -879,6 +879,7 @@ class Agent:
                 summary_result = fallback
                 return fallback
 
+        await self.hooks.emit("context.compact", strategy="sliding_window")
         compressed = await compressor.compress(
             self.context.messages,
             strategy="sliding",
