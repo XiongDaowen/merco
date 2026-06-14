@@ -16,12 +16,15 @@ class Observer:
         self._live = MetricsCollector()
         self._acc_map: dict[str, int] = {}
         self._last_merged: dict[str, int] = {}  # 记录上次合并时的 live 值
+        self._current_session: str | None = None  # 当前会话 ID
 
         hooks.on("llm.chat", self._on_llm)
         hooks.on("tool.after_execute", self._on_tool)
         hooks.on("tool.error", self._on_error)
         hooks.on("conversation.turn", self._on_turn)
         hooks.on("agent.interrupted", self._on_interrupt)
+        hooks.on("agent.start", self._on_agent_start)
+        hooks.on("agent.stop", self._on_agent_stop)
 
     # ── 事件处理 ──────────────────────────────────────────
 
@@ -58,6 +61,15 @@ class Observer:
             self._live.increment("tool_calls", interrupted_tools)
         # 中断也算一轮（用户确实发起了请求）
         self._live.increment("turns")
+
+    def _on_agent_start(self, session_id: str, **kwargs):
+        """Agent 启动"""
+        self._live.increment("agent_starts")
+        self._current_session = session_id
+
+    def _on_agent_stop(self, session_id: str, **kwargs):
+        """Agent 停止"""
+        self._live.increment("agent_stops")
 
     # ── 生命周期 ──────────────────────────────────────────
 
