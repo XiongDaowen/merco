@@ -38,3 +38,14 @@ class MemorySaveProcessor(ABC):
     async def process(self, item: SaveItem) -> SaveItem | None:
         """返回 None = 跳过该 item"""
         ...
+
+
+class SourceEnricher(MemorySaveProcessor):
+    """自动补 [source] 前缀到 tags"""
+    name = "source_enricher"
+
+    async def process(self, item: SaveItem) -> SaveItem:
+        prefix = f"[{item.source}]"
+        if prefix not in item.tags:
+            item.tags.insert(0, prefix)
+        return item
