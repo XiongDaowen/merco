@@ -320,6 +320,70 @@ async def cmd_recall(agent, args):
 
 
 # ═══════════════════════════════════════════════════════════════════
+# MEMORY GROUP
+# ═══════════════════════════════════════════════════════════════════
+
+@cmd_registry.register("/remember", "存一条记忆（key= 可选）", group="memory")
+async def cmd_remember(agent, args):
+    """解析 text 或 key=value 形式，emit command.remember"""
+    if not args:
+        console.print("[dim]用法: /remember <text>  或  /remember key=<k> <text>[/dim]")
+        return True
+
+    key = ""
+    text = args
+    if args.startswith("key="):
+        parts = args.split(maxsplit=1)
+        key = parts[0][4:].strip()
+        text = parts[1] if len(parts) > 1 else ""
+
+    if not text and "=" in args and not args.startswith("key="):
+        # 形式：/remember 生日=1990-01-01
+        k, v = args.split("=", 1)
+        key, text = k.strip(), v.strip()
+
+    await agent.hooks.emit("command.remember", text=text, key=key)
+    console.print(f"[green]✓ 已记:[/green] {text[:80]}{'...' if len(text) > 80 else ''}")
+    return True
+
+
+@cmd_registry.register("/memories", "列出所有记忆（[tag] 可选过滤）", group="memory")
+async def cmd_memories(agent, args):
+    """列出所有记忆"""
+    store = agent._memory_store
+    tag_filter = args.strip() if args else None
+    keys = store.list_keys(tag=tag_filter)
+    if not keys:
+        console.print("[dim]暂无记忆[/dim]")
+        return True
+    console.print(f"[bold]📚 已存记忆 ({len(keys)} 条)[/bold]")
+    console.print("─" * 60)
+    for k in keys:
+        record = store.load(k)
+        if not record:
+            continue
+        tags = record.get("tags", [])
+        tag_str = " ".join(tags[:2])
+        value = record.get("value", "")
+        # Rich 会把 [user] 当成 markup，需要转义
+        tag_str_escaped = tag_str.replace("[", "\\[")
+        console.print(f"  {tag_str_escaped:20s}  [cyan]{k}[/cyan]")
+        console.print(f"     [dim]{value[:100]}{'...' if len(value) > 100 else ''}[/dim]")
+    return True
+
+
+@cmd_registry.register("/forget", "删除一条记忆", group="memory")
+async def cmd_forget(agent, args):
+    """删除指定 key 的记忆"""
+    if not args:
+        console.print("[dim]用法: /forget <key>[/dim]")
+        return True
+    agent._memory_store.delete(args.strip())
+    console.print(f"[green]✓ 已忘记:[/green] {args.strip()}")
+    return True
+
+
+# ═══════════════════════════════════════════════════════════════════
 # CONTROL GROUP
 # ═══════════════════════════════════════════════════════════════════
 
