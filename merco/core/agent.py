@@ -399,6 +399,8 @@ class Agent:
         """执行一次 Agent 循环"""
         self._current_prompt = prompt
 
+        # ── 生命周期事件：session.create（首次激活时）──
+        await self.hooks.emit("session.create", session_id=self.session.id)
         # ── 生命周期事件：agent.start ──
         await self.hooks.emit("agent.start", session_id=self.session.id)
 
@@ -433,6 +435,8 @@ class Agent:
         finally:
             # ── 生命周期事件：agent.stop（所有退出路径都触发）──
             await self.hooks.emit("agent.stop", session_id=self.session.id)
+            # ── 生命周期事件：session.destroy（清理 session）──
+            await self.hooks.emit("session.destroy", session_id=self.session.id)
         return result
 
     def _restore_context(self):
