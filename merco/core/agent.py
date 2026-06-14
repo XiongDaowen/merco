@@ -380,6 +380,31 @@ class Agent:
             .add(_mem)
         )
 
+        # ── Memory 保存链（让 /remember 和 session 结束抽取可写入）──
+        from merco.memory.save_pipeline import MemorySavePipeline
+        from merco.memory.strategy import (
+            ExplicitRememberStrategy, SessionEndExtractStrategy,
+        )
+
+        self.memory_save_pipeline = MemorySavePipeline(
+            store=MemoryStore(config.memory_path),
+            hooks=self.hooks,
+        )
+        self.memory_strategies = [
+            ExplicitRememberStrategy(self.memory_save_pipeline),
+        ]
+        if self.config.memory_auto_extract_on_session_end:
+            self.memory_strategies.append(
+                SessionEndExtractStrategy(
+                    self.memory_save_pipeline, self.llm,
+                    session_store=self._session_store,
+                    max_per_session=self.config.memory_extract_max_per_session,
+                    min_messages=self.config.memory_extract_min_messages,
+                )
+            )
+        for strat in self.memory_strategies:
+            strat.subscribe(self.hooks)
+
         # ── MCP 客户端 ──
         from merco.mcp.manager import MCPServerManager
         self.mcp_manager = MCPServerManager(
