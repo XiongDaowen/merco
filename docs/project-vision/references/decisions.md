@@ -2,6 +2,11 @@
 
 | 日期 | 决策 | 原因 |
 |------|------|------|
+| 2026-06-15 | Memory 保存侧采用 Strategy + Pipeline + Hook 三模式组合 | Recall 链路（HybridRecaller）已通，保存侧需要同时支持多触发源（/remember CLI + session 结束 LLM 抽取）和多处理（dedup/filter/enrich）。直接调用 `store.save` 散落各处无法扩展。三模式各司其职：Strategy 监听事件构造 SaveItem、Pipeline 串联 Processor 链、Hook 解耦业务与可观察性/审计。新触发源扩展只需一个 Strategy 类。 |
+| 2026-06-15 | SOURCE_PRIORITY = {user: 3, extracted: 2, system: 1} 保护显式 /remember | LLM 自动抽取的 extracted 永远不应覆盖用户显式存的记忆（用户明确说"我喜欢中文"，LLM 不该改成"用户偶尔用中文"）。`DedupProcessor` 在已有 key 时比较 source 优先级，新低则 skip。`DedupProcessor._infer_source` 从已有 tag 反推 source，应对未来读取老数据的场景。 |
+| 2026-06-15 | SessionEndExtractStrategy 默认 opt-in (config.memory_auto_extract_on_session_end = False) | LLM 抽取消耗 token 且质量不可控，对小项目/开发环境是负担。默认关闭 + 文档提醒，让用户主动开启。`/remember` 显式存不存在任何疑虑。 |
+| 2026-06-15 | LLM 抽取走 fail-soft (不阻塞 session.destroy) | 用户退出体验优先于记忆质量。LLM 网络/5xx/JSON 解析失败 → log warning + return，session.destroy 正常完成。`memory_extract_min_messages` 默认 5 也避免空会话浪费 token。 |
+|------|------|------|
 | 2026-06-07 | 流式 Content 纯文本 + 完成后切 Markdown | Rich Markdown 每次 chunk 重新解析全文，长内容卡顿。纯文本 `[dim]...[/dim]` 零解析开销，流式结束后一次性切 Markdown Panel。用户感知：流式时灰色文字，完成后变彩色 Markdown。 |
 | 2026-06-07 | 渲染节流统一 300ms（4fps） | 原 50ms（20fps）闪烁严重，人眼感知 4fps 足够流畅。content 和 reasoning 共用 `stream_render_interval`，避免各自节流逻辑分散。 |
 | 2026-06-03 | Skill 三状态计数 (REAL/PARTIAL/SKELETON + NOT WIRED) | 原五状态 (POLISHED/NEW/REAL/PARTIAL/SKELETON) 难以维护，三状态够用。Skill 副本与代码状态重对齐。 |

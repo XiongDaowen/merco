@@ -386,8 +386,9 @@ class Agent:
             ExplicitRememberStrategy, SessionEndExtractStrategy,
         )
 
+        self._memory_store = MemoryStore(config.memory_path)
         self.memory_save_pipeline = MemorySavePipeline(
-            store=MemoryStore(config.memory_path),
+            store=self._memory_store,
             hooks=self.hooks,
         )
         self.memory_strategies = [

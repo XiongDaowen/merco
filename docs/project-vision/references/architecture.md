@@ -29,7 +29,7 @@ merco/
 ├── core/           # 核心引擎 (agent, session, message, context, config, pipeline, setup, llm, self_healing)
 ├── tools/          # 工具系统 (registry, file, bash, web, task, mcp, skill, edit)
 ├── skills/         # 技能系统 (loader, registry, builtin/)
-├── memory/         # 记忆系统 (store, recall, compressor, search, session_store)
+├── memory/         # 记忆系统 (store, recall, compressor, search, session_store, save_pipeline, strategy)
 ├── hooks/          # 钩子系统 (registry, lifecycle, tool, chat)
 ├── sandbox/        # 沙箱环境 (permissions, isolation, security, guard, confirm, snapshot)
 ├── scheduler/      # 定时任务 (cron, jobs, delivery)
@@ -96,7 +96,7 @@ Agent.run(prompt)
        │
        ├─ _ask_continuation() → LLM 自评续命       ← ✅ 已实现 (max_tool_calls)
        │
-       └─ Memory.Store.save() → 持久化记忆         ← ❌ Phase 5 计划
+       └─ Memory.SavePipeline → 持久化记忆         ← ✅ v0.3.0 (Strategy + Pipeline + Hook 模式)
 ```
 
 ## 架构模式
@@ -416,6 +416,77 @@ self._restore_context()  # 从 SQLite 灌入历史消息 + observer.restore()
 **对比 JSON 文件**：
 - 旧：每轮 `json.dump` 全量，1MB 会话 = 1MB IO × N 轮
 - 新：增量写 1-2 条消息 = 几十字节 IO
+
+### Memory Save Pipeline (Strategy + Pipeline + Hook)
+
+记忆保存侧（"存"和"什么时候存"）采用三模式组合：Strategy 触发 + Pipeline 处理 + Hook 解耦。Recall 链路（HybridRecaller）早已通，本次补齐保存侧实现双向闭环。
+
+**核心结构**：
+
+```python
+# 1. Hook 触发（业务代码零感知）
+await agent.hooks.emit("command.remember", text="我喜欢用中文", key="user_lang")
+await agent.hooks.emit("session.destroy", session_id="s1")
+
+# 2. Strategy 监听事件 → 构造 SaveItem
+class ExplicitRememberStrategy(MemorySaveStrategy):
+    def subscribe(self, hooks):
+        hooks.on("command.remember", self._on_remember)
+    async def _on_remember(self, text, key=""):
+        await self.pipeline.save(SaveItem(key=key or self._derive_key(text), value=text, source="user"))
+
+# 3. Pipeline 串联 Processor（链式可插拔）
+class MemorySavePipeline:
+    def __init__(self, store, hooks):
+        self._processors = [
+            SourceEnricher(),           # 自动加 [user]/[extracted] tag
+            DedupProcessor(store),       # 优先级 user>extracted>system，return None=skip
+        ]
+    async def save(self, item):
+        for p in self._processors:
+            item = await p.process(item)        # None = skip
+            if item is None:
+                return False
+        self.store.save(item.key, item.value, tags=item.tags)
+        await self.hooks.emit("memory.saved", key=item.key, ...)
+        return True
+```
+
+**三个关键设计**：
+
+1. **Source 优先级保护**：`SOURCE_PRIORITY = {user: 3, extracted: 2, system: 1}`，user 显式存的永远不被 extracted（LLM 自动抽）覆盖。`DedupProcessor._infer_source` 从已有 tag 反推优先级，对抗自动抽取污染。
+
+2. **fail-soft 抽取**：`SessionEndExtractStrategy` 在 LLM 调用/JSON 解析失败时 log warning 并 return，永不阻塞 `session.destroy` 流程。LLM 失败不应影响用户退出体验。
+
+3. **Hook 双向解耦**：业务代码只 emit 事件，Strategy 监听 + 写库 + emit `memory.saved` + Observer 计数。CLI `/remember`/Strategy/Observer/未来的 Audit 全部订阅同一事件流，加新订阅者零侵入。
+
+**对比直接调用**：
+- 旧：业务代码 `store.save(...)` 散落各处，新增触发源要改所有调用点
+- 新：业务只 emit，Strategy 抽象让新触发源（webhook/scheduler/MCP）扩展只需一个类
+
+**接入位置**（agent.py 启动装配）：
+
+```python
+self._memory_store = MemoryStore(config.memory_path)
+self.memory_save_pipeline = MemorySavePipeline(store=self._memory_store, hooks=self.hooks)
+self.memory_strategies = [ExplicitRememberStrategy(self.memory_save_pipeline)]
+if config.memory_auto_extract_on_session_end:
+    self.memory_strategies.append(SessionEndExtractStrategy(
+        self.memory_save_pipeline, self.llm,
+        session_store=self._session_store,
+        max_per_session=config.memory_extract_max_per_session,
+        min_messages=config.memory_extract_min_messages,
+    ))
+for strat in self.memory_strategies:
+    strat.subscribe(self.hooks)
+```
+
+**YAGNI 预留扩展点**（不实现）：
+
+- `SecretFilterProcessor` — 检测 API key/密码/身份证号
+- TTL 过期机制
+- MemoryStore backend 抽象（SQLite 后端）
+- 跨 agent 共享 Memory
 
 ### Sandbox 扩展路线（从规则守卫到容器隔离）
 
