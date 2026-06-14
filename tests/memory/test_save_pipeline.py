@@ -92,7 +92,7 @@ async def test_dedup_pass_through_when_key_not_exists():
 
 @pytest.mark.asyncio
 async def test_dedup_infer_source_from_tags():
-    """旧记录无 [source] 标签时按 user 处理（向后兼容）"""
+    """旧记录无 [source] 标签时按 system 处理（向后兼容，最低优先级）"""
     store = FakeStore({"k1": {"tags": [], "value": "old"}})
     proc = DedupProcessor(store)
     # extracted 来（优先级 2） vs 空（默认最低 0） → 覆盖
