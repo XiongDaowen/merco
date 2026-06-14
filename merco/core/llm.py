@@ -39,24 +39,41 @@ THINK_TAG_PAIRS: tuple[tuple[str, str], ...] = (
 
 
 def _build_think_block_re() -> re.Pattern:
-    """根据 THINK_TAG_PAIRS 构建匹配所有 think 块的正则"""
-    patterns = []
+    """根据 THINK_TAG_PAIRS 构建匹配所有 think 块的正则。
+
+    构造策略：
+      1. 收集所有模式（块 + 单标签）
+      2. 按"长度降序"排序——块（长）必须先于裸标签（短）
+      3. 用非捕获组组装，避免 sub() 因空捕获组错位
+
+    排序是关键：Python re 交替是"左优先"，短模式排在前面会"吞掉"块首字符，
+    导致长块模式失配。例如块模式 <think>...[/think] 在前时，遇到 <think>hi</think>
+    会先匹配 <think> 裸标签，块模式再也匹配不上。
+    """
+    raw_patterns = []
     for open_tag, close_tag in THINK_TAG_PAIRS:
-        # 转义特殊字符，构造匹配块的正则
-        escaped_open = re.escape(open_tag)
-        escaped_close = re.escape(close_tag)
-        patterns.append(f"{escaped_open}.*?{escaped_close}")
-        # 也清理单独的标签（块已被上面匹配，这里处理残留的单独标签）
-        patterns.append(escaped_open)
-        patterns.append(escaped_close)
-    return re.compile("|".join(f"({p})" for p in patterns), re.IGNORECASE)
+        eo = re.escape(open_tag)
+        ec = re.escape(close_tag)
+        raw_patterns.append(f"{eo}.*?{ec}")  # 完整块
+        raw_patterns.append(eo)              # 孤儿开标签
+        raw_patterns.append(ec)              # 孤儿闭标签
+    # 长度降序：块（最长）必须先于单标签
+    raw_patterns.sort(key=len, reverse=True)
+    return re.compile("|".join(f"(?:{p})" for p in raw_patterns), re.IGNORECASE | re.DOTALL)
 
 
 _THINK_BLOCK_RE = _build_think_block_re()
 
 
 def _strip_think_tags(text: str) -> str:
-    """移除 content 中残留的所有 think 块及其标签"""
+    """chunk 安全：只去 think 标签，不动空白。
+    流式场景专用——每 chunk 调一次，.strip() 会破坏词边界。"""
+    return _THINK_BLOCK_RE.sub("", text)
+
+
+def _clean_content(text: str) -> str:
+    """完整 content 终态处理：去 think 标签 + 去前后空白。
+    非流式专用——完整响应只需调一次，strip 收尾合理。"""
     return _THINK_BLOCK_RE.sub("", text).strip()
 
 
@@ -433,7 +450,7 @@ class LLMClient:
 
         # 兜底：无论哪个策略命中，都清理 content 中残留的 <thinking> 标签
         # 防止 DirectFieldStrategy 命中后 ThinkTagStrategy 没跑导致标签泄漏
-        result["content"] = _strip_think_tags(result["content"])
+        result["content"] = _clean_content(result["content"])
 
         if message.tool_calls:
             normalized = self._normalize_tool_calls(message.tool_calls)
