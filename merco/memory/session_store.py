@@ -23,6 +23,9 @@ class SessionStore:
 
     def __init__(self, db_path: str):
         self.db_path = os.path.expanduser(db_path)
+        # 顺序：先检查/恢复，再建表
+        # （如果 DB 完全损坏，_ensure_db() 会在 _conn() 阶段抛 DatabaseError）
+        self.startup_check()
         self._ensure_db()
 
     # ── 表初始化 ──────────────────────────────────────────
@@ -116,6 +119,37 @@ class SessionStore:
         except Exception as e:
             logger.warning(f"删除备份文件失败: {e}")
             return False
+
+    # ── 完整性检查 ──────────────────────────────────────
+
+    def check_integrity(self) -> bool:
+        """检查 SQLite 完整性，返回 True=正常"""
+        try:
+            with self._conn() as conn:
+                result = conn.execute("PRAGMA integrity_check").fetchone()
+                is_ok = result[0] == "ok"
+                if not is_ok:
+                    logger.warning(f"Session 数据库完整性检查失败: {result[0]}")
+                return is_ok
+        except Exception as e:
+            logger.warning(f"完整性检查异常: {e}")
+            return False
+
+    def startup_check(self):
+        """启动时检查，必要时恢复"""
+        if not os.path.exists(self.db_path):
+            return  # 数据库不存在，无需检查
+
+        if not self.check_integrity():
+            logger.warning("Session 数据库损坏，尝试从备份恢复...")
+            if not self.restore_from_backup():
+                logger.error("恢复失败，Session 数据可能丢失")
+                # 无备份可用：删除损坏文件，让 _ensure_db() 重建
+                try:
+                    os.remove(self.db_path)
+                    logger.warning("已删除损坏的 Session 数据库")
+                except Exception as e:
+                    logger.error(f"删除损坏文件失败: {e}")
 
     # ── Session CRUD ──────────────────────────────────────
 
