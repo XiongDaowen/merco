@@ -10,6 +10,21 @@ from .recall import (
     MemoryRecall,
 )
 
+from .save_pipeline import (
+    MemorySavePipeline,
+    MemorySaveProcessor,
+    SaveItem,
+    MemorySource,
+    SOURCE_PRIORITY,
+    SourceEnricher,
+    DedupProcessor,
+)
+from .strategy import (
+    MemorySaveStrategy,
+    ExplicitRememberStrategy,
+    SessionEndExtractStrategy,
+)
+
 __all__ = [
     "MemoryStore",
     "MemoryRecall",
@@ -18,4 +33,14 @@ __all__ = [
     "FTS5Recaller",
     "MemoryRecaller",
     "HybridRecaller",
+    "MemorySavePipeline",
+    "MemorySaveProcessor",
+    "SaveItem",
+    "MemorySource",
+    "SOURCE_PRIORITY",
+    "SourceEnricher",
+    "DedupProcessor",
+    "MemorySaveStrategy",
+    "ExplicitRememberStrategy",
+    "SessionEndExtractStrategy",
 ]
