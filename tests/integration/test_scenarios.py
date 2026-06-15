@@ -258,8 +258,48 @@ async def test_session_fork_on_compress(test_agent):
 
 
 # ═══════════════════════════════════════════════════════════
-# RecoveryPipeline 重试
+# MCP tool calling E2E
 # ═══════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_mcp_tool_calling_e2e(test_agent, tmp_path):
+    """MCP tool 通过 agent.run() 端到端调用 → result 正确"""
+    from merco.tools.base import BaseTool
+
+    class MockMCPTool(BaseTool):
+        name = "mcp_test_tool"
+        description = "MCP test tool"
+        toolset = "mcp"
+        parameters = {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        }
+
+        async def execute(self, query: str, **kwargs):
+            return {"result": f"mcp: {query}"}
+
+    # 把 MCP tool 加入 registry
+    test_agent.tool_registry.register(MockMCPTool())
+
+    # Mock LLM：第一次 tool_call → 第二次答
+    test_agent.llm = MockLLMClient([
+        {
+            "tool_calls": [{
+                "id": "mcp_t1",
+                "name": "mcp_test_tool",
+                "arguments": {"query": "test query"},
+            }],
+        },
+        {"content": "MCP 工具返回了结果"},
+    ])
+
+    result = await test_agent.run("用 mcp 工具查 test query")
+    assert "MCP 工具返回了结果" in result
+
+    # 验证：tool result 注入 session
+    msgs = test_agent.session.messages
+    assert any(m["role"] == "tool" and "mcp: test query" in str(m.get("content", "")) for m in msgs)
 
 @pytest.mark.asyncio
 async def test_recovery_pipeline_retries_on_5xx(test_agent):
