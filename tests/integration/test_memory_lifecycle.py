@@ -138,3 +138,28 @@ async def test_recall_injects_into_system_prompt(test_agent):
         if m.get("role") == "system":
             all_sys += m.get("content", "")
     assert "小王" in all_sys or "user_name" in all_sys
+
+
+async def test_memory_save_emits_event(test_agent):
+    """/remember → Strategy → Pipeline → Store + memory.saved 事件"""
+    # 注册事件 handler
+    saved_events = []
+
+    async def on_saved(key, **kwargs):
+        saved_events.append(key)
+
+    test_agent.hooks.on("memory.saved", on_saved)
+
+    # 触发 command.remember
+    await test_agent.hooks.emit(
+        "command.remember", text="我喜欢用中文", key="user_lang_pref"
+    )
+
+    # 验证：store 写入成功
+    record = test_agent._memory_store.load("user_lang_pref")
+    assert record is not None
+    assert record["value"] == "我喜欢用中文"
+    assert "[user]" in record["tags"]
+
+    # 验证：memory.saved 事件触发
+    assert "user_lang_pref" in saved_events
