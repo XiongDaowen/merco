@@ -129,6 +129,7 @@ def test_agent(monkeypatch, tmp_path):
     cfg.model.api_key = "test-key"
     cfg.model.model = "test-model"
     cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")  # 隔离 memory 目录，不污染 ~/.merco/memory
 
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
