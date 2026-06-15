@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-15
+> 最后更新: 2026-06-16
 
 ## 目标对标
 
@@ -9,7 +9,18 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: Memory → Sessions 打通 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+**阶段**: Phase 2 深入 | **焦点**: 集成测试补全 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+
+### 本次会话更新 (2026-06-16)
+
+- **集成测试补全（新功能）**: +8 个集成测试覆盖 6 个场景：
+  - Context 压缩 + Session fork on compress
+  - Memory recall 注入 system prompt 端到端 + HybridRecaller 真实数据
+  - Memory save 全链路 + `memory.saved` 事件
+  - RecoveryPipeline 重试（500 错误 → 第二次成功）
+  - Hook 事件计数 during loop
+  - MCP tool calling 端到端
+  - 全部用 MockLLMClient + test_agent fixture，零网络依赖
 
 ### 本次会话更新 (2026-06-15)
 
@@ -273,7 +284,7 @@
 
 1. **Scheduler → Runtime** — CronScheduler 已有，接入 CLI 启动时加载 + 按时触发
 2. **TUI 实现** — Textual 重写 REPL，多会话切换/分支树/记忆管理
-3. **集成测试补全** — mock LLM 的 Agent-Loop 全覆盖（压缩/恢复/工具调用/记忆召回）
+3. **集成测试补全** — mock LLM 的 Agent-Loop 全覆盖（压缩/恢复/工具调用/记忆召回） ✅ 本次完成 8 个
 4. **通一个 Gateway** — Telegram 端到端（Bot API + webhook/polling）
 5. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
 6. **MemoryStore backend 抽象** — 支持 SQLite 后端（YAGNI 预留）
