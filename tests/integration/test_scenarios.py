@@ -157,6 +157,41 @@ async def test_guard_auto_skips(test_agent):
 
 
 # ═══════════════════════════════════════════════════════════
+# Context 压缩
+# ═══════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_context_compression_triggered(test_agent):
+    """MockLLM 产生 N 条大消息 → context 超过阈值 → 压缩 → messages 变少"""
+    # 构造大上下文：每条 ~22000 chars，确保 4 轮后超过 0.8 × 20000 token 阈值
+    # (needs_compression 触发条件为 total_tokens > max_tokens × 0.8 = 16000)
+    big_msg = "x" * 22000
+    test_agent.config.max_input_tokens = 20000
+    test_agent.context.max_tokens = 20000  # ContextManager 已在 __init__ 创建，需同步更新
+
+    # Mock LLM 5 次调用：前 4 轮大消息触发压缩，第 5 轮压缩后的正常消息
+    test_agent.llm = MockLLMClient([
+        {"content": big_msg},  # 第 1 轮
+        {"content": big_msg},  # 第 2 轮
+        {"content": big_msg},  # 第 3 轮
+        {"content": big_msg},  # 第 4 轮 — 累积到 > 16000 tokens，触发压缩
+        {"content": "压缩后继续"},  # 压缩后第 5 轮
+    ])
+
+    # 跑 4 轮
+    for i in range(4):
+        await test_agent.run(f"msg {i}")
+
+    # 验证：context.messages 已被压缩（小于 4 轮的 8 条）
+    assert len(test_agent.context.messages) < 8
+
+    # 验证：session 持久化了所有消息
+    test_agent.session.save()
+    loaded = test_agent._session_store.load_session(test_agent.session.id)
+    assert len(loaded["messages"]) == 8  # session 完整保存（压缩只在 context 层）
+
+
+# ═══════════════════════════════════════════════════════════
 # Context 恢复
 # ═══════════════════════════════════════════════════════════
 
