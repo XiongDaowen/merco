@@ -213,3 +213,42 @@ async def test_context_restore_after_switch(test_agent):
     assert len(msgs) == 2
     assert msgs[0]["role"] == "user"
     assert msgs[0]["content"] == "会话A的问题"
+
+
+# ═══════════════════════════════════════════════════════════
+# Session Fork on Compress
+# ═══════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_session_fork_on_compress(test_agent):
+    """压缩时自动 fork 当前 session 到 child session"""
+    # fork_enabled=True / fork_auto_on_compress=True 已是 config 默认值，无需设置
+    big_msg = "x" * 22000
+    test_agent.config.max_input_tokens = 20000
+    test_agent.context.max_tokens = 20000  # ContextManager 已在 __init__ 创建，需同步更新
+
+    # Mock LLM 5 次调用：前 4 轮大消息累积触发压缩 → 自动 fork
+    test_agent.llm = MockLLMClient([
+        {"content": big_msg},
+        {"content": big_msg},
+        {"content": big_msg},
+        {"content": big_msg},
+        {"content": "压缩后继续"},
+    ])
+
+    original_session_id = test_agent.session.id
+
+    # 跑 5 轮触发压缩
+    for i in range(5):
+        await test_agent.run(f"msg {i}")
+
+    # 验证：session store 至少 2 个 session（原 + fork child）
+    sessions = test_agent._session_store.list_sessions()
+    assert len(sessions) >= 2
+
+    # 验证：fork session 存在且包含原始消息
+    children = test_agent._session_store.get_children(original_session_id)
+    assert len(children) >= 1
+    forked = children[0]
+    forked_data = test_agent._session_store.load_session(forked["id"])
+    assert len(forked_data["messages"]) > 0
