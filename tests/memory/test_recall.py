@@ -347,3 +347,38 @@ class TestHybridRecaller:
         hybrid = HybridRecaller([])
         results = await hybrid.recall("anything", limit=5)
         assert results == []
+
+    @pytest.mark.asyncio
+    async def test_hybrid_with_real_store_and_search(self, tmp_path):
+        """HybridRecaller 聚合 FTS5Recaller + MemoryRecaller，从真实数据召回"""
+        from merco.memory.store import MemoryStore
+        from merco.memory.session_store import SessionStore
+        from merco.memory.session_search import SessionSearch
+
+        # 真实 store
+        session_store = SessionStore(str(tmp_path / "sess.db"))
+        mem_store = MemoryStore(str(tmp_path / "memory"))
+
+        # 先创建 session（save_message 有 FK 约束）
+        session_store.create_session("s1")
+
+        # 写入 session message
+        session_store.save_message("s1", "user", "Python programming")
+        session_store.save_message("s1", "assistant", "I can help with Python")
+        session_store.save_message("s1", "user", "Java is also good")
+
+        # 写入 memory（value 需 JSON-serializable）
+        mem_store.save("user_lang", {"text": "Python"}, tags=["[user]"])
+
+        # 构造 HybridRecaller
+        fts5 = FTS5Recaller(SessionSearch(session_store))
+        mem = MemoryRecaller(mem_store)
+        hybrid = HybridRecaller(limit=5, max_chars=500).add(fts5).add(mem)
+
+        # 召回
+        results = await hybrid.recall("Python", limit=5)
+        assert len(results) >= 1
+
+        # 验证 source 字段标识
+        sources = {r.source for r in results}
+        assert "fts5" in sources or "memory" in sources
