@@ -3,6 +3,7 @@
 import pytest
 from merco.observability.observer import Observer
 from merco.hooks.registry import HookRegistry
+from tests.conftest import MockLLMClient
 
 
 @pytest.fixture
@@ -179,3 +180,55 @@ def test_snapshot_restore_roundtrip(obs):
     obs2 = Observer(HookRegistry())
     obs2.restore(data)
     assert obs2._acc_map == {"turns": 42, "llm_calls": 30}
+
+
+# ── Hook 事件计数 during agent loop ───────────────────────
+
+def test_observer_counts_hook_events_in_agent_loop(test_agent, monkeypatch):
+    """agent.run() 触发后，Observer 内部计数应正确更新。
+
+    验证 _live 计数器在一次 run（包含 LLM 调用 + 工具执行 + conversation turn）之后
+    被 hook 事件正确填充。counter key 名（来自 observer.py）：
+    - llm_calls, tokens_in, tokens_out
+    - tool_calls, tool.{name}
+    - turns
+    - agent_starts, agent_stops
+    """
+    from io import StringIO
+    from rich.console import Console
+
+    # 替换 console 避免噪声
+    quiet = Console(file=StringIO(), force_terminal=True, width=120)
+    monkeypatch.setattr("merco.core.agent.console", quiet)
+
+    # test_agent fixture 已经在 agent.py:328 自动创建 self.observer
+    observer = test_agent.observer
+    # 确保计数从干净状态开始
+    observer.reset(full=False)
+
+    # Mock LLM：第一次 tool_call → 第二次 final answer
+    test_agent.llm = MockLLMClient([
+        {"tool_calls": [{"id": "t1", "name": "echo", "arguments": {"message": "hi"}}]},
+        {"content": "done"},
+    ])
+
+    # 跑一轮带工具调用
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(test_agent.run("echo hi"))
+
+    # 验证 Observer live 计数（key 名以 observer.py:36, 47, 55 为准）
+    counters = observer._live.get_counters()
+
+    # agent.start + agent.stop 都会触发
+    assert counters.get("agent_starts", 0) >= 1
+    assert counters.get("agent_stops", 0) >= 1
+
+    # 至少 2 次 LLM 调用（tool_call 一次，final 一次）
+    assert counters.get("llm_calls", 0) >= 2
+
+    # tool.after_execute 至少 1 次
+    assert counters.get("tool_calls", 0) >= 1
+    assert counters.get("tool.echo", 0) >= 1
+
+    # conversation.turn 至少 1 次
+    assert counters.get("turns", 0) >= 1
