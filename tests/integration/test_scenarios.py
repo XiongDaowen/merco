@@ -3,9 +3,12 @@
 每个测试 = 声明 LLM 响应 → 执行 → 验证
 """
 
+import httpx
 import pytest
+from merco.core.pipeline import RecoveryPipeline, WaitRecovery
 from merco.core.session import Session
 from merco.sandbox.guard import ToolGuard
+from openai import APIStatusError
 from tests.conftest import MockLLMClient
 
 
@@ -252,3 +255,39 @@ async def test_session_fork_on_compress(test_agent):
     forked = children[0]
     forked_data = test_agent._session_store.load_session(forked["id"])
     assert len(forked_data["messages"]) > 0
+
+
+# ═══════════════════════════════════════════════════════════
+# RecoveryPipeline 重试
+# ═══════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_recovery_pipeline_retries_on_5xx(test_agent):
+    """MockLLM 第一次抛 500 → RecoveryPipeline 重试 → 第二次成功"""
+    class FlakyLLM:
+        def __init__(self):
+            self.calls = 0
+
+        async def chat(self, messages, tools=None, tool_choice="auto"):
+            self.calls += 1
+            if self.calls == 1:
+                # 第一次抛 500 错误
+                resp = httpx.Response(500, request=httpx.Request("POST", "http://test"))
+                raise APIStatusError("internal server error", response=resp, body=None)
+            # 第二次返回成功
+            return {"content": "重试后成功", "finish_reason": "stop"}
+
+        async def chat_stream(self, messages, tools=None, tool_choice="auto"):
+            resp = await self.chat(messages, tools, tool_choice)
+            yield resp
+
+    # 用极短 delay 替换默认 WaitRecovery，避免 3s 真实等待
+    test_agent.recovery_pipeline = RecoveryPipeline()
+    test_agent.recovery_pipeline.use(WaitRecovery(delay=0.01, max_delay=0.01))
+    test_agent.llm = FlakyLLM()
+
+    # 跑一轮：第一次失败 → 重试 → 第二次成功
+    result = await test_agent.run("hello")
+    assert result == "重试后成功"
+    # LLM 至少被调用 2 次（第一次失败 + 重试成功）
+    assert test_agent.llm.calls >= 2
