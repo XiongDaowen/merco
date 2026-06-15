@@ -1,11 +1,13 @@
 """Memory 全链路端到端测试"""
 import json
+import pytest
 from merco.memory.store import MemoryStore
 from merco.memory.save_pipeline import MemorySavePipeline, SaveItem
 from merco.memory.strategy import (
     ExplicitRememberStrategy, SessionEndExtractStrategy,
 )
 from merco.hooks.registry import HookRegistry
+from tests.conftest import MockLLMClient
 
 
 class FakeLLM:
@@ -106,3 +108,33 @@ async def test_dedup_user_beats_extracted(tmp_path):
     assert result is False  # 被 dedup skip
     record2 = store.load("preference")
     assert record2["value"] == "我的偏好"  # 未覆盖
+
+
+@pytest.mark.asyncio
+async def test_recall_injects_into_system_prompt(test_agent):
+    """存记忆 → agent.run() → system prompt 含记忆内容"""
+    # 存记忆
+    test_agent._memory_store.save("user_name", "小王", tags=["[user]"])
+
+    # 构造会让系统调用 recaller 的 user prompt
+    test_agent.llm = MockLLMClient([{"content": "你好小王"}])
+
+    # 跑一轮 — query 包含 "user_name" 以触发 MemoryStore.search 命中
+    # (MemoryStore.search 是简单子串匹配：把 query 与 json.dumps(record) 比对。
+    #  中文在 JSON 中被转义为 \uXXXX，所以用 key 名称 "user_name" 作为查询词
+    #  才能匹配到记录。查询词必须是 JSON dump 的子串。)
+    await test_agent.run("user_name")
+
+    # 验证：system prompt 包含记忆
+    # context.messages[0] 是 user 消息（system prompt 只在 LLM 调用的 messages 列表里），
+    # 所以我们检查 LLM 收到的消息中的 system 内容
+    assert len(test_agent.llm.calls) >= 1
+    llm_messages = test_agent.llm.calls[0]["messages"]
+    sys_msg = llm_messages[0]
+    assert sys_msg["role"] == "system"
+    # 拼接所有 system chunk（_build_system_prompt 可能在多个 system 消息里）
+    all_sys = sys_msg.get("content", "")
+    for m in llm_messages[1:]:
+        if m.get("role") == "system":
+            all_sys += m.get("content", "")
+    assert "小王" in all_sys or "user_name" in all_sys
