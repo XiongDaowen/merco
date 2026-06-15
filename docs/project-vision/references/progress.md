@@ -271,15 +271,9 @@
 
 ## 下一步（按优先级）
 
-1. **打通 Sandbox → Tools** — Bash/File 工具调用 SecurityChecker + SandboxIsolation
-2. **打通 Hooks → Agent** — Agent Loop 关键节点 emit 事件
-3. **打通 Observability → Agent** — 通过 hooks emit 完整可观察性埋点
-4. **实现 Session 持久化** — 增量写 SQLite（已基础实现，需容错增强）
-5. **接入 LLM 上下文压缩** — 替换占位摘要为真实 LLM 调用（已基础实现）
-6. **实现 WebSearch** — 对接搜索 API
-7. **实现 MCP 客户端协议** — 接入外部 MCP server（已实现 MCPServerManager）
-8. **补充集成测试** — mock LLM 的 Agent-Loop 全覆盖测试
-9. **Memory 写入（SavePipeline 双向打通）** — Agent 存记忆（已实现：/remember + session 结束 LLM 抽取）
-10. **打通 Scheduler → Runtime** — CLI/Web 启动时激活
-11. **通一个 Gateway** — Telegram 端到端
-12. **TUI 实现** — Textual 替换 `"coming soon"`
+1. **Scheduler → Runtime** — CronScheduler 已有，接入 CLI 启动时加载 + 按时触发
+2. **TUI 实现** — Textual 重写 REPL，多会话切换/分支树/记忆管理
+3. **集成测试补全** — mock LLM 的 Agent-Loop 全覆盖（压缩/恢复/工具调用/记忆召回）
+4. **通一个 Gateway** — Telegram 端到端（Bot API + webhook/polling）
+5. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
+6. **MemoryStore backend 抽象** — 支持 SQLite 后端（YAGNI 预留）
