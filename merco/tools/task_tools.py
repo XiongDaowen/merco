@@ -7,29 +7,34 @@ class TaskTool(BaseTool):
     """委派任务给子代理"""
 
     name = "task"
-    description = "将任务委派给子代理执行"
+    description = "创建任务并派发给子代理执行"
     toolset = "task"
     parameters = {
         "type": "object",
         "properties": {
-            "description": {"type": "string", "description": "任务描述"},
-            "prompt": {"type": "string", "description": "详细指令"},
-            "agent": {"type": "string", "description": "指定子代理名称"},
+            "title": {"type": "string", "description": "任务标题"},
+            "description": {"type": "string", "description": "详细描述"},
+            "priority": {"type": "integer", "description": "优先级 0=低 1=中 2=高", "default": 1},
+            "agent": {"type": "string", "description": "指定子代理名称", "default": "default"},
         },
-        "required": ["description", "prompt"],
+        "required": ["title"],
     }
 
     def check(self) -> bool:
-        """子代理调度未实现时隐藏此工具"""
-        return False  # TODO: 实现后改为 True
+        """激活！"""
+        return True
 
-    async def execute(self, description: str, prompt: str, agent: str = None) -> dict:
-        # TODO: 实现子代理调度逻辑
+    async def execute(self, title: str, description: str = "", priority: int = 1, agent: str = "default") -> dict:
+        # 1. 创建 Todo
+        todo = self._todo_manager.create(title, description, priority)
+
+        # 2. 派发子代理
+        subagent_id = await self._sub_agent_manager.dispatch(todo.id, description, agent)
+
         return {
-            "status": "pending",
-            "description": description,
-            "agent": agent or "default",
-            "note": "Subagent dispatch not yet implemented",
+            "todo_id": todo.id,
+            "subagent_id": subagent_id,
+            "status": "dispatched",
         }
 
 
