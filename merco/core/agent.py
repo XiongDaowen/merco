@@ -406,6 +406,39 @@ class Agent:
         for strat in self.memory_strategies:
             strat.subscribe(self.hooks)
 
+        # ── 插件系统 ──
+        from merco.plugins.base import PluginContext
+        from merco.plugins.manager import PluginManager
+        from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
+
+        self._plugin_ctx = PluginContext(
+            hooks=self.hooks,
+            tool_registry=self.tool_registry,
+            prompt_builder=self.prompt_builder,
+            recovery_pipeline=self.recovery_pipeline,
+            result_pipeline=self.result_pipeline,
+            memory_save_pipeline=self.memory_save_pipeline,
+            recaller=self.recaller,
+            config=config,
+            observer=self.observer,
+        )
+        self.plugin_manager = PluginManager(self._plugin_ctx)
+
+        # 注册内置插件
+        self.plugin_manager.register(SuperpowerPlugin())
+
+        # 激活所有 enabled 插件（同步调用，Agent.__init__ 是同步的）
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 如果已经在 async 上下文，用 create_task
+                asyncio.ensure_future(self.plugin_manager.activate_all())
+            else:
+                loop.run_until_complete(self.plugin_manager.activate_all())
+        except RuntimeError:
+            # 没有 event loop，跳过
+            pass
+
         # ── MCP 客户端 ──
         from merco.mcp.manager import MCPServerManager
         self.mcp_manager = MCPServerManager(
