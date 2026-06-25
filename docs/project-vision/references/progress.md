@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-20
+> 最后更新: 2026-06-26
 
 ## 目标对标
 
@@ -9,7 +9,19 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: 插件系统 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+**阶段**: Phase 2 深入 | **焦点**: Todo + SubAgent | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+
+### 本次会话更新 (2026-06-26)
+
+- **Todo + SubAgent 系统（新功能）**: Todo 驱动子代理执行，结果自动注入父 context。构建 merco 的任务管理 + 子代理派发基础设施。
+  - **TodoItem 数据模型**: `merco/todo/models.py` — TodoItem dataclass，字段：id/title/description/status(pending/in_progress/completed/failed)/priority(0-2)/parent_id/assigned_to/created_at/updated_at/result
+  - **TodoManager (SQLite CRUD)**: `merco/todo/manager.py` — SQLite 持久化，完整 CRUD（create/get/update/list/delete），支持 status/parent_id 过滤，按 priority DESC + created_at ASC 排序，自动建库建表
+  - **SubAgentManager（子代理派发）**: `merco/agents/subagent.py` — `dispatch(todo_id, prompt, agent_name)` 创建子 Agent（继承父 config + tool_registry，隔离 session），执行任务，更新 Todo 状态（in_progress → completed/failed），结果注入父 context，emit `subagent.completed` hook
+  - **TaskTool 激活**: `merco/tools/task_tools.py` — 从 skeleton 升级为完整实现。`task` 工具接受 title/description/priority/agent 参数，创建 Todo 后派发子代理执行，返回 `{todo_id, subagent_id, status}`。自注册到 tool_registry
+  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `todo_manager` 和 `sub_agent_manager` 两个扩展点（11 个扩展点总计），插件可访问任务管理和子代理派发能力
+  - **Agent 启动装配**: `merco/core/agent.py` — `__init__` 构造 `TodoManager`（SQLite 路径 `{memory_path}/../todos.db`）+ `SubAgentManager(self)`，注入 PluginContext
+  - **端到端集成测试**: `tests/integration/test_todo_subagent.py` — 4 个集成测试覆盖：派发+结果注入、失败状态标记、多次独立派发、hooks.emit 验证
+  - **单元测试**: `tests/todo/test_models.py` (2) + `tests/todo/test_manager.py` (6) + `tests/agents/test_subagent.py` (2) = 10 个单测，全部通过
 
 ### 本次会话更新 (2026-06-20)
 
@@ -195,7 +207,7 @@
 | `edit.py` | 🟢 POLISHED | SEARCH/REPLACE + diff 预览 + 确认。MultiEdit 已删。 |
 | `bash_tools.py` | 🟢 REAL | `BashTool` asyncio subprocess。**未调 SecurityChecker。** |
 | `web_tools.py` | 🟡 PARTIAL | `WebFetch` 可用。`WebSearch` 骨架。|
-| `task_tools.py` | 🔴 SKELETON | `"not yet implemented"`。|
+| `task_tools.py` | 🟢 NEW | TaskTool 激活：创建 Todo + 派发子代理执行。自注册 tool_registry。运行时注入 `_todo_manager`/`_sub_agent_manager`。 |
 | `mcp_tools.py` | 🟢 REAL | MCPServerManager（stdio/HTTP 传输，工具发现，自动注册）+ ToolGuard 沙箱集成 + Hook 适配。 |
 
 ### merco/skills/ — Skills System
@@ -233,9 +245,22 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（9 扩展点 + 5 便捷方法）。|
+| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（11 扩展点 + 5 便捷方法）。新增 todo_manager/sub_agent_manager。|
 | `manager.py` | 🟢 NEW | PluginManager 生命周期管理：register/activate/deactivate/activate_all，失败隔离，事件 emit。|
 | `builtin/superpower/plugin.py` | 🟢 NEW | SuperpowerPlugin 示例：prompt chunk 注入 + 事件订阅。|
+
+### merco/todo/ — Todo System
+
+| File | Status | Details |
+|------|--------|---------|
+| `models.py` | 🟢 NEW | TodoItem dataclass（id/title/description/status/priority/parent_id/assigned_to/created_at/updated_at/result）。|
+| `manager.py` | 🟢 NEW | TodoManager SQLite CRUD：create/get/update/list(支持 status/parent_id 过滤)/delete，自动建库建表。|
+
+### merco/agents/ — SubAgent System
+
+| File | Status | Details |
+|------|--------|---------|
+| `subagent.py` | 🟢 NEW | SubAgentManager：dispatch 派发子代理（继承父 config，隔离 session），自动更新 Todo 状态 + 结果注入父 context + emit `subagent.completed` hook。|
 
 ### cli/ — CLI Interface
 
@@ -259,6 +284,7 @@
 | Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
 | Memory Save → Agent | ✅ WIRED | Agent 启动装配 MemorySavePipeline + Strategies，/remember 触发保存，session.destroy 触发 LLM 抽取。 |
 | Plugin → Agent | ✅ WIRED | Agent.__init__ 装配 PluginManager + SuperpowerPlugin，activate_all 激活 enabled 插件，/plugins 命令查看状态。 |
+| Todo + SubAgent → Agent | ✅ WIRED | Agent.__init__ 装配 TodoManager + SubAgentManager，注入 PluginContext。TaskTool 创建 Todo + 派发子代理。subagent.completed hook 可订阅。|
 
 ---
 
@@ -267,11 +293,11 @@
 | Status | Count |
 |--------|-------|
 | 🟢 POLISHED | 11 |
-| 🟢 NEW | 8 |
+| 🟢 NEW | 12 |
 | 🟢 REAL | 8 |
 | 🟡 PARTIAL | 6 |
-| 🔴 SKELETON | 8 |
-| ✅ WIRED | 5 |
+| 🔴 SKELETON | 7 |
+| ✅ WIRED | 6 |
 
 ## 三家对标 (2026-05-29)
 
@@ -290,6 +316,7 @@
 | 跨会话搜索 | ✓ | ✗ | ✓ | ✓ |
 | 观察性报告 | ✗ | ✗ | ✗ | ✓ 独有 |
 | 插件系统 | ✗ | ✗ | ✓ | **✓ (新增)** |
+| Todo + 子代理 | ✗ | ✗ | ✗ | **✓ 独有** |
 
 **总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 10**
 
@@ -307,6 +334,7 @@
 2. **TUI 实现** — Textual 重写 REPL，多会话切换/分支树/记忆管理
 3. **集成测试补全** — mock LLM 的 Agent-Loop 全覆盖（压缩/恢复/工具调用/记忆召回） ✅ 已完成
 4. **插件系统** ✅ 已完成 — Plugin 基类 + PluginManager + Superpower 示例 + 12 测试
-5. **通一个 Gateway** — Telegram 端到端（Bot API + webhook/polling）
-6. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
-7. **MemoryStore backend 抽象** — 支持 SQLite 后端（YAGNI 预留）
+5. **Todo + SubAgent 系统** ✅ 已完成 — TodoManager + SubAgentManager + TaskTool + PluginContext 扩展 + Agent 装配 + 14 测试
+6. **通一个 Gateway** — Telegram 端到端（Bot API + webhook/polling）
+7. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
+8. **MemoryStore backend 抽象** — 支持 SQLite 后端（YAGNI 预留）
