@@ -410,6 +410,65 @@ async def cmd_plugins(agent, args):
 
 
 # ═══════════════════════════════════════════════════════════════════
+# TASK GROUP
+# ═══════════════════════════════════════════════════════════════════
+
+@cmd_registry.register("/todos", "列出所有任务", group="task")
+async def cmd_todos(agent, args):
+    """列出所有任务"""
+    status_filter = args.strip() if args else None
+    items = agent.todo_manager.list(status=status_filter)
+    if not items:
+        console.print("[dim]暂无任务[/dim]")
+        return True
+    console.print(f"[bold]📋 任务列表 ({len(items)} 个)[/bold]")
+    console.print("─" * 50)
+    for item in items:
+        status_icon = {"pending": "⏳", "in_progress": "🔄", "completed": "✅", "failed": "❌"}.get(item.status, "❓")
+        priority_icon = {0: "低", 1: "中", 2: "高"}.get(item.priority, "中")
+        console.print(f"  {status_icon} [{item.id[:8]}] {item.title}")
+        console.print(f"     [dim]优先级: {priority_icon}  状态: {item.status}[/dim]")
+    return True
+
+
+@cmd_registry.register("/todo", "查看任务详情", group="task")
+async def cmd_todo(agent, args):
+    """查看单个任务详情"""
+    if not args:
+        console.print("[dim]用法: /todo <id>[/dim]")
+        return True
+    item = agent.todo_manager.get(args.strip())
+    if not item:
+        console.print("[dim]任务不存在[/dim]")
+        return True
+    console.print("[bold]📋 任务详情[/bold]")
+    console.print(f"  ID: {item.id}")
+    console.print(f"  标题: {item.title}")
+    console.print(f"  描述: {item.description or '无'}")
+    console.print(f"  状态: {item.status}")
+    console.print(f"  优先级: {item.priority}")
+    if item.assigned_to:
+        console.print(f"  分配给: {item.assigned_to}")
+    if item.result:
+        console.print(f"  结果: {item.result[:200]}")
+    return True
+
+
+@cmd_registry.register("/todo-done", "标记任务完成", group="task")
+async def cmd_todo_done(agent, args):
+    """标记任务完成"""
+    if not args:
+        console.print("[dim]用法: /todo-done <id>[/dim]")
+        return True
+    item = agent.todo_manager.update(args.strip(), status="completed")
+    if item:
+        console.print(f"[green]✅ 任务已完成:[/green] {item.title}")
+    else:
+        console.print("[dim]任务不存在[/dim]")
+    return True
+
+
+# ═══════════════════════════════════════════════════════════════════
 # CONTROL GROUP
 # ═══════════════════════════════════════════════════════════════════
 
