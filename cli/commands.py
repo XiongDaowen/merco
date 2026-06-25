@@ -384,6 +384,32 @@ async def cmd_forget(agent, args):
 
 
 # ═══════════════════════════════════════════════════════════════════
+# SYSTEM GROUP
+# ═══════════════════════════════════════════════════════════════════
+
+@cmd_registry.register("/plugins", "列出已安装插件", group="system")
+async def cmd_plugins(agent, args):
+    """列出所有插件及其状态"""
+    pm = agent.plugin_manager
+    plugins_config = getattr(agent.config, 'plugins', {})
+
+    if not pm._plugins:
+        console.print("[dim]暂无插件[/dim]")
+        return True
+
+    console.print("[bold]🔌 已安装插件[/bold]")
+    console.print("─" * 40)
+    for name, plugin in pm._plugins.items():
+        status = "✅ 已激活" if name in pm._active else "⏸️  未激活"
+        cfg = plugins_config.get(name, {})
+        if not cfg.get("enabled", True):
+            status = "❌ 已禁用"
+        console.print(f"  {status}  {name} v{plugin.version}")
+        console.print(f"     [dim]{plugin.description}[/dim]")
+    return True
+
+
+# ═══════════════════════════════════════════════════════════════════
 # CONTROL GROUP
 # ═══════════════════════════════════════════════════════════════════
 
