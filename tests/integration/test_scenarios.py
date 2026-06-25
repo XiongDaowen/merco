@@ -7,7 +7,7 @@ import httpx
 import pytest
 from merco.core.pipeline import RecoveryPipeline, WaitRecovery
 from merco.core.session import Session
-from merco.sandbox.guard import ToolGuard
+from merco.sandbox.guard import ToolGuard, GuardAction
 from openai import APIStatusError
 from tests.conftest import MockLLMClient
 
@@ -126,17 +126,12 @@ async def test_new_session_preserves_old(test_agent):
 
 @pytest.mark.asyncio
 async def test_guard_sensitive_blocked(test_agent):
-    """sandbox_mode=ask → bash rm → 拦截"""
+    """sandbox_mode=ask → bash rm → 返回 ASK（需要用户确认）"""
     test_agent.config.sandbox_mode = "ask"
     test_agent.guard = ToolGuard(mode="ask")
 
-    # mock confirm 返回拒绝
-    async def mock_reject(self, command, rule):
-        return False
-    ToolGuard._confirm = mock_reject
-
     result = await test_agent.guard.check("bash", {"command": "rm file.txt"})
-    assert result is False
+    assert result.action == GuardAction.ASK
 
 
 @pytest.mark.asyncio
@@ -146,7 +141,7 @@ async def test_guard_normal_passes(test_agent):
     test_agent.guard = ToolGuard(mode="ask")
 
     result = await test_agent.guard.check("bash", {"command": "ls -la"})
-    assert result is True
+    assert result.action == GuardAction.ALLOW
 
 
 @pytest.mark.asyncio
@@ -156,7 +151,7 @@ async def test_guard_auto_skips(test_agent):
     test_agent.guard = ToolGuard(mode="auto")
 
     result = await test_agent.guard.check("bash", {"command": "rm -rf /"})
-    assert result is True
+    assert result.action == GuardAction.ALLOW
 
 
 # ═══════════════════════════════════════════════════════════

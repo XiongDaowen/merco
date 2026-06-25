@@ -41,7 +41,7 @@ class TestToolRegistry:
         registry.register(MockTool())
 
         import asyncio
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             registry.execute("echo", message="hello")
         )
         assert result["echo"] == "hello"
@@ -50,7 +50,7 @@ class TestToolRegistry:
         registry = ToolRegistry()
 
         import asyncio
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             registry.execute("nonexistent")
         )
         assert "error" in result
