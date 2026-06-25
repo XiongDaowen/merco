@@ -148,6 +148,7 @@ class MercoConfig:
     fork_auto_on_compress: bool = True
     fork_reset_observer: bool = False  # default: inherit observer acc on fork
     mcp_servers: dict = field(default_factory=dict)
+    plugins: dict = field(default_factory=dict)
 
     @classmethod
     def load(cls, config_path: str | None = None) -> "MercoConfig":
@@ -218,6 +219,7 @@ class MercoConfig:
                 "fork_reset_observer": self.fork_reset_observer,
             },
             "mcp_servers": self.mcp_servers,
+            "plugins": self.plugins,
         }
 
     @classmethod
@@ -271,6 +273,7 @@ class MercoConfig:
             fork_auto_on_compress=sess.get("fork_auto_on_compress", True),
             fork_reset_observer=isinstance(sess, dict) and sess.get("fork_reset_observer", False),
             mcp_servers=data.get("mcp_servers", {}),
+            plugins=data.get("plugins", {}),
         )
 
     @staticmethod

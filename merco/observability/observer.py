@@ -27,6 +27,8 @@ class Observer:
         hooks.on("agent.stop", self._on_agent_stop)
         hooks.on("context.compact", self._on_context_compact)
         hooks.on("memory.saved", self._on_memory_saved)
+        hooks.on("plugin.activated", self._on_plugin_activated)
+        hooks.on("plugin.error", self._on_plugin_error)
 
     # ── 事件处理 ──────────────────────────────────────────
 
@@ -80,6 +82,14 @@ class Observer:
     def _on_memory_saved(self, key: str = "", source: str = "", **kwargs):
         """记忆保存"""
         self._live.increment("memories_saved")
+
+    def _on_plugin_activated(self, plugin_name: str = "", **kwargs):
+        """插件激活"""
+        self._live.increment(f"plugin.{plugin_name}.activations")
+
+    def _on_plugin_error(self, plugin_name: str = "", **kwargs):
+        """插件错误"""
+        self._live.increment(f"plugin.{plugin_name}.errors")
 
     # ── 生命周期 ──────────────────────────────────────────
 
