@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-16
+> 最后更新: 2026-06-20
 
 ## 目标对标
 
@@ -9,7 +9,18 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: 集成测试补全 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+**阶段**: Phase 2 深入 | **焦点**: 插件系统 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+
+### 本次会话更新 (2026-06-20)
+
+- **插件系统（新功能）**: merco 架构升级为插件一等公民，构建可扩展的插件体系。
+  - **Plugin 基类 + PluginContext**: `merco/plugins/base.py` — Plugin ABC（`activate`/`deactivate` 生命周期），PluginContext 暴露 9 个扩展点（hooks、tool_registry、prompt_builder、recovery_pipeline、result_pipeline、memory_save_pipeline、recaller、config、observer），便捷方法 `on()`/`register_tool()`/`add_prompt_chunk()`/`add_processor()`/`add_recaller()`
+  - **PluginManager 生命周期管理**: `merco/plugins/manager.py` — register/activate/deactivate/activate_all/deactivate_all，激活失败隔离（单个插件异常不影响其他），`plugin.activated`/`plugin.error`/`plugin.deactivated` 事件 emit，按 config `enabled` 字段选择性激活
+  - **Superpower 示例插件**: `merco/plugins/builtin/superpower/plugin.py` — 注册 SuperpowerHintChunk prompt 注入 + 订阅 `agent.start`/`tool.error` 事件，展示插件如何扩展 Agent 能力
+  - **Config 字段 + Observer 集成**: `MercoConfig.plugins` dict 字段（序列化/反序列化），Observer 订阅 `plugin.activated`/`plugin.error` 事件追踪插件活动计数
+  - **Agent 启动装配**: `merco/core/agent.py` — `__init__` 构造 PluginContext + PluginManager，注册 SuperpowerPlugin 内置插件，`activate_all()` 激活所有 enabled 插件
+  - **CLI /plugins 命令**: `cli/commands.py` — 列出所有已安装插件及状态（已激活/未激活/已禁用），group="system"
+  - **测试覆盖**: 12 个新测试（4 基类单测 + 5 PluginManager 单测 + 3 端到端集成测试），全部通过
 
 ### 本次会话更新 (2026-06-16)
 
@@ -218,6 +229,14 @@
 | `mcp/` | 🟢 NEW — MCPServerManager stdio+HTTP 传输，工具发现+注册，沙箱集成 |
 | `gateway/` | 🔴 SKELETON |
 
+### merco/plugins/ — Plugin System
+
+| File | Status | Details |
+|------|--------|---------|
+| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（9 扩展点 + 5 便捷方法）。|
+| `manager.py` | 🟢 NEW | PluginManager 生命周期管理：register/activate/deactivate/activate_all，失败隔离，事件 emit。|
+| `builtin/superpower/plugin.py` | 🟢 NEW | SuperpowerPlugin 示例：prompt chunk 注入 + 事件订阅。|
+
 ### cli/ — CLI Interface
 
 | File | Status | Details |
@@ -239,6 +258,7 @@
 | MCP → Agent | ✅ WIRED | MCPServerManager 接管 MCP config 加载 + 工具注册 + 沙箱守卫。 |
 | Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
 | Memory Save → Agent | ✅ WIRED | Agent 启动装配 MemorySavePipeline + Strategies，/remember 触发保存，session.destroy 触发 LLM 抽取。 |
+| Plugin → Agent | ✅ WIRED | Agent.__init__ 装配 PluginManager + SuperpowerPlugin，activate_all 激活 enabled 插件，/plugins 命令查看状态。 |
 
 ---
 
@@ -247,11 +267,11 @@
 | Status | Count |
 |--------|-------|
 | 🟢 POLISHED | 11 |
-| 🟢 NEW | 5 |
+| 🟢 NEW | 8 |
 | 🟢 REAL | 8 |
 | 🟡 PARTIAL | 6 |
 | 🔴 SKELETON | 8 |
-| ✅ WIRED | 4 |
+| ✅ WIRED | 5 |
 
 ## 三家对标 (2026-05-29)
 
@@ -269,6 +289,7 @@
 | 会话清理/归档 | ✓ | ✓ | ✓ | ✗ |
 | 跨会话搜索 | ✓ | ✗ | ✓ | ✓ |
 | 观察性报告 | ✗ | ✗ | ✗ | ✓ 独有 |
+| 插件系统 | ✗ | ✗ | ✓ | **✓ (新增)** |
 
 **总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 10**
 
@@ -284,7 +305,8 @@
 
 1. **Scheduler → Runtime** — CronScheduler 已有，接入 CLI 启动时加载 + 按时触发
 2. **TUI 实现** — Textual 重写 REPL，多会话切换/分支树/记忆管理
-3. **集成测试补全** — mock LLM 的 Agent-Loop 全覆盖（压缩/恢复/工具调用/记忆召回） ✅ 本次完成 8 个
-4. **通一个 Gateway** — Telegram 端到端（Bot API + webhook/polling）
-5. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
-6. **MemoryStore backend 抽象** — 支持 SQLite 后端（YAGNI 预留）
+3. **集成测试补全** — mock LLM 的 Agent-Loop 全覆盖（压缩/恢复/工具调用/记忆召回） ✅ 已完成
+4. **插件系统** ✅ 已完成 — Plugin 基类 + PluginManager + Superpower 示例 + 12 测试
+5. **通一个 Gateway** — Telegram 端到端（Bot API + webhook/polling）
+6. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
+7. **MemoryStore backend 抽象** — 支持 SQLite 后端（YAGNI 预留）
