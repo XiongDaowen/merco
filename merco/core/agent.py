@@ -429,15 +429,17 @@ class Agent:
 
         # 激活所有 enabled 插件（同步调用，Agent.__init__ 是同步的）
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 如果已经在 async 上下文，用 create_task
-                asyncio.ensure_future(self.plugin_manager.activate_all())
-            else:
-                loop.run_until_complete(self.plugin_manager.activate_all())
+            loop = asyncio.get_running_loop()
+            # 已在 async 上下文，用 create_task
+            asyncio.ensure_future(self.plugin_manager.activate_all())
         except RuntimeError:
-            # 没有 event loop，跳过
-            pass
+            # 没有运行中的 event loop，创建新的
+            try:
+                loop = asyncio.new_event_loop()
+                loop.run_until_complete(self.plugin_manager.activate_all())
+                loop.close()
+            except Exception:
+                pass
 
         # ── MCP 客户端 ──
         from merco.mcp.manager import MCPServerManager

@@ -214,7 +214,7 @@ def test_observer_counts_hook_events_in_agent_loop(test_agent, monkeypatch):
 
     # 跑一轮带工具调用
     import asyncio
-    asyncio.get_event_loop().run_until_complete(test_agent.run("echo hi"))
+    asyncio.run(test_agent.run("echo hi"))
 
     # 验证 Observer live 计数（key 名以 observer.py:36, 47, 55 为准）
     counters = observer._live.get_counters()
