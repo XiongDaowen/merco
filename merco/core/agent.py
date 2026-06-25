@@ -441,6 +441,17 @@ class Agent:
             except Exception:
                 pass
 
+        # ── Todo + SubAgent 系统 ──
+        from merco.todo.manager import TodoManager
+        from merco.agents.subagent import SubAgentManager
+
+        self.todo_manager = TodoManager(f"{config.memory_path}/../todos.db")
+        self.sub_agent_manager = SubAgentManager(self)
+
+        # 注入到 PluginContext
+        self._plugin_ctx.todo_manager = self.todo_manager
+        self._plugin_ctx.sub_agent_manager = self.sub_agent_manager
+
         # ── MCP 客户端 ──
         from merco.mcp.manager import MCPServerManager
         self.mcp_manager = MCPServerManager(
