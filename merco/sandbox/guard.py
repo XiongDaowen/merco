@@ -103,7 +103,7 @@ _DEFAULT_RULES: list[GuardRule] = [
 # ── ToolGuard ─────────────────────────────────────────────
 
 class ToolGuard:
-    """工具执行守卫 — 规则链。
+    """工具执行守卫 — facade，委托给 PolicyPipeline
 
     用法::
 
@@ -113,77 +113,31 @@ class ToolGuard:
         result = await guard.check("bash", {"command": "rm file.txt"})
         if result.action == GuardAction.DENY:
             return  # 已拦截
+
+    插件用法::
+
+        pipeline = PolicyPipeline()
+        pipeline.use(BuiltinDefaultPolicy(mode="ask"))
+        pipeline.use(MyCustomPolicy())
+        guard = ToolGuard(pipeline=pipeline)
     """
 
-    def __init__(self, mode: str = "ask", user_rules: list[dict] | None = None):
-        self.mode = mode
-        self._rules: list[GuardRule] = []
-
-        if user_rules:
-            for r in user_rules:
-                self._rules.append(
-                    GuardRule.from_dict(r) if isinstance(r, dict) else r
-                )
-
-        self._rules.extend(_DEFAULT_RULES)
-
-    # ── 链式 API ──
+    def __init__(self, pipeline: "PolicyPipeline" = None, mode: str = "ask", user_rules: list = None):
+        if pipeline:
+            self._pipeline = pipeline
+        else:
+            # 向后兼容：没传 pipeline 时自动创建默认 pipeline
+            self._pipeline = PolicyPipeline()
+            self._pipeline.use(BuiltinDefaultPolicy(mode=mode, user_rules=user_rules))
 
     def rule(self, tool: str, pattern: str, action: str) -> "ToolGuard":
-        """添加规则，插入链首（优先级最高）。"""
-        self._rules.insert(0, GuardRule(tool, pattern, action))
+        """添加规则（向后兼容）。在默认策略前插入一条自定义策略。"""
+        self._pipeline._policies.insert(0,
+            _SingleRulePolicy(tool, pattern, action))
         return self
 
-    # ── 检查 ──
-
     async def check(self, tool_name: str, arguments: dict) -> GuardResult:
-        """检查工具是否可以执行。返回 GuardResult。"""
-        if self.mode == "auto":
-            return GuardResult(action=GuardAction.ALLOW, command="")
-
-        command = arguments.get("command", "")
-        path = arguments.get("path", "")
-
-        # 文件工具：SecurityChecker 路径检测
-        if path and tool_name != "bash":
-            ok, reason = SecurityChecker.check_file_path(path)
-            if not ok:
-                return GuardResult(
-                    action=GuardAction.DENY,
-                    command=path,
-                    reason=reason
-                )
-
-        # SecurityChecker 正则兜底
-        if command:
-            ok, reason = SecurityChecker.check_command(command)
-            if not ok:
-                return GuardResult(
-                    action=GuardAction.DENY,
-                    command=command,
-                    reason=reason
-                )
-
-        # 规则链匹配
-        for rule in self._rules:
-            if not self._tool_match(rule.tool, tool_name):
-                continue
-            if rule.pattern not in command:
-                continue
-
-            if rule.action == "allow":
-                return GuardResult(action=GuardAction.ALLOW, command=command, rule=rule)
-            if rule.action == "deny":
-                return GuardResult(action=GuardAction.DENY, command=command, rule=rule)
-            if rule.action == "ask":
-                return GuardResult(action=GuardAction.ASK, command=command, rule=rule)
-
-        return GuardResult(action=GuardAction.ALLOW, command=command)
-
-    @staticmethod
-    def _tool_match(rule_tool: str, actual_tool: str) -> bool:
-        """检查规则工具是否匹配实际工具。"""
-        return rule_tool == "*" or rule_tool == actual_tool
+        return await self._pipeline.check(tool_name, arguments)
 
 
 # ── PermissionPolicy ───────────────────────────────────────
@@ -216,6 +170,24 @@ class PolicyPipeline:
             if result is not None:
                 return result
         return GuardResult(action=GuardAction.ALLOW, command="")
+
+
+class _SingleRulePolicy(PermissionPolicy):
+    """单条规则的策略包装"""
+    name = "single_rule"
+
+    def __init__(self, tool, pattern, action):
+        self._tool = tool
+        self._pattern = pattern
+        self._action = action
+
+    async def check(self, tool_name, arguments):
+        command = arguments.get("command", "")
+        if self._tool not in (tool_name, "*"):
+            return None
+        if self._pattern not in command:
+            return None
+        return GuardResult(action=GuardAction(self._action), command=command)
 
 
 # ── BuiltinDefaultPolicy ───────────────────────────────────
