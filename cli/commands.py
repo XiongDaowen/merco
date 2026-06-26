@@ -468,6 +468,44 @@ async def cmd_todo_done(agent, args):
     return True
 
 
+@cmd_registry.register("/agents", "列出所有 AgentProfile", group="task")
+async def cmd_agents(agent, args):
+    """列出所有 AgentProfile"""
+    profiles = agent.agent_profiles.list()
+    if not profiles:
+        console.print("[dim]暂无 AgentProfile[/dim]")
+        return True
+    console.print(f"[bold]🤖 Agent Profiles ({len(profiles)} 个)[/bold]")
+    console.print("─" * 50)
+    for p in profiles:
+        tool_count = len(p.tools)
+        tools_note = f"{tool_count} tools" if tool_count else "全部工具"
+        console.print(f"  [cyan]{p.name}[/cyan]  {tools_note}")
+        console.print(f"     [dim]{p.description}[/dim]")
+    return True
+
+
+@cmd_registry.register("/agent", "查看 AgentProfile 详情", group="task")
+async def cmd_agent(agent, args):
+    """查看 Profile 详情"""
+    if not args:
+        console.print("[dim]用法: /agent <name>[/dim]")
+        return True
+    profile = agent.agent_profiles.get(args.strip())
+    if not profile:
+        console.print("[dim]Profile 不存在[/dim]")
+        return True
+    console.print(f"[bold]🤖 {profile.name}[/bold]")
+    console.print(f"  描述: {profile.description}")
+    console.print(f"  工具: {', '.join(profile.tools) if profile.tools else '全部工具'}")
+    if profile.model:
+        console.print(f"  模型: {profile.model}")
+    if profile.limits:
+        console.print(f"  限制: {profile.limits}")
+    console.print(f"  Prompt:\n[dim]{profile.prompt}[/dim]")
+    return True
+
+
 # ═══════════════════════════════════════════════════════════════════
 # CONTROL GROUP
 # ═══════════════════════════════════════════════════════════════════
