@@ -14,6 +14,7 @@
 """
 
 import logging
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
@@ -183,3 +184,35 @@ class ToolGuard:
     def _tool_match(rule_tool: str, actual_tool: str) -> bool:
         """检查规则工具是否匹配实际工具。"""
         return rule_tool == "*" or rule_tool == actual_tool
+
+
+# ── PermissionPolicy ───────────────────────────────────────
+
+class PermissionPolicy(ABC):
+    """安全策略基类"""
+    name: str = ""
+
+    @abstractmethod
+    async def check(self, tool_name: str, arguments: dict) -> GuardResult | None:
+        """检查工具。返回 GuardResult = 决断，None = 传给下一个策略"""
+        ...
+
+
+class PolicyPipeline:
+    """安全策略责任链"""
+
+    def __init__(self):
+        self._policies: list[PermissionPolicy] = []
+
+    def use(self, policy: PermissionPolicy) -> "PolicyPipeline":
+        """注册策略"""
+        self._policies.append(policy)
+        return self
+
+    async def check(self, tool_name: str, arguments: dict) -> GuardResult:
+        """依次检查，首个返回非 None 的结果生效"""
+        for policy in self._policies:
+            result = await policy.check(tool_name, arguments)
+            if result is not None:
+                return result
+        return GuardResult(action=GuardAction.ALLOW, command="")
