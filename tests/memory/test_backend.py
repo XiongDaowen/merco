@@ -42,6 +42,40 @@ class TestMemoryBackendABC:
         assert b.load("k1")["value"] == "v1"
 
 
+from merco.memory.backends.json_backend import JSONBackend
+
+
+class TestJSONBackend:
+    def test_save_and_load(self, tmp_path):
+        b = JSONBackend(str(tmp_path))
+        b.save("k1", {"text": "hello"}, tags=["[user]"])
+        record = b.load("k1")
+        assert record["value"]["text"] == "hello"
+        assert "[user]" in record["tags"]
+
+    def test_delete(self, tmp_path):
+        b = JSONBackend(str(tmp_path))
+        b.save("k1", "v1")
+        b.delete("k1")
+        assert b.load("k1") is None
+
+    def test_list_keys(self, tmp_path):
+        b = JSONBackend(str(tmp_path))
+        b.save("k1", "v1", tags=["[user]"])
+        b.save("k2", "v2", tags=["[extracted]"])
+        keys = b.list_keys()
+        assert len(keys) == 2
+        assert len(b.list_keys(tag="[user]")) == 1
+
+    def test_search(self, tmp_path):
+        b = JSONBackend(str(tmp_path))
+        b.save("k1", {"text": "hello world"})
+        b.save("k2", {"text": "goodbye"})
+        results = b.search("hello")
+        assert len(results) == 1
+        assert results[0]["key"] == "k1"
+
+
 class TestMemoryBackendRegistry:
     def test_register_and_get(self):
         reg = MemoryBackendRegistry()
