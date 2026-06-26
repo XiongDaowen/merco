@@ -424,6 +424,19 @@ class Agent:
         )
         self.plugin_manager = PluginManager(self._plugin_ctx)
 
+        # ── Context Pipeline ──
+        from merco.context.pipeline import ContextPipeline
+        from merco.context.processors.compress import CompressProcessor
+        from merco.context.processors.cache_optimize import CacheOptimizeProcessor
+
+        self.context_pipeline = ContextPipeline()
+        self.context_pipeline.use(CacheOptimizeProcessor())
+        self.context_pipeline.use(CompressProcessor(
+            max_tokens=config.max_input_tokens,
+            threshold=config.compression_threshold,
+        ))
+        self._plugin_ctx.context_pipeline = self.context_pipeline
+
         # 注册内置插件
         self.plugin_manager.register(SuperpowerPlugin())
 
@@ -898,6 +911,35 @@ class Agent:
 
         return base
 
+    async def _llm_summary(self, messages: list[dict]) -> str:
+        """LLM 生成语义摘要——保留用户意图 + 关键决策"""
+        lines = []
+        for m in messages:
+            role = m.get("role", "unknown")
+            content = m.get("content", "")
+            if isinstance(content, str) and content.strip():
+                # tool 结果只取前 200 字
+                text = content[:200] if role == "tool" else content[:600]
+                lines.append(f"[{role}]: {text}")
+
+        prompt = (
+            "Summarize this conversation segment into one concise paragraph "
+            "(under 150 words). Include: what the user asked, what tools were "
+            "used, key findings or decisions. Use natural language, not bullet "
+            "points.\n\n"
+            + "\n".join(lines[-30:])  # 最多 30 条
+            + "\n\nSummary:"
+        )
+        try:
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}], tools=[]
+            )
+            content = response.get("content", "").strip()
+            return f"[Earlier conversation summary]: {content}"
+        except Exception as e:
+            logger.warning("LLM summary failed: %s", e)
+            return f"[{len(messages)} earlier messages — summary unavailable]"
+
     async def _compress_context(self):
         """压缩上下文"""
         # 压缩前备份 Session 数据库
@@ -915,56 +957,22 @@ class Agent:
             except Exception:
                 logger.debug("Auto-fork failed", exc_info=True)
 
-        from merco.memory.compressor import ContextCompressor
-
-        compressor = ContextCompressor(
-            max_input_tokens=self.config.max_input_tokens,
-            threshold=self.config.compression_threshold,
-        )
-
         summary_result = None
         # Capture original count before context.messages is reassigned
         original_count = len(self.session.messages)
 
-        async def llm_summary(messages: list[dict]) -> str:
-            """LLM 生成语义摘要——保留用户意图 + 关键决策"""
+        async def llm_summary_wrapper(messages: list[dict]) -> str:
             nonlocal summary_result
-            lines = []
-            for m in messages:
-                role = m.get("role", "unknown")
-                content = m.get("content", "")
-                if isinstance(content, str) and content.strip():
-                    # tool 结果只取前 200 字
-                    text = content[:200] if role == "tool" else content[:600]
-                    lines.append(f"[{role}]: {text}")
-
-            prompt = (
-                "Summarize this conversation segment into one concise paragraph "
-                "(under 150 words). Include: what the user asked, what tools were "
-                "used, key findings or decisions. Use natural language, not bullet "
-                "points.\n\n"
-                + "\n".join(lines[-30:])  # 最多 30 条
-                + "\n\nSummary:"
-            )
-            try:
-                response = await self.llm.chat(
-                    [{"role": "user", "content": prompt}], tools=[]
-                )
-                content = response.get("content", "").strip()
-                summary_result = f"[Earlier conversation summary]: {content}"
-                return summary_result
-            except Exception as e:
-                logger.warning("LLM summary failed: %s", e)
-                fallback = f"[{len(messages)} earlier messages — summary unavailable]"
-                summary_result = fallback
-                return fallback
+            result = await self._llm_summary(messages)
+            summary_result = result
+            return result
 
         try:
             await self.hooks.emit("context.compact", strategy="sliding_window")
-            compressed = await compressor.compress(
+            compressed = await self.context_pipeline.run(
                 self.context.messages,
-                strategy="sliding",
-                summary_fn=llm_summary,
+                summary_fn=llm_summary_wrapper,
+                compress_strategy="sliding",
             )
             self.context.messages = compressed
             self.context.current_tokens = sum(
