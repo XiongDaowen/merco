@@ -1,7 +1,8 @@
 """PermissionPolicy + PolicyPipeline 单测"""
 import pytest
 from merco.sandbox.guard import (
-    PermissionPolicy, PolicyPipeline, GuardResult, GuardAction
+    PermissionPolicy, PolicyPipeline, GuardResult, GuardAction,
+    BuiltinDefaultPolicy,
 )
 
 
@@ -53,3 +54,28 @@ class TestPolicyPipeline:
         p.use(PassPolicy())
         result = await p.check("bash", {"command": "ls"})
         assert result.action == GuardAction.ALLOW
+
+
+class TestBuiltinDefaultPolicy:
+    async def test_allows_safe_command(self):
+        p = BuiltinDefaultPolicy(mode="ask")
+        result = await p.check("bash", {"command": "ls -la"})
+        assert result.action == GuardAction.ALLOW
+
+    async def test_default_rule_ask(self):
+        p = BuiltinDefaultPolicy(mode="ask")
+        result = await p.check("bash", {"command": "pip install requests"})
+        assert result.action == GuardAction.ASK  # 默认规则 ask
+
+    async def test_auto_mode_skips(self):
+        p = BuiltinDefaultPolicy(mode="auto")
+        result = await p.check("bash", {"command": "rm -rf /"})
+        assert result.action == GuardAction.ALLOW
+
+    async def test_user_rules_override(self):
+        from merco.sandbox.guard import GuardRule
+        p = BuiltinDefaultPolicy(mode="ask", user_rules=[
+            {"tool": "bash", "pattern": "rm ", "action": "deny"},
+        ])
+        result = await p.check("bash", {"command": "rm file.txt"})
+        assert result.action == GuardAction.DENY

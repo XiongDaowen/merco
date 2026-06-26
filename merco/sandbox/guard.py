@@ -216,3 +216,51 @@ class PolicyPipeline:
             if result is not None:
                 return result
         return GuardResult(action=GuardAction.ALLOW, command="")
+
+
+# ── BuiltinDefaultPolicy ───────────────────────────────────
+
+class BuiltinDefaultPolicy(PermissionPolicy):
+    """默认安全策略 — 包装 30 条默认规则 + SecurityChecker + mode logic"""
+    name = "builtin_default"
+
+    def __init__(self, mode: str = "ask", user_rules: list = None):
+        self.mode = mode
+        self._rules: list[GuardRule] = []
+        if user_rules:
+            for r in user_rules:
+                self._rules.append(
+                    GuardRule.from_dict(r) if isinstance(r, dict) else r
+                )
+        self._rules.extend(_DEFAULT_RULES)
+
+    async def check(self, tool_name: str, arguments: dict) -> GuardResult | None:
+        if self.mode == "auto":
+            return GuardResult(action=GuardAction.ALLOW, command="")
+
+        command = arguments.get("command", "")
+        path = arguments.get("path", "")
+
+        if path and tool_name != "bash":
+            ok, reason = SecurityChecker.check_file_path(path)
+            if not ok:
+                return GuardResult(action=GuardAction.DENY, command=path, reason=reason)
+
+        if command:
+            ok, reason = SecurityChecker.check_command(command)
+            if not ok:
+                return GuardResult(action=GuardAction.DENY, command=command, reason=reason)
+
+        for rule in self._rules:
+            if not self._tool_match(rule.tool, tool_name):
+                continue
+            if rule.pattern not in command:
+                continue
+            action = GuardAction(rule.action)
+            return GuardResult(action=action, command=command, rule=rule)
+
+        return GuardResult(action=GuardAction.ALLOW, command=command)
+
+    @staticmethod
+    def _tool_match(pattern: str, tool_name: str) -> bool:
+        return pattern == "*" or pattern == tool_name
