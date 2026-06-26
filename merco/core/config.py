@@ -128,6 +128,7 @@ class MercoConfig:
     skills_paths: list = field(default_factory=lambda: ["./.merco/skills", "~/.config/merco/skills"])
     memory_enabled: bool = True
     memory_path: str = "~/.merco/memory"
+    memory_backend: str = "json"
     log_level: str = "INFO"
     sandbox_mode: str = "ask"
     sandbox_rules: list = field(default_factory=list)
@@ -205,6 +206,7 @@ class MercoConfig:
             "memory": {
                 "enabled": self.memory_enabled,
                 "path": self.memory_path,
+                "backend": self.memory_backend,
                 "recall_enabled": self.memory_recall_enabled,
                 "recall_limit": self.memory_recall_limit,
                 "recall_max_chars": self.memory_recall_max_chars,
@@ -253,6 +255,7 @@ class MercoConfig:
             skills_paths=data.get("skills_paths", ["./.merco/skills", "~/.config/merco/skills"]),
             memory_enabled=memory_data.get("enabled", data.get("memory_enabled", True)),
             memory_path=memory_data.get("path", data.get("memory_path", "~/.merco/memory")),
+            memory_backend=memory_data.get("backend", "json"),
             log_level=data.get("log_level", "INFO"),
             sandbox_mode=data.get("sandbox_mode", "ask"),
             sandbox_rules=data.get("sandbox_rules", []),

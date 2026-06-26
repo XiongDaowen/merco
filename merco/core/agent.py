@@ -371,9 +371,17 @@ class Agent:
         # ── Memory 召回 ──
         from merco.memory.recall import HybridRecaller, FTS5Recaller, MemoryRecaller
         from merco.memory.store import MemoryStore
+        from merco.memory.backend import MemoryBackendRegistry
+        from merco.memory.backends.json_backend import JSONBackend
+
+        self.memory_backends = MemoryBackendRegistry()
+        self.memory_backends.register(JSONBackend(config.memory_path))
+
+        backend_name = config.memory_backend or "json"
+        selected_backend = self.memory_backends.get(backend_name) or self.memory_backends.get("json")
 
         _fts5 = FTS5Recaller(self._search)
-        _mem = MemoryRecaller(MemoryStore(config.memory_path))
+        _mem = MemoryRecaller(MemoryStore(backend=selected_backend))
         self.recaller = (
             HybridRecaller(limit=config.memory_recall_limit, max_chars=config.memory_recall_max_chars)
             .add(_fts5)
@@ -386,7 +394,7 @@ class Agent:
             ExplicitRememberStrategy, SessionEndExtractStrategy,
         )
 
-        self._memory_store = MemoryStore(config.memory_path)
+        self._memory_store = MemoryStore(backend=selected_backend)
         self.memory_save_pipeline = MemorySavePipeline(
             store=self._memory_store,
             hooks=self.hooks,
@@ -473,6 +481,7 @@ class Agent:
         # 注入到 PluginContext
         self._plugin_ctx.todo_manager = self.todo_manager
         self._plugin_ctx.sub_agent_manager = self.sub_agent_manager
+        self._plugin_ctx.memory_backends = self.memory_backends
 
         # 注入到 TaskTool（全局 tool_registry 中的 TaskTool 实例）
         task_tool = self.tool_registry.get("task")
