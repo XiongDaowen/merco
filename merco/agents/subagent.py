@@ -46,18 +46,47 @@ class SubAgentManager:
         return sub_agent.session.id
 
     def _create_sub_agent(self, agent_name: str) -> "Agent":
-        """创建子 Agent，继承父的配置"""
+        """创建子代理，根据 profile 配置 prompt/tools/model/limits"""
         from merco.core.agent import Agent
         from merco.core.session import Session
+        from merco.agents.profile import ProfilePromptChunk
+        from merco.tools.registry import ToolRegistry
 
-        # 复制父的 config/tools
-        sub_agent = Agent(
-            config=self._parent.config,
-            tool_registry=self._parent.tool_registry,
-        )
+        # 查找 profile
+        profile = None
+        if self._profiles:
+            profile = self._profiles.get(agent_name) or self._profiles.get("default")
+
+        config = self._parent.config
+        tool_registry = self._parent.tool_registry
+
+        if profile:
+            # model override
+            if profile.model:
+                import copy
+                config = copy.deepcopy(config)
+                config.model.provider = profile.model.get("provider", config.model.provider)
+                config.model.model = profile.model.get("model", config.model.model)
+
+            # tools allowlist
+            if profile.tools:
+                tool_registry = ToolRegistry()
+                for name in profile.tools:
+                    tool = self._parent.tool_registry.get(name)
+                    if tool:
+                        tool_registry.register(tool)
+
+        sub_agent = Agent(config=config, tool_registry=tool_registry)
         # 强制新 session（Agent.__init__ 会 resume_or_create 恢复父会话）
         sub_agent.session = Session(store=sub_agent._session_store)
         sub_agent._session_store.create_session(sub_agent.session.id)
+
+        if profile:
+            sub_agent.prompt_builder.use(ProfilePromptChunk(profile))
+            if profile.limits.get("max_tool_calls"):
+                sub_agent.config.max_tool_calls = profile.limits["max_tool_calls"]
+                sub_agent._max_tool_calls = profile.limits["max_tool_calls"]
+
         self._active[sub_agent.session.id] = sub_agent
         return sub_agent
 
