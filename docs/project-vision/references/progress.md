@@ -13,6 +13,15 @@
 
 ### 本次会话更新 (2026-06-26)
 
+- **Context Pipeline 系统（新功能）**: 上下文处理（压缩、缓存优化）升级为可扩展处理器链，替代硬编码的 ContextCompressor。构建 merco 的上下文处理管线基础设施。
+  - **ContextProcessor ABC + ContextPipeline**: `merco/context/pipeline.py` — ContextProcessor 抽象基类（`process(messages, **kwargs)` 签名），ContextPipeline 按注册顺序链式执行处理器，`use()` 链式注册，`run()` 顺序执行
+  - **CompressProcessor（迁移自 ContextCompressor）**: `merco/context/processors/compress.py` — 超过阈值触发压缩，支持 sliding（保留最后 2 轮 + 摘要旧消息）和 truncate（截断 fallback）两种策略，`_extend_to_chain` 补全孤立 tool 消息的前导 assistant，fallback 摘要含最近讨论预览
+  - **CacheOptimizeProcessor**: `merco/context/processors/cache_optimize.py` — 重排序让稳定内容（system 消息、摘要、记忆）排在前面，提高 LLM 缓存命中率
+  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `context_pipeline` 扩展点（12 个扩展点总计），插件可访问上下文处理管线
+  - **Agent 集成**: `merco/core/agent.py` — `__init__` 构造 ContextPipeline（CacheOptimizeProcessor + CompressProcessor），注入 PluginContext，`_compress_context` 替换为 pipeline.run() 调用
+  - **端到端集成测试**: `tests/integration/test_context_pipeline.py` — 2 个集成测试覆盖：压缩端到端、缓存优化重排序
+  - **单元测试**: `tests/context/test_pipeline.py` (4) + `tests/context/test_processors.py` (7) = 11 个单测，全部通过
+
 - **Todo + SubAgent 系统（新功能）**: Todo 驱动子代理执行，结果自动注入父 context。构建 merco 的任务管理 + 子代理派发基础设施。
   - **TodoItem 数据模型**: `merco/todo/models.py` — TodoItem dataclass，字段：id/title/description/status(pending/in_progress/completed/failed)/priority(0-2)/parent_id/assigned_to/created_at/updated_at/result
   - **TodoManager (SQLite CRUD)**: `merco/todo/manager.py` — SQLite 持久化，完整 CRUD（create/get/update/list/delete），支持 status/parent_id 过滤，按 priority DESC + created_at ASC 排序，自动建库建表
@@ -241,6 +250,15 @@
 | `mcp/` | 🟢 NEW — MCPServerManager stdio+HTTP 传输，工具发现+注册，沙箱集成 |
 | `gateway/` | 🔴 SKELETON |
 
+### merco/context/ — Context Pipeline
+
+| File | Status | Details |
+|------|--------|---------|
+| `pipeline.py` | 🟢 NEW | ContextProcessor ABC + ContextPipeline 链式执行。`use()` 注册，`run()` 顺序执行。|
+| `processors/__init__.py` | 🟢 NEW | 处理器包。|
+| `processors/compress.py` | 🟢 NEW | CompressProcessor：阈值触发压缩，sliding/truncate 双策略，孤立 tool 补全，fallback 摘要。迁移自 ContextCompressor。|
+| `processors/cache_optimize.py` | 🟢 NEW | CacheOptimizeProcessor：重排序稳定内容在前，提高 LLM 缓存命中率。|
+
 ### merco/plugins/ — Plugin System
 
 | File | Status | Details |
@@ -285,6 +303,7 @@
 | Memory Save → Agent | ✅ WIRED | Agent 启动装配 MemorySavePipeline + Strategies，/remember 触发保存，session.destroy 触发 LLM 抽取。 |
 | Plugin → Agent | ✅ WIRED | Agent.__init__ 装配 PluginManager + SuperpowerPlugin，activate_all 激活 enabled 插件，/plugins 命令查看状态。 |
 | Todo + SubAgent → Agent | ✅ WIRED | Agent.__init__ 装配 TodoManager + SubAgentManager，注入 PluginContext。TaskTool 创建 Todo + 派发子代理。subagent.completed hook 可订阅。|
+| Context Pipeline → Agent | ✅ WIRED | Agent.__init__ 装配 ContextPipeline（CacheOptimize + Compress），注入 PluginContext。_compress_context 替换为 pipeline.run()。|
 
 ---
 
@@ -293,11 +312,11 @@
 | Status | Count |
 |--------|-------|
 | 🟢 POLISHED | 11 |
-| 🟢 NEW | 12 |
+| 🟢 NEW | 16 |
 | 🟢 REAL | 8 |
 | 🟡 PARTIAL | 6 |
 | 🔴 SKELETON | 7 |
-| ✅ WIRED | 6 |
+| ✅ WIRED | 7 |
 
 ## 三家对标 (2026-05-29)
 
@@ -317,6 +336,7 @@
 | 观察性报告 | ✗ | ✗ | ✗ | ✓ 独有 |
 | 插件系统 | ✗ | ✗ | ✓ | **✓ (新增)** |
 | Todo + 子代理 | ✗ | ✗ | ✗ | **✓ 独有** |
+| Context Pipeline | ✗ | ✗ | ✗ | **✓ 独有** |
 
 **总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 10**
 
