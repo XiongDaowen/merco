@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-26
+> 最后更新: 2026-06-27
 
 ## 目标对标
 
@@ -31,6 +31,16 @@
   - **Agent 启动装配**: `merco/core/agent.py` — `__init__` 构造 `TodoManager`（SQLite 路径 `{memory_path}/../todos.db`）+ `SubAgentManager(self)`，注入 PluginContext
   - **端到端集成测试**: `tests/integration/test_todo_subagent.py` — 4 个集成测试覆盖：派发+结果注入、失败状态标记、多次独立派发、hooks.emit 验证
   - **单元测试**: `tests/todo/test_models.py` (2) + `tests/todo/test_manager.py` (6) + `tests/agents/test_subagent.py` (2) = 10 个单测，全部通过
+
+- **AgentProfile 插件化（新功能）**: 子代理按专业角色（researcher/reviewer/debugger）创建，插件可注册自定义 AgentProfile。构建 merco 的子代理角色系统。
+  - **AgentProfile dataclass + Registry**: `merco/agents/profile.py` — AgentProfile dataclass（name/description/prompt/tools/model/limits），AgentProfileRegistry（register/get/list），ProfilePromptChunk 注入角色 prompt
+  - **4 个 builtin profiles**: default（继承全部能力）、researcher（搜索研究，工具白名单，max 30 次调用）、reviewer（代码审查，max 25 次）、debugger（系统调试，max 40 次）
+  - **SubAgentManager profile 集成**: `merco/agents/subagent.py` — `_create_sub_agent(agent_name)` 根据 profile 配置子代理（model override / tools allowlist / ProfilePromptChunk / limits），未找到回退 default
+  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `agent_profiles` 扩展点（13 个扩展点总计），插件可注册自定义 AgentProfile
+  - **Agent 装配**: `merco/core/agent.py` — 创建 AgentProfileRegistry + 注册 4 builtins + 注入 PluginContext + 注入 SubAgentManager
+  - **CLI /agents /agent**: `cli/commands.py` — `/agents` 列出所有 AgentProfile（名字+工具数+描述），`/agent <name>` 查看详情（prompt/model/limits），group="task"
+  - **单元测试**: `tests/agents/test_profile.py` (5) + `tests/agents/test_subagent_profile.py` (3) = 8 个单测
+  - **端到端集成测试**: `tests/integration/test_agent_profile.py` — 2 个集成测试覆盖：TaskTool agent=researcher 派发、registry builtins 可访问
 
 ### 本次会话更新 (2026-06-20)
 
@@ -263,7 +273,7 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（11 扩展点 + 5 便捷方法）。新增 todo_manager/sub_agent_manager。|
+| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（13 扩展点 + 5 便捷方法）。新增 todo_manager/sub_agent_manager/agent_profiles。|
 | `manager.py` | 🟢 NEW | PluginManager 生命周期管理：register/activate/deactivate/activate_all，失败隔离，事件 emit。|
 | `builtin/superpower/plugin.py` | 🟢 NEW | SuperpowerPlugin 示例：prompt chunk 注入 + 事件订阅。|
 
@@ -278,7 +288,8 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `subagent.py` | 🟢 NEW | SubAgentManager：dispatch 派发子代理（继承父 config，隔离 session），自动更新 Todo 状态 + 结果注入父 context + emit `subagent.completed` hook。|
+| `subagent.py` | 🟢 NEW | SubAgentManager：dispatch 派发子代理，根据 AgentProfile 配置 prompt/tools/model/limits（model override / tools allowlist / ProfilePromptChunk），隔离 session，自动更新 Todo 状态 + 结果注入父 context + emit `subagent.completed` hook。|
+| `profile.py` | 🟢 NEW | AgentProfile dataclass（name/description/prompt/tools/model/limits）+ AgentProfileRegistry（register/get/list）+ ProfilePromptChunk + 4 builtins（default/researcher/reviewer/debugger）。|
 
 ### cli/ — CLI Interface
 
@@ -303,6 +314,7 @@
 | Memory Save → Agent | ✅ WIRED | Agent 启动装配 MemorySavePipeline + Strategies，/remember 触发保存，session.destroy 触发 LLM 抽取。 |
 | Plugin → Agent | ✅ WIRED | Agent.__init__ 装配 PluginManager + SuperpowerPlugin，activate_all 激活 enabled 插件，/plugins 命令查看状态。 |
 | Todo + SubAgent → Agent | ✅ WIRED | Agent.__init__ 装配 TodoManager + SubAgentManager，注入 PluginContext。TaskTool 创建 Todo + 派发子代理。subagent.completed hook 可订阅。|
+| AgentProfile → Agent | ✅ WIRED | Agent.__init__ 创建 AgentProfileRegistry + 注册 BUILTIN_PROFILES + 注入 PluginContext + 注入 SubAgentManager。SubAgentManager._create_sub_agent() 按 profile 配置子代理（tools allowlist / model override / ProfilePromptChunk / limits）。|
 | Context Pipeline → Agent | ✅ WIRED | Agent.__init__ 装配 ContextPipeline（CacheOptimize + Compress），注入 PluginContext。_compress_context 替换为 pipeline.run()。|
 
 ---
@@ -312,11 +324,11 @@
 | Status | Count |
 |--------|-------|
 | 🟢 POLISHED | 11 |
-| 🟢 NEW | 16 |
+| 🟢 NEW | 17 |
 | 🟢 REAL | 8 |
 | 🟡 PARTIAL | 6 |
 | 🔴 SKELETON | 7 |
-| ✅ WIRED | 7 |
+| ✅ WIRED | 8 |
 
 ## 三家对标 (2026-05-29)
 
@@ -337,6 +349,7 @@
 | 插件系统 | ✗ | ✗ | ✓ | **✓ (新增)** |
 | Todo + 子代理 | ✗ | ✗ | ✗ | **✓ 独有** |
 | Context Pipeline | ✗ | ✗ | ✗ | **✓ 独有** |
+| AgentProfile 插件化 | ✗ | ✗ | ✗ | **✓ 独有** |
 
 **总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 10**
 
