@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from merco.agents.subagent import SubAgentManager
     from merco.context.pipeline import ContextPipeline
     from merco.memory.backend import MemoryBackendRegistry
+    from merco.sandbox.guard import PolicyPipeline
     from typing import Callable
 
 
@@ -57,6 +58,7 @@ class PluginContext:
         context_pipeline: "ContextPipeline" = None,
         agent_profiles: "AgentProfileRegistry" = None,
         memory_backends: "MemoryBackendRegistry" = None,
+        security_pipeline: "PolicyPipeline" = None,
     ):
         self.hooks = hooks
         self.tool_registry = tool_registry
@@ -72,6 +74,7 @@ class PluginContext:
         self.context_pipeline = context_pipeline
         self.agent_profiles = agent_profiles
         self.memory_backends = memory_backends
+        self.security_pipeline = security_pipeline
 
     def on(self, event: str, handler: "Callable") -> None:
         """Subscribe to event (convenience method)"""

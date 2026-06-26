@@ -328,11 +328,15 @@ class Agent:
         self.observer = Observer(self.hooks)
 
         # ── 守卫：敏感命令执行前确认 ──
-        from merco.sandbox.guard import ToolGuard
-        self.guard = ToolGuard(
+        from merco.sandbox.guard import (
+            ToolGuard, PolicyPipeline, BuiltinDefaultPolicy
+        )
+        self._security_pipeline = PolicyPipeline()
+        self._security_pipeline.use(BuiltinDefaultPolicy(
             mode=config.sandbox_mode,
             user_rules=config.sandbox_rules,
-        )
+        ))
+        self.guard = ToolGuard(pipeline=self._security_pipeline)
 
         # ── 会话持久化 ──
         from merco.memory.session_store import SessionStore
@@ -431,6 +435,7 @@ class Agent:
             observer=self.observer,
         )
         self.plugin_manager = PluginManager(self._plugin_ctx)
+        self._plugin_ctx.security_pipeline = self._security_pipeline
 
         # ── Context Pipeline ──
         from merco.context.pipeline import ContextPipeline
