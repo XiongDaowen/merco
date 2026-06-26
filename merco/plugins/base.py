@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from merco.tools.base import BaseTool
     from merco.todo.manager import TodoManager
     from merco.agents.subagent import SubAgentManager
+    from merco.context.pipeline import ContextPipeline
     from typing import Callable
 
 
@@ -51,6 +52,7 @@ class PluginContext:
         observer: "Observer",
         todo_manager: "TodoManager" = None,
         sub_agent_manager: "SubAgentManager" = None,
+        context_pipeline: "ContextPipeline" = None,
     ):
         self.hooks = hooks
         self.tool_registry = tool_registry
@@ -63,6 +65,7 @@ class PluginContext:
         self.observer = observer
         self.todo_manager = todo_manager
         self.sub_agent_manager = sub_agent_manager
+        self.context_pipeline = context_pipeline
 
     def on(self, event: str, handler: "Callable") -> None:
         """Subscribe to event (convenience method)"""
