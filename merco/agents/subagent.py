@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from merco.core.agent import Agent
+    from merco.agents.profile import AgentProfileRegistry
 
 logger = logging.getLogger("merco.agents.subagent")
 
@@ -13,8 +14,9 @@ logger = logging.getLogger("merco.agents.subagent")
 class SubAgentManager:
     """子代理派发管理器"""
 
-    def __init__(self, parent: "Agent"):
+    def __init__(self, parent: "Agent", profile_registry: "AgentProfileRegistry" = None):
         self._parent = parent
+        self._profiles = profile_registry
         self._active: dict[str, "Agent"] = {}
 
     async def dispatch(self, todo_id: str, prompt: str, agent_name: str = "default") -> str:

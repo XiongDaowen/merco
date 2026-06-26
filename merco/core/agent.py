@@ -437,6 +437,15 @@ class Agent:
         ))
         self._plugin_ctx.context_pipeline = self.context_pipeline
 
+        # ── AgentProfile Registry ──
+        from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
+
+        self.agent_profiles = AgentProfileRegistry()
+        for p in BUILTIN_PROFILES:
+            self.agent_profiles.register(p)
+
+        self._plugin_ctx.agent_profiles = self.agent_profiles
+
         # 注册内置插件
         self.plugin_manager.register(SuperpowerPlugin())
 
@@ -459,11 +468,17 @@ class Agent:
         from merco.agents.subagent import SubAgentManager
 
         self.todo_manager = TodoManager(f"{config.memory_path}/../todos.db")
-        self.sub_agent_manager = SubAgentManager(self)
+        self.sub_agent_manager = SubAgentManager(self, self.agent_profiles)
 
         # 注入到 PluginContext
         self._plugin_ctx.todo_manager = self.todo_manager
         self._plugin_ctx.sub_agent_manager = self.sub_agent_manager
+
+        # 注入到 TaskTool（全局 tool_registry 中的 TaskTool 实例）
+        task_tool = self.tool_registry.get("task")
+        if task_tool:
+            task_tool._todo_manager = self.todo_manager
+            task_tool._sub_agent_manager = self.sub_agent_manager
 
         # ── MCP 客户端 ──
         from merco.mcp.manager import MCPServerManager
