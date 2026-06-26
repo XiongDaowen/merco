@@ -1,6 +1,7 @@
 """处理器单测"""
 import pytest
 from merco.context.processors.compress import CompressProcessor
+from merco.context.processors.cache_optimize import CacheOptimizeProcessor
 
 
 class TestCompressProcessor:
@@ -34,3 +35,42 @@ class TestCompressProcessor:
         msgs = [{"role": "user", "content": f"msg{i}"} for i in range(10)]
         result = await proc.process(msgs, compress_strategy="truncate")
         assert len(result) <= len(msgs)
+
+
+class TestCacheOptimizeProcessor:
+    async def test_system_messages_first(self):
+        """system 消息排在前面"""
+        proc = CacheOptimizeProcessor()
+        msgs = [
+            {"role": "user", "content": "hi"},
+            {"role": "system", "content": "system prompt"},
+            {"role": "assistant", "content": "hello"},
+        ]
+        result = await proc.process(msgs)
+        assert result[0]["role"] == "system"
+
+    async def test_summary_messages_stable(self):
+        """摘要消息视为稳定"""
+        proc = CacheOptimizeProcessor()
+        msgs = [
+            {"role": "user", "content": "hi"},
+            {"role": "system", "content": "[Earlier conversation summary] ..."},
+        ]
+        result = await proc.process(msgs)
+        assert "[Earlier conversation summary]" in result[0]["content"]
+
+    async def test_memory_messages_stable(self):
+        """记忆消息视为稳定"""
+        proc = CacheOptimizeProcessor()
+        msgs = [
+            {"role": "user", "content": "hi"},
+            {"role": "system", "content": "[memory] user preference"},
+        ]
+        result = await proc.process(msgs)
+        assert "[memory]" in result[0]["content"]
+
+    async def test_empty_messages(self):
+        """空消息列表"""
+        proc = CacheOptimizeProcessor()
+        result = await proc.process([])
+        assert result == []
