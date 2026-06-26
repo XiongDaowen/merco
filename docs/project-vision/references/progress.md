@@ -54,6 +54,16 @@
   - **单元测试**: `tests/memory/test_backend.py` (8) — MemoryBackend ABC + DummyBackend + Registry + JSONBackend CRUD
   - **集成测试**: `tests/memory/test_backend_integration.py` (3) — 向后兼容：默认 JSONBackend、显式 backend、facade CRUD 全链路
 
+- **PermissionPolicy 插件化（新功能）**: ToolGuard 安全策略从硬编码规则链改为可拔插的 PermissionPolicy 架构。构建 merco 的安全策略管线。
+  - **PermissionPolicy ABC + PolicyPipeline**: `merco/sandbox/guard.py` — PermissionPolicy 抽象基类（`check(tool_name, arguments)` 返回 `GuardResult | None` 签名），PolicyPipeline 按注册顺序链式执行策略（`use()` 链式注册，`check()` 首个非 None 结果生效，默认放行）
+  - **BuiltinDefaultPolicy**: `merco/sandbox/guard.py` — 包装 30 条 DEFAULT_RULES + SecurityChecker + mode logic（auto 直接放行，ask/deny 执行规则链），支持 user_rules 覆盖
+  - **ToolGuard facade**: `merco/sandbox/guard.py` — ToolGuard 改为 facade，委托给 PolicyPipeline。`rule()` 向后兼容，自动创建默认 pipeline（无 adapter 向后兼容）
+  - **_SingleRulePolicy**: `merco/sandbox/guard.py` — 单条规则策略包装，`rule()` 方法内部使用
+  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `security_pipeline` 扩展点（15 个扩展点总计），插件可注册自定义 PermissionPolicy
+  - **Agent 装配**: `merco/core/agent.py` — 构造 PolicyPipeline + BuiltinDefaultPolicy，注入 ToolGuard，注入 PluginContext
+  - **单元测试**: `tests/sandbox/test_policy.py` (8) — PermissionPolicy ABC + PolicyPipeline 责任链 + BuiltinDefaultPolicy（safe command / rm_rf / auto_mode / user_rules override）
+  - **集成测试**: `tests/sandbox/test_policy_integration.py` (2) — 插件注册自定义策略 + auto mode 跳过 default 策略但仍执行 custom 策略
+
 ### 本次会话更新 (2026-06-20)
 
 - **插件系统（新功能）**: merco 架构升级为插件一等公民，构建可扩展的插件体系。
@@ -269,7 +279,7 @@
 | Module | Status |
 |--------|--------|
 | `hooks/` | 🔴 SKELETON — 未集成 |
-| `sandbox/` | 🟢 POLISHED — diff split view + show mode + ToolGuard guard。未集成到 Tools |
+| `sandbox/` | 🟢 POLISHED — PermissionPolicy ABC + PolicyPipeline + BuiltinDefaultPolicy + ToolGuard facade。10 个测试覆盖 |
 | `scheduler/` | 🟢 REAL — CLI 未启动 |
 | `observability/` | 🟢 REAL — Observer 已接入 Agent（中断/Report），hooks 未触发 |
 | `mcp/` | 🟢 NEW — MCPServerManager stdio+HTTP 传输，工具发现+注册，沙箱集成 |
@@ -288,7 +298,7 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（14 扩展点 + 5 便捷方法）。新增 memory_backends 扩展点。|
+| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（15 扩展点 + 5 便捷方法）。新增 security_pipeline 扩展点。|
 | `manager.py` | 🟢 NEW | PluginManager 生命周期管理：register/activate/deactivate/activate_all，失败隔离，事件 emit。|
 | `builtin/superpower/plugin.py` | 🟢 NEW | SuperpowerPlugin 示例：prompt chunk 注入 + 事件订阅。|
 
@@ -328,6 +338,7 @@
 | Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
 | Memory Save → Agent | ✅ WIRED | Agent 启动装配 MemorySavePipeline + Strategies，/remember 触发保存，session.destroy 触发 LLM 抽取。 |
 | MemoryBackend → Agent | ✅ WIRED | Agent 构造 MemoryBackendRegistry + JSONBackend，按 config `memory.backend` 选取，注入 MemoryStore/MemoryRecaller/MemorySavePipeline + PluginContext。 |
+| PermissionPolicy → Agent | ✅ WIRED | Agent 构造 PolicyPipeline + BuiltinDefaultPolicy，注入 ToolGuard facade，注入 PluginContext。插件可注册自定义 PermissionPolicy。 |
 | Plugin → Agent | ✅ WIRED | Agent.__init__ 装配 PluginManager + SuperpowerPlugin，activate_all 激活 enabled 插件，/plugins 命令查看状态。 |
 | Todo + SubAgent → Agent | ✅ WIRED | Agent.__init__ 装配 TodoManager + SubAgentManager，注入 PluginContext。TaskTool 创建 Todo + 派发子代理。subagent.completed hook 可订阅。|
 | AgentProfile → Agent | ✅ WIRED | Agent.__init__ 创建 AgentProfileRegistry + 注册 BUILTIN_PROFILES + 注入 PluginContext + 注入 SubAgentManager。SubAgentManager._create_sub_agent() 按 profile 配置子代理（tools allowlist / model override / ProfilePromptChunk / limits）。|
@@ -344,7 +355,7 @@
 | 🟢 REAL | 7 |
 | 🟡 PARTIAL | 6 |
 | 🔴 SKELETON | 7 |
-| ✅ WIRED | 9 |
+| ✅ WIRED | 10 |
 
 ## 三家对标 (2026-05-29)
 
