@@ -9,7 +9,7 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: Todo + SubAgent | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+**阶段**: Phase 2 深入 | **焦点**: MemoryBackend 插件化 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
 
 ### 本次会话更新 (2026-06-26)
 
@@ -41,6 +41,18 @@
   - **CLI /agents /agent**: `cli/commands.py` — `/agents` 列出所有 AgentProfile（名字+工具数+描述），`/agent <name>` 查看详情（prompt/model/limits），group="task"
   - **单元测试**: `tests/agents/test_profile.py` (5) + `tests/agents/test_subagent_profile.py` (3) = 8 个单测
   - **端到端集成测试**: `tests/integration/test_agent_profile.py` — 2 个集成测试覆盖：TaskTool agent=researcher 派发、registry builtins 可访问
+
+### 本次会话更新 (2026-06-27)
+
+- **MemoryBackend 插件化（新功能）**: MemoryStore 从单一 JSON 后端升级为可拔插的 MemoryBackend 架构。构建 merco 的记忆存储后端抽象层。
+  - **MemoryBackend ABC + Registry**: `merco/memory/backend.py` — MemoryBackend 抽象基类（save/load/delete/list_keys/search 接口），MemoryBackendRegistry 注册表（register/get/list）
+  - **JSONBackend（迁移自 MemoryStore）**: `merco/memory/backends/json_backend.py` — JSON 文件后端，每记忆一个 .json 文件，逻辑从 MemoryStore 迁移
+  - **MemoryStore facade**: `merco/memory/store.py` — 改为 facade，委托给 MemoryBackend。`__init__` 支持 `backend=` 参数注入后端，默认 JSONBackend
+  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `memory_backends` 扩展点（14 个扩展点总计），插件可注册自定义 MemoryBackend
+  - **Config 字段**: `memory.backend` 配置项（默认 "json"），Agent 按名称从 Registry 选取后端
+  - **Agent 装配**: `merco/core/agent.py` — 构造 MemoryBackendRegistry + 注册 JSONBackend，按 config 选取后端，注入 MemoryStore/MemoryRecaller/MemorySavePipeline，注入 PluginContext
+  - **单元测试**: `tests/memory/test_backend.py` (8) — MemoryBackend ABC + DummyBackend + Registry + JSONBackend CRUD
+  - **集成测试**: `tests/memory/test_backend_integration.py` (3) — 向后兼容：默认 JSONBackend、显式 backend、facade CRUD 全链路
 
 ### 本次会话更新 (2026-06-20)
 
@@ -241,13 +253,16 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `store.py` | 🟢 REAL | JSON 文件 CRUD。|
+| `store.py` | 🟢 NEW | MemoryStore facade — 委托给 MemoryBackend，支持 `backend=` 参数注入。 |
 | `recall.py` | 🟢 POLISHED | `BaseRecaller` ABC + `FTS5Recaller` + `MemoryRecaller` + `HybridRecaller`（聚合/去重/截断/缓存）+ 旧版 `MemoryRecall` 兼容。已接入 Agent。 |
 | `compressor.py` | 🟢 REAL | Token 滑动窗口 + 链完整 + LLM 摘要。Token 函数统一从 `core/context` 导入。 |
 | `search.py` | 🟢 REAL | SQLite FTS5。|
 | `session_store.py` | 🟢 REAL | SQLite 会话持久化，sessions + messages 表，WAL 模式。 |
 | `save_pipeline.py` | 🟢 NEW | MemorySavePipeline + SaveItem + SourceEnricher + DedupProcessor。`SOURCE_PRIORITY` 保护 user > extracted > system。 |
 | `strategy.py` | 🟢 NEW | MemorySaveStrategy ABC + ExplicitRememberStrategy + SessionEndExtractStrategy (LLM 抽取 fail-soft)。|
+| `backend.py` | 🟢 NEW | MemoryBackend ABC（save/load/delete/list_keys/search）+ MemoryBackendRegistry（register/get/list）。|
+| `backends/__init__.py` | 🟢 NEW | 后端包，导出 JSONBackend。|
+| `backends/json_backend.py` | 🟢 NEW | JSONBackend — 每记忆一个 .json 文件，create/read/update/delete/search，逻辑从 MemoryStore 迁移。|
 
 ### Other Modules
 
@@ -273,7 +288,7 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（13 扩展点 + 5 便捷方法）。新增 todo_manager/sub_agent_manager/agent_profiles。|
+| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（14 扩展点 + 5 便捷方法）。新增 memory_backends 扩展点。|
 | `manager.py` | 🟢 NEW | PluginManager 生命周期管理：register/activate/deactivate/activate_all，失败隔离，事件 emit。|
 | `builtin/superpower/plugin.py` | 🟢 NEW | SuperpowerPlugin 示例：prompt chunk 注入 + 事件订阅。|
 
@@ -312,6 +327,7 @@
 | MCP → Agent | ✅ WIRED | MCPServerManager 接管 MCP config 加载 + 工具注册 + 沙箱守卫。 |
 | Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
 | Memory Save → Agent | ✅ WIRED | Agent 启动装配 MemorySavePipeline + Strategies，/remember 触发保存，session.destroy 触发 LLM 抽取。 |
+| MemoryBackend → Agent | ✅ WIRED | Agent 构造 MemoryBackendRegistry + JSONBackend，按 config `memory.backend` 选取，注入 MemoryStore/MemoryRecaller/MemorySavePipeline + PluginContext。 |
 | Plugin → Agent | ✅ WIRED | Agent.__init__ 装配 PluginManager + SuperpowerPlugin，activate_all 激活 enabled 插件，/plugins 命令查看状态。 |
 | Todo + SubAgent → Agent | ✅ WIRED | Agent.__init__ 装配 TodoManager + SubAgentManager，注入 PluginContext。TaskTool 创建 Todo + 派发子代理。subagent.completed hook 可订阅。|
 | AgentProfile → Agent | ✅ WIRED | Agent.__init__ 创建 AgentProfileRegistry + 注册 BUILTIN_PROFILES + 注入 PluginContext + 注入 SubAgentManager。SubAgentManager._create_sub_agent() 按 profile 配置子代理（tools allowlist / model override / ProfilePromptChunk / limits）。|
@@ -324,11 +340,11 @@
 | Status | Count |
 |--------|-------|
 | 🟢 POLISHED | 11 |
-| 🟢 NEW | 17 |
-| 🟢 REAL | 8 |
+| 🟢 NEW | 21 |
+| 🟢 REAL | 7 |
 | 🟡 PARTIAL | 6 |
 | 🔴 SKELETON | 7 |
-| ✅ WIRED | 8 |
+| ✅ WIRED | 9 |
 
 ## 三家对标 (2026-05-29)
 
@@ -370,4 +386,4 @@
 5. **Todo + SubAgent 系统** ✅ 已完成 — TodoManager + SubAgentManager + TaskTool + PluginContext 扩展 + Agent 装配 + 14 测试
 6. **通一个 Gateway** — Telegram 端到端（Bot API + webhook/polling）
 7. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
-8. **MemoryStore backend 抽象** — 支持 SQLite 后端（YAGNI 预留）
+8. **MemoryBackend 插件化** ✅ 已完成 — MemoryBackend ABC + JSONBackend + MemoryStore facade + Registry + PluginContext 14 扩展点 + Config + Agent 装配 + 11 测试
