@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from merco.agents.subagent import SubAgentManager
     from merco.context.pipeline import ContextPipeline
     from merco.memory.backend import MemoryBackendRegistry
+    from merco.core.loop_policy import LoopPolicyRegistry
     from typing import Callable
 
 
@@ -65,6 +66,7 @@ class PluginContext:
         context_pipeline: "ContextPipeline" = None,
         agent_profiles: "AgentProfileRegistry" = None,
         memory_backends: "MemoryBackendRegistry" = None,
+        loop_policies: "LoopPolicyRegistry" = None,
     ):
         self.hooks = hooks
         self.tool_registry = tool_registry
@@ -80,6 +82,7 @@ class PluginContext:
         self.context_pipeline = context_pipeline
         self.agent_profiles = agent_profiles
         self.memory_backends = memory_backends
+        self.loop_policies = loop_policies
 
     def on(self, event: str, handler: "Callable") -> None:
         """Subscribe to event (convenience method)"""

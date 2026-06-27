@@ -449,6 +449,12 @@ class Agent:
         self.todo_manager = TodoManager(f"{config.memory_path}/../todos.db")
         self.sub_agent_manager = SubAgentManager(self, self.agent_profiles)
 
+        # ── Loop Policy ──
+        from merco.core.loop_policy import LoopPolicyRegistry, DefaultLoopPolicy
+        self.loop_policies = LoopPolicyRegistry()
+        self.loop_policies.register(DefaultLoopPolicy())
+        self.loop_policies.set_active("default")
+
         self._plugin_ctx = PluginContext(
             hooks=self.hooks,
             tool_registry=self.tool_registry,
@@ -464,6 +470,7 @@ class Agent:
             context_pipeline=self.context_pipeline,
             memory_backends=self.memory_backends,
             agent_profiles=self.agent_profiles,
+            loop_policies=self.loop_policies,
         )
         self.plugin_manager = PluginManager(self._plugin_ctx)
 
