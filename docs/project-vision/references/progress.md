@@ -11,6 +11,15 @@
 
 **阶段**: Phase 2 深入 | **焦点**: MemoryBackend 插件化 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
 
+### 本次会话更新 (2026-06-28)
+
+- **ToolRegistry 中间件链（架构重构 Phase 2.2）**:
+  - 新增 `ToolContext` / `ToolMiddleware` ABC / `ToolMiddlewareChain` 洋葱模型，支持 `before` / `after` / `on_error` 钩子
+  - `GuardMiddleware` + `ErrorHandlingMiddleware` — 内置安全守卫和错误处理中间件
+  - `ToolRegistry` 只负责路由，`execute()` 委托给中间件链，支持 `use(mw)` 链式注册
+  - Agent 启动装配中间件链（Guard + ErrorHandling），行为与旧版完全等价
+  - 测试覆盖：单元测试 + 集成测试（行为等价旧版）
+
 ### 本次会话更新 (2026-06-26)
 
 - **Context Pipeline 系统（新功能）**: 上下文处理（压缩、缓存优化）升级为可扩展处理器链，替代硬编码的 ContextCompressor。构建 merco 的上下文处理管线基础设施。

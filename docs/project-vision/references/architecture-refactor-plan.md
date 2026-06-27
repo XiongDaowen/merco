@@ -49,7 +49,7 @@ class DefaultLoopPolicy(LoopPolicy):
 |------|--------|------|
 | LoopPolicy ABC | Plugin 可注册 custom policy | LoopEngineeringPlugin |
 
-### 2.2 ToolRegistry 安全守卫解耦 → 中间件链
+### 2.2 ToolRegistry 中间件链 ✅ 已完成
 
 **问题**: `registry.execute()` 硬编码 `tool_guard.check()` → core 反向依赖 sandbox。
 
