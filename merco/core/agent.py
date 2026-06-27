@@ -338,6 +338,11 @@ class Agent:
         ))
         self.guard = ToolGuard(pipeline=self._security_pipeline)
 
+        # ── Middleware：Guard + ErrorHandling 装配到 ToolRegistry ──
+        from merco.tools.middleware import GuardMiddleware, ErrorHandlingMiddleware
+        self.tool_registry.use(GuardMiddleware(self.guard))
+        self.tool_registry.use(ErrorHandlingMiddleware())
+
         # ── 会话持久化 ──
         from merco.memory.session_store import SessionStore
         from merco.memory.session_search import SessionSearch
