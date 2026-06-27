@@ -1,6 +1,5 @@
 """沙箱系统"""
 
-from .permissions import PermissionManager
 from .guard import ToolGuard, GuardRule, _DEFAULT_RULES
 
 
@@ -23,7 +22,6 @@ except Exception:
     tool_guard = ToolGuard(mode='ask', user_rules=[])
 
 __all__ = [
-    "PermissionManager",
     "ToolGuard",
     "GuardRule",
     "tool_guard",
