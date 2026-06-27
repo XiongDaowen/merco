@@ -698,7 +698,18 @@ class Agent:
                 logger.debug("Agent 循环: 收到 %d 个 tool_calls: %s",
                             len(tool_calls),
                             [f"{tc['name']}({tc.get('id','?')[:8]})" for tc in tool_calls])
-            if not tool_calls:
+
+            from merco.core.loop_policy import LoopState
+            state = LoopState(
+                iteration=self._tool_calls_count,
+                tool_calls_count=self._tool_calls_count,
+                max_tool_calls=self._max_tool_calls,
+                has_tool_calls=bool(tool_calls),
+                finish_reason=response.get("finish_reason"),
+            )
+            decision = await self.loop_policies.active.decide(response, state)
+
+            if decision.action == "exit":
                 content = response.get("content", "") or ""
                 content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL).strip()
                 reasoning = response.get("reasoning", "")
