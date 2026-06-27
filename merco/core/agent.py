@@ -423,20 +423,6 @@ class Agent:
         from merco.plugins.manager import PluginManager
         from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
 
-        self._plugin_ctx = PluginContext(
-            hooks=self.hooks,
-            tool_registry=self.tool_registry,
-            prompt_builder=self.prompt_builder,
-            recovery_pipeline=self.recovery_pipeline,
-            result_pipeline=self.result_pipeline,
-            memory_save_pipeline=self.memory_save_pipeline,
-            recaller=self.recaller,
-            config=config,
-            observer=self.observer,
-        )
-        self.plugin_manager = PluginManager(self._plugin_ctx)
-        self._plugin_ctx.security_pipeline = self._security_pipeline
-
         # ── Context Pipeline ──
         from merco.context.pipeline import ContextPipeline
         from merco.context.processors.compress import CompressProcessor
@@ -448,7 +434,6 @@ class Agent:
             max_tokens=config.max_input_tokens,
             threshold=config.compression_threshold,
         ))
-        self._plugin_ctx.context_pipeline = self.context_pipeline
 
         # ── AgentProfile Registry ──
         from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
@@ -457,7 +442,30 @@ class Agent:
         for p in BUILTIN_PROFILES:
             self.agent_profiles.register(p)
 
-        self._plugin_ctx.agent_profiles = self.agent_profiles
+        # ── Todo + SubAgent 系统 ──
+        from merco.todo.manager import TodoManager
+        from merco.agents.subagent import SubAgentManager
+
+        self.todo_manager = TodoManager(f"{config.memory_path}/../todos.db")
+        self.sub_agent_manager = SubAgentManager(self, self.agent_profiles)
+
+        self._plugin_ctx = PluginContext(
+            hooks=self.hooks,
+            tool_registry=self.tool_registry,
+            prompt_builder=self.prompt_builder,
+            recovery_pipeline=self.recovery_pipeline,
+            result_pipeline=self.result_pipeline,
+            memory_save_pipeline=self.memory_save_pipeline,
+            recaller=self.recaller,
+            config=config,
+            observer=self.observer,
+            todo_manager=self.todo_manager,
+            sub_agent_manager=self.sub_agent_manager,
+            context_pipeline=self.context_pipeline,
+            memory_backends=self.memory_backends,
+            agent_profiles=self.agent_profiles,
+        )
+        self.plugin_manager = PluginManager(self._plugin_ctx)
 
         # 注册内置插件
         self.plugin_manager.register(SuperpowerPlugin())
@@ -475,18 +483,6 @@ class Agent:
                 loop.close()
             except Exception:
                 pass
-
-        # ── Todo + SubAgent 系统 ──
-        from merco.todo.manager import TodoManager
-        from merco.agents.subagent import SubAgentManager
-
-        self.todo_manager = TodoManager(f"{config.memory_path}/../todos.db")
-        self.sub_agent_manager = SubAgentManager(self, self.agent_profiles)
-
-        # 注入到 PluginContext
-        self._plugin_ctx.todo_manager = self.todo_manager
-        self._plugin_ctx.sub_agent_manager = self.sub_agent_manager
-        self._plugin_ctx.memory_backends = self.memory_backends
 
         # 注入到 TaskTool（全局 tool_registry 中的 TaskTool 实例）
         task_tool = self.tool_registry.get("task")

@@ -75,3 +75,31 @@ async def test_plugin_failure_isolated(test_agent):
 
     assert working.activated is True
     assert "test_plugin" in test_agent.plugin_manager.active_plugins
+
+
+async def test_plugins_see_all_extension_points_on_activate(test_agent):
+    """插件 activate(ctx) 时应能看到所有扩展点"""
+    seen = {}
+
+    class ProbePlugin(Plugin):
+        name = "probe"
+        version = "1.0.0"
+        description = "probe"
+
+        async def activate(self, ctx):
+            seen["context_pipeline"] = ctx.context_pipeline is not None
+            seen["todo_manager"] = ctx.todo_manager is not None
+            seen["sub_agent_manager"] = ctx.sub_agent_manager is not None
+            seen["memory_backends"] = ctx.memory_backends is not None
+            seen["agent_profiles"] = ctx.agent_profiles is not None
+            seen["security_pipeline"] = hasattr(ctx, "security_pipeline")
+
+    test_agent.plugin_manager.register(ProbePlugin())
+    await test_agent.plugin_manager.activate("probe")
+
+    assert seen["context_pipeline"] is True
+    assert seen["todo_manager"] is True
+    assert seen["sub_agent_manager"] is True
+    assert seen["memory_backends"] is True
+    assert seen["agent_profiles"] is True
+    assert seen["security_pipeline"] is False
