@@ -193,3 +193,61 @@ async def test_chain_before_returns_context_continues():
     ctx = ToolContext(tool_name="t", arguments={}, tool=StubTool())
     await chain.execute(ctx, lambda: {})
     assert ctx.metadata["x"] == 1
+
+
+# ── Task 2: GuardMiddleware + ErrorHandlingMiddleware ───────
+
+from merco.tools.middleware import GuardMiddleware, ErrorHandlingMiddleware
+from merco.sandbox.guard import GuardAction, GuardResult, GuardConfirmationRequired
+
+
+class StubGuard:
+    def __init__(self, result):
+        self._result = result
+        self.called = []
+
+    async def check(self, tool_name, arguments):
+        self.called.append((tool_name, arguments))
+        return self._result
+
+
+@pytest.mark.asyncio
+async def test_guard_middleware_deny_returns_error():
+    """GuardMiddleware DENY → 返回错误 dict"""
+    guard = StubGuard(GuardResult(action=GuardAction.DENY, command="", reason="blocked"))
+    mw = GuardMiddleware(guard)
+    ctx = ToolContext(tool_name="bash", arguments={"command": "rm"})
+    result = await mw.before(ctx)
+    assert result == {"error": "操作被安全守卫拒绝: blocked", "tool": "bash"}
+
+
+@pytest.mark.asyncio
+async def test_guard_middleware_ask_raises():
+    """GuardMiddleware ASK → raise GuardConfirmationRequired"""
+    guard = StubGuard(GuardResult(action=GuardAction.ASK, command="", reason="need confirm"))
+    mw = GuardMiddleware(guard)
+    ctx = ToolContext(tool_name="bash", arguments={})
+    with pytest.raises(GuardConfirmationRequired):
+        await mw.before(ctx)
+
+
+@pytest.mark.asyncio
+async def test_guard_middleware_allow_continues():
+    """GuardMiddleware ALLOW → None 继续"""
+    guard = StubGuard(GuardResult(action=GuardAction.ALLOW, command=""))
+    mw = GuardMiddleware(guard)
+    ctx = ToolContext(tool_name="bash", arguments={})
+    assert await mw.before(ctx) is None
+
+
+@pytest.mark.asyncio
+async def test_error_handling_returns_tool_error():
+    """ErrorHandlingMiddleware on_error 返回结构化结果"""
+    mw = ErrorHandlingMiddleware()
+    from unittest.mock import MagicMock
+    tool = MagicMock()
+    tool.parameters = {"type": "object"}
+    ctx = ToolContext(tool_name="bash", arguments={"cmd": "x"}, tool=tool, error=RuntimeError("boom"))
+    result = await mw.on_error(ctx)
+    assert "error" in result
+    assert result["tool"] == "bash"

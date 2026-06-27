@@ -4,6 +4,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+from merco.sandbox.guard import GuardAction
+
 
 @dataclass
 class ToolContext:
@@ -74,3 +76,45 @@ class ToolMiddlewareChain:
             elif isinstance(r, ToolContext):
                 ctx = r
         return ctx.result
+
+
+class GuardMiddleware(ToolMiddleware):
+    """包装 ToolGuard — DENY 返回错误，ASK 抛异常，ALLOW 继续"""
+    name = "guard"
+
+    def __init__(self, guard):
+        self.guard = guard
+
+    async def before(self, ctx: ToolContext):
+        result = await self.guard.check(ctx.tool_name, ctx.arguments)
+        if result.action == GuardAction.DENY:
+            return {"error": f"操作被安全守卫拒绝: {result.reason}", "tool": ctx.tool_name}
+        if result.action == GuardAction.ASK:
+            from merco.sandbox.guard import GuardConfirmationRequired
+            raise GuardConfirmationRequired(result)
+        return None
+
+    async def after(self, ctx: ToolContext):
+        return None
+
+    async def on_error(self, ctx: ToolContext):
+        return None
+
+
+class ErrorHandlingMiddleware(ToolMiddleware):
+    """工具异常 → 结构化 tool_error 结果"""
+    name = "error_handling"
+
+    async def before(self, ctx: ToolContext):
+        return None
+
+    async def after(self, ctx: ToolContext):
+        return None
+
+    async def on_error(self, ctx: ToolContext):
+        from merco.core.self_healing import tool_error
+        return tool_error(
+            ctx.error,
+            ctx.tool_name,
+            getattr(ctx.tool, 'parameters', None) if ctx.tool else None,
+        )
