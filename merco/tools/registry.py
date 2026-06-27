@@ -2,7 +2,7 @@
 
 from typing import Optional
 from .base import BaseTool
-from merco.sandbox.guard import GuardAction
+from merco.tools.middleware import ToolContext, ToolMiddlewareChain
 
 
 class ToolRegistry:
@@ -18,6 +18,12 @@ class ToolRegistry:
     def __init__(self):
         self._tools: dict[str, BaseTool] = {}
         self._enabled_toolsets: set | None = None  # None = 全部启用
+        self._middleware = ToolMiddlewareChain()
+
+    def use(self, middleware) -> "ToolRegistry":
+        """挂载中间件"""
+        self._middleware.use(middleware)
+        return self
 
     def register(self, tool: BaseTool):
         """注册一个工具"""
@@ -64,37 +70,13 @@ class ToolRegistry:
         return definitions
 
     async def execute(self, tool_name: str, **kwargs) -> dict:
-        """执行指定工具（异常自动转为结构化错误，喂回 LLM 自愈）
-
-        执行前通过 ToolGuard 安全检查：
-        - GuardAction.DENY → 返回错误
-        - GuardAction.ASK → 抛出 GuardConfirmationRequired 异常
-        - GuardAction.ALLOW → 直接执行
-        """
+        """执行指定工具。中间件链处理安全检查和错误处理。"""
         tool = self.get(tool_name)
         if tool is None:
             return {"error": f"工具 '{tool_name}' 不存在"}
 
-        from merco.sandbox import tool_guard
-        result = await tool_guard.check(tool_name, kwargs)
-
-        if result.action == GuardAction.DENY:
-            return {
-                "error": f"操作被安全守卫拒绝: {result.reason}",
-                "tool": tool_name,
-            }
-
-        if result.action == GuardAction.ASK:
-            # 抛异常让 Agent 层处理确认
-            from merco.sandbox.guard import GuardConfirmationRequired
-            raise GuardConfirmationRequired(result)
-
-        # ALLOW: 直接执行
-        try:
-            return await tool.execute(**kwargs)
-        except Exception as e:
-            from merco.core.self_healing import tool_error
-            return tool_error(e, tool_name, getattr(tool, 'parameters', None))
+        ctx = ToolContext(tool_name=tool_name, arguments=kwargs, tool=tool)
+        return await self._middleware.execute(ctx, lambda: tool.execute(**kwargs))
 
 
 # 模块级全局单例 — 工具模块在 import 时通过此实例自注册
