@@ -1,6 +1,6 @@
 # merco 架构重构路线图
 
-> 最后更新: 2026-06-27
+> 最后更新: 2026-06-28
 > 基于: `docs/user_pasted_clipboard_long_content_as_file_# merco 架构审查报告.txt`
 
 ## 审查核心发现
@@ -20,46 +20,12 @@
 | P1 | MemoryBackend 插件化 | ✅ |
 | P2 | PermissionPolicy 插件化 | ✅ |
 
-## Phase 1 — 安全加固（P0）
-
-### 1.1 PluginContext 安全加固
-
-**问题**: `security_pipeline` 暴露允许插件绕过沙箱；`add_processor` 字符串访问任意属性。
-
-**方案**:
-- 移除 `security_pipeline` 直接暴露 → 保留给内部使用，不从 PluginContext 暴露
-- `add_processor` 改为白名单模式
-
-```python
-_PIPELINE_WHITELIST = {
-    "result_pipeline", "recovery_pipeline",
-    "memory_save_pipeline", "context_pipeline",
-}
-
-def add_processor(self, pipeline_name: str, processor) -> None:
-    if pipeline_name not in _PIPELINE_WHITELIST:
-        raise ValueError(f"Pipeline '{pipeline_name}' not extensible")
-```
-
-| 原子 | 可拔插 | 改动 |
-|------|--------|------|
-| PluginContext API | 安全白名单 | 小 |
-
-### 1.2 修复 activate_all 时序
-
-**问题**: TodoManager/SubAgentManager 在插件激活后才赋值到 PluginContext。
-
-**方案**: 先创建 TodoManager/SubAgentManager 并赋值到 ctx，再激活插件。
-
-| 原子 | 可拔插 | 改动 |
-|------|--------|------|
-| PluginManager | 激活时序 | 小 |
-
-### 1.3 删除重复代码
-
-- `memory/compressor.py` → 已被 `context/processors/compress.py` 替代，删除
-- `sandbox/permissions.py` → 功能与 guard.py 重叠，删除
-- `sandbox/isolation.py` → 未被使用，删除
+## Phase 1 — 安全加固（P0）✅ 已完成
+| 任务 | 内容 | 状态 |
+|------|------|------|
+| 1.1 PluginContext 安全加固 | 移除 security_pipeline + add_processor 白名单 | ✅ |
+| 1.2 activate_all 时序修复 | 先填充 PluginContext 再激活插件 | ✅ |
+| 1.3 删除重复代码 | 删除 compressor.py, permissions.py, isolation.py | ✅ |
 
 ---
 

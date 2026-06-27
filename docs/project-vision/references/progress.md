@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-27
+> 最后更新: 2026-06-28
 
 ## 目标对标
 
@@ -41,6 +41,15 @@
   - **CLI /agents /agent**: `cli/commands.py` — `/agents` 列出所有 AgentProfile（名字+工具数+描述），`/agent <name>` 查看详情（prompt/model/limits），group="task"
   - **单元测试**: `tests/agents/test_profile.py` (5) + `tests/agents/test_subagent_profile.py` (3) = 8 个单测
   - **端到端集成测试**: `tests/integration/test_agent_profile.py` — 2 个集成测试覆盖：TaskTool agent=researcher 派发、registry builtins 可访问
+
+### 本次会话更新 (2026-06-28)
+
+- **Phase 1 安全加固（架构重构完成）**:
+  - PluginContext 移除 `security_pipeline` 直接暴露，防止插件绕过沙箱
+  - `add_processor()` 改为白名单模式，仅允许 `_PIPELINE_WHITELIST` 内的管线
+  - Agent 插件激活时序修复：PluginContext 在插件激活前完整注入所有扩展点（context_pipeline/todo_manager/sub_agent_manager/memory_backends/agent_profiles）
+  - 删除重复/废弃模块：`memory/compressor.py`（已被 `context/processors/compress.py` 替代）、`sandbox/permissions.py`（功能与 guard.py 重叠）、`sandbox/isolation.py`（未使用）
+  - 从 `sandbox/__init__.py` 移除 `PermissionManager` export
 
 ### 本次会话更新 (2026-06-27)
 
