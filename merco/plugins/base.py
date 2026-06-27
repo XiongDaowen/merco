@@ -19,8 +19,15 @@ if TYPE_CHECKING:
     from merco.agents.subagent import SubAgentManager
     from merco.context.pipeline import ContextPipeline
     from merco.memory.backend import MemoryBackendRegistry
-    from merco.sandbox.guard import PolicyPipeline
     from typing import Callable
+
+
+_PIPELINE_WHITELIST = {
+    "result_pipeline",
+    "recovery_pipeline",
+    "memory_save_pipeline",
+    "context_pipeline",
+}
 
 
 class Plugin(ABC):
@@ -58,7 +65,6 @@ class PluginContext:
         context_pipeline: "ContextPipeline" = None,
         agent_profiles: "AgentProfileRegistry" = None,
         memory_backends: "MemoryBackendRegistry" = None,
-        security_pipeline: "PolicyPipeline" = None,
     ):
         self.hooks = hooks
         self.tool_registry = tool_registry
@@ -74,7 +80,6 @@ class PluginContext:
         self.context_pipeline = context_pipeline
         self.agent_profiles = agent_profiles
         self.memory_backends = memory_backends
-        self.security_pipeline = security_pipeline
 
     def on(self, event: str, handler: "Callable") -> None:
         """Subscribe to event (convenience method)"""
@@ -89,7 +94,9 @@ class PluginContext:
         self.prompt_builder.use(chunk)
 
     def add_processor(self, pipeline_name: str, processor) -> None:
-        """Add a processor to the specified pipeline"""
+        """加处理器到白名单管线"""
+        if pipeline_name not in _PIPELINE_WHITELIST:
+            raise ValueError(f"Pipeline '{pipeline_name}' not extensible")
         pipeline = getattr(self, pipeline_name, None)
         if pipeline and hasattr(pipeline, 'use'):
             pipeline.use(processor)

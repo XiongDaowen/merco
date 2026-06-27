@@ -79,6 +79,28 @@ def test_plugin_deactivate_default():
     asyncio.run(plugin.deactivate())
 
 
+def test_plugin_context_does_not_expose_security_pipeline(ctx):
+    """PluginContext 不直接暴露 security_pipeline，避免插件绕过沙箱"""
+    assert not hasattr(ctx, "security_pipeline")
+
+
+def test_add_processor_rejects_non_whitelisted_pipeline(ctx):
+    """add_processor 只允许白名单 pipeline"""
+    with pytest.raises(ValueError, match="not extensible"):
+        ctx.add_processor("security_pipeline", object())
+
+
+def test_add_processor_allows_context_pipeline(ctx):
+    """add_processor 允许白名单内 pipeline"""
+    class DummyProcessor:
+        name = "dummy"
+        async def process(self, messages, **kwargs):
+            return messages
+
+    ctx.add_processor("context_pipeline", DummyProcessor())
+    assert any(p.name == "dummy" for p in ctx.context_pipeline._processors)
+
+
 @pytest.fixture
 def ctx(tmp_path):
     """Construct PluginContext"""
@@ -89,6 +111,7 @@ def ctx(tmp_path):
     from merco.memory.save_pipeline import MemorySavePipeline
     from merco.memory.recall import HybridRecaller
     from merco.core.config import MercoConfig
+    from merco.context.pipeline import ContextPipeline
     from unittest.mock import MagicMock
 
     hooks = HookRegistry()
@@ -108,4 +131,5 @@ def ctx(tmp_path):
         recaller=HybridRecaller(),
         config=config,
         observer=MagicMock(),
+        context_pipeline=ContextPipeline(),
     )
