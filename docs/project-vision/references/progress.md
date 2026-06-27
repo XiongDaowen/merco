@@ -44,6 +44,12 @@
 
 ### 本次会话更新 (2026-06-28)
 
+- **LoopPolicy（架构重构 Phase 2.1）**:
+  - 新增 `LoopState` / `LoopDecision` / `LoopPolicy` ABC / `DefaultLoopPolicy` / `LoopPolicyRegistry`
+  - Agent 启动装配 `loop_policies` 并注入 PluginContext
+  - `_agent_loop` 退出条件委托给 active policy，默认策略复刻原行为
+  - 测试覆盖默认退出、tool_call 继续、自定义策略强制退出
+
 - **Phase 1 安全加固（架构重构完成）**:
   - PluginContext 移除 `security_pipeline` 直接暴露，防止插件绕过沙箱
   - `add_processor()` 改为白名单模式，仅允许 `_PIPELINE_WHITELIST` 内的管线

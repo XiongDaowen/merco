@@ -31,7 +31,7 @@
 
 ## Phase 2 — 原子能力内聚化（P1）
 
-### 2.1 Agent Loop 开放 LoopPolicy
+### 2.1 Agent Loop 开放 LoopPolicy ✅ 已完成
 
 **问题**: `_agent_loop` 退出条件硬编码（agent.py:698），插件无法注入迭代策略。
 
