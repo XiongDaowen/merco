@@ -113,9 +113,11 @@ Agent 硬初始化 MCPServerManager → MCPPlugin。
 
 `MCPPlugin` 只负责创建 `MCPServerManager`，激活阶段不触发任何网络/stdio I/O；加载 MCP 服务器仍由调用方显式触发。
 
-### 3.4 agents + todo → SubAgentPlugin
+### 3.4 agents + todo → SubAgentPlugin ✅ 已完成
 
 Agent 硬初始化 SubAgentManager + TodoManager → SubAgentPlugin。
+
+`SubAgentPlugin` 负责创建 TodoManager + SubAgentManager 并注入 TaskTool；新增 CLI e2e smoke test 防止 import-time 回归。
 
 ### 3.5 web_tools → WebPlugin
 
