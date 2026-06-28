@@ -1,5 +1,5 @@
 """钩子系统"""
 
-from .registry import HookRegistry
+from .registry import HookRegistry, HookResult
 
-__all__ = ["HookRegistry"]
+__all__ = ["HookRegistry", "HookResult"]
