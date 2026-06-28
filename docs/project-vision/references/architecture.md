@@ -1,58 +1,75 @@
 # 架构设计
 
-## 必须保留的核心模块
-
-| 模块 | 说明 |
-|------|------|
-| Agent-Loop | 主循环与工具调用调度 |
-| Skills | 可扩展技能系统 |
-| Tools | 文件/终端/网络等基础工具 |
-| MCP | 模型上下文协议支持 |
-| Memory | 自动记忆与召回 |
-| Context | 上下文压缩与管理 |
-| Hooks | 生命周期钩子 |
-| Sandbox | 权限与沙箱控制 (目标: 容器化隔离) |
-| Observability | 日志与可观测性 |
-| Scheduler | 定时任务调度 |
-
-### 可以裁剪的部分
-
-- 过度抽象的配置系统
-- 不常用的消息平台集成
-- 复杂的插件加载机制
-- 冗余的中间层封装
-
 ## 项目目录结构
 
 ```
 merco/
-├── core/           # 核心引擎 (agent, session, message, context, config, pipeline, setup, llm, self_healing)
-├── tools/          # 工具系统 (registry, file, bash, web, task, mcp, skill, edit)
-├── skills/         # 技能系统 (loader, registry, builtin/)
-├── memory/         # 记忆系统 (store, recall, compressor, search, session_store, save_pipeline, strategy)
-├── hooks/          # 钩子系统 (registry, lifecycle, tool, chat)
-├── sandbox/        # 沙箱环境 (permissions, isolation, security, guard, confirm, snapshot)
-├── scheduler/      # 定时任务 (cron, jobs, delivery)
-├── observability/  # 可观测性 (logger, metrics, tracing, audit, observer)
-├── gateway/        # 消息网关 (base, telegram, discord, web)
-└── utils/          # 工具函数
+├── core/           # 核心引擎 (agent, llm/, config, session, message, context,
+│                   #             pipeline, recovery/, interrupt, self_healing,
+│                   #             empty_response, loop_policy)                    🟢 POLISHED
+├── tools/          # 工具系统 (registry, bash_tools, file_tools, edit,
+│                   #             web_tools, mcp_tools, skill_tools, task_tools,
+│                   #             errors, middleware, recovery, base, processors/)  🟢 POLISHED
+├── skills/         # 技能系统 (loader, registry, builtin/merco/SKILL.md)         🟢 POLISHED
+├── memory/         # 记忆系统 (store, recall, save_pipeline, strategy,
+│                   #             session_store, backend, backends/, search,
+│                   #             session_search)                                   🟢 POLISHED
+├── hooks/          # 钩子系统 (registry, lifecycle, tool_hooks, chat_hooks)     🟢 POLISHED
+├── sandbox/        # 沙箱环境 (guard, security, confirm, snapshot)              🟢 POLISHED
+├── scheduler/      # 定时任务 (cron, jobs, delivery)                            🟢 POLISHED
+├── observability/  # 可观测性 (observer, metrics, audit, logger, tracing)       🟢 POLISHED
+├── plugins/        # 插件系统 (base, manager, builtin/{mcp,observability,
+│                   #             scheduler,skills,subagent,web,superpower})      🟢 NEW
+├── context/        # 上下文处理 (pipeline, processors/, recovery)               🟢 NEW
+├── agents/         # 子 Agent 管理 (subagent, profile)                          🟢 NEW
+├── todo/           # 待办事项 (manager, models)                                 🟢 NEW
+├── mcp/            # MCP 客户端 (manager, config, tool)                         🟢 POLISHED
+├── gateway/        # 消息网关 (预留)                                           ⚪ LEGACY
+└── utils/          # 工具函数                                                 ⚪ UTIL
 
-cli/                # CLI 入口 (main, commands, tui)
-web/                # Web 界面 (FastAPI app)
-tests/              # 测试 (unit, integration, fixtures, conftest)
+cli/                # CLI 入口 (main, commands, input_driver, interrupt,
+│                   #             registry, tui)                                  🟢 POLISHED
+web/                # Web 界面 (FastAPI app, 预留)                               ⚪ LEGACY
+tests/              # 测试 (core, mcp, observability, cli, integration, unit)
 docs/               # 文档
 config/             # 配置示例
 references/         # 参考源码 (git 忽略)
 ```
+
+**图例：**
+- 🟢 POLISHED — 功能完整，经过测试验证
+- 🟢 NEW — 新增模块，功能实现
+- ⚪ LEGACY — 历史模块，功能未完善
+- ⚪ UTIL — 工具模块，无业务状态
+
+## 模块状态总览
+
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| Agent Loop | 🟢 POLISHED | 主循环与工具调用调度，完整实现 |
+| Skills | 🟢 POLISHED | 技能系统，14 个 superpowers 技能已安装 |
+| Tools | 🟢 POLISHED | 文件/终端/网络/Skill/MCP/Task 等工具 |
+| MCP | 🟢 POLISHED | MCPServerManager + MCPPlugin 完整实现 |
+| Memory | 🟢 POLISHED | Save (Pipeline+Strategy) + Recall (HybridRecaller) 双链路 |
+| Context | 🟢 NEW | ContextPipeline + CompressProcessor + CacheOptimizeProcessor |
+| Hooks | 🟢 POLISHED | HookRegistry，15+ 事件类型全链路接入 |
+| Sandbox | 🟢 POLISHED | ToolGuard + SecurityChecker + Confirm + Snapshot |
+| Observability | 🟢 POLISHED | Observer 全链路接入，metrics/audit/tracing |
+| Scheduler | 🟢 POLISHED | CronScheduler + SchedulerPlugin 接入 Agent 生命周期 |
+| Plugins | 🟢 NEW | Plugin + PluginContext，19 扩展点，8 个内置插件 |
+| SubAgent | 🟢 NEW | SubAgentManager + AgentProfile + AgentProfileRegistry |
+| Todo | 🟢 NEW | TodoItem + TodoManager，支持子任务分解 |
+| Gateway | ⚪ LEGACY | 消息网关预留，未完善 |
+| Utils | ⚪ UTIL | 通用工具函数 |
 
 ## 技术栈
 
 - **语言**: Python 3.12+
 - **包管理**: uv
 - **异步**: asyncio / aiohttp
-- **CLI**: typer / click
-- **TUI**: textual / rich
-- **Web**: fastapi
+- **CLI**: typer / prompt_toolkit
+- **TUI**: textual (skeleton)
+- **Web**: fastapi (预留)
 - **配置**: pydantic-settings
 - **测试**: pytest
 
@@ -66,38 +83,831 @@ references/         # 参考源码 (git 忽略)
 | **OpenClaw** | `references/openclaw/` | 个人 AI 助手框架，支持多平台、插件系统、定时任务等 |
 | **OpenCode** | `references/opencode/` | 终端 AI 编码助手，提供 TUI、Skill 系统、MCP 集成等 |
 
- 实现功能时优先参考这些项目的源码。
+实现功能时优先参考这些项目的源码。
+
+---
+
+## 1. 整体系统架构图
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FF8F00
+}
+
+package "merco" {
+  rectangle "CLI\n(main.py)" as CLI #LightBlue
+
+  rectangle "Agent Loop\n(agent.py)" as Agent #LightGreen
+  note right of Agent
+    主心骨：协调所有子系统
+    - 生命周期管理
+    - 工具调用循环
+    - 上下文管理
+  end note
+
+  package "核心模块" {
+    rectangle "LLM\n(llm/)" as LLM #LightYellow
+    rectangle "Config\n(config.py)" as Config #LightYellow
+    rectangle "Session\n(session.py)" as Session #LightYellow
+    rectangle "Context\n(context.py)" as SessionContext #LightYellow
+  }
+
+  package "工具层" {
+    rectangle "ToolRegistry" as Registry #LightGray
+    rectangle "ToolGuard" as Guard #LightGray
+    rectangle "Tools\n(bash/file/web/mcp/...)" as Tools #LightGray
+  }
+
+  package "记忆层" {
+    rectangle "MemorySave\n(Pipeline + Strategy)" as MemorySave #LightGray
+    rectangle "MemoryRecall\n(HybridRecaller)" as MemoryRecall #LightGray
+    rectangle "SessionStore\n(SQLite)" as SessionStore #LightGray
+  }
+
+  package "扩展层" {
+    rectangle "Hooks\n(15 事件)" as Hooks #LightGray
+    rectangle "Plugins\n(8 内置插件)" as Plugins #LightGray
+    rectangle "Scheduler\n(CronScheduler)" as Scheduler #LightGray
+    rectangle "Observer\n(全链路接入)" as Observer #LightGray
+  }
+
+  package "子模块" {
+    rectangle "MCP\n(MCPServerManager)" as MCP #LightGray
+    rectangle "Skills\n(SkillLoader/Registry)" as Skills #LightGray
+    rectangle "SubAgent\n(SubAgentManager)" as SubAgent #LightGray
+    rectangle "Todo\n(TodoManager)" as Todo #LightGray
+    rectangle "ContextPipeline\n(Compress/Cache)" as ContextPipeline #LightGray
+  }
+}
+
+CLI --> Agent
+Agent --> LLM
+Agent --> Config
+Agent --> Session
+Agent --> SessionContext
+
+Agent --> Registry
+Registry --> Guard
+Registry --> Tools
+
+Agent --> MemorySave
+Agent --> MemoryRecall
+Agent --> SessionStore
+
+Agent --> Hooks
+Agent --> Plugins
+Agent --> Scheduler
+Agent --> Observer
+
+Agent --> MCP
+Agent --> Skills
+Agent --> SubAgent
+Agent --> Todo
+Agent --> ContextPipeline
+
+note right of MemorySave
+  Save 链路：
+  Strategy → Pipeline → Hooks.emit("memory.saved")
+end note
+
+note right of MemoryRecall
+  Recall 链路：
+  HybridRecaller → FTS5 + JSON → 注入 context
+end note
+
+note right of Plugins
+  PluginContext 接入：
+  - MCP Plugin
+  - Observability Plugin
+  - Scheduler Plugin
+  - Skills Plugin
+  - SubAgent Plugin
+  - Web Plugin
+  - Superpower Plugin
+end note
+
+@enduml
+```
+
+---
+
+## 2. 插件系统架构图
+
+> **扩展点说明**：插件系统有两套扩展机制：
+> - **PluginContext 属性（19个）**：代码层面直接注入的子系统引用
+> - **Hook 事件扩展点（15个）**：生命周期事件，插件可订阅
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+
+package "Plugin System" {
+  rectangle "PluginManager" as Manager #LightGreen
+  note bottom of Manager
+    生命周期管理：
+    - register(Plugin)
+    - activate_all()
+    - deactivate_all()
+  end note
+
+  rectangle "PluginContext" as Context #LightYellow
+  note bottom of Context
+    19 个扩展属性：
+    hooks / agent / config
+    tool_registry / skill_registry
+    observer / scheduler / mcp_manager
+    todo_manager / sub_agent_manager
+    memory_save_pipeline / recaller
+    context_pipeline / agent_profiles
+    memory_backends / loop_policies
+  end note
+}
+
+package "Builtin Plugins (8)" {
+  rectangle "MCPPlugin" as MCP #LightBlue
+  rectangle "ObserverPlugin" as Obs #LightBlue
+  rectangle "SchedulerPlugin" as Sched #LightBlue
+  rectangle "SkillsPlugin" as Skills #LightBlue
+  rectangle "SubAgentPlugin" as SubAgent #LightBlue
+  rectangle "WebPlugin" as Web #LightBlue
+  rectangle "SuperpowerPlugin" as Super #LightBlue
+  rectangle "PermissionPolicyPlugin" as Policy #LightBlue
+}
+
+package "Hook Events (15)" {
+  card "agent.start" as E1
+  card "agent.stop" as E2
+  card "session.create" as E3
+  card "session.destroy" as E4
+  card "llm.before_chat" as E5
+  card "llm.chat" as E6
+  card "llm.after_chat" as E7
+  card "tool.before_execute" as E8
+  card "tool.after_execute" as E9
+  card "tool.error" as E10
+  card "context.compact" as E11
+  card "conversation.turn" as E12
+  card "command.remember" as E13
+  card "plugin.activated" as E14
+  card "memory.saved" as E15
+}
+
+Manager --> Context : 创建并注入
+Manager --> MCP : activate(ctx)
+Manager --> Obs : activate(ctx)
+Manager --> Sched : activate(ctx)
+Manager --> Skills : activate(ctx)
+Manager --> SubAgent : activate(ctx)
+Manager --> Web : activate(ctx)
+Manager --> Super : activate(ctx)
+Manager --> Policy : activate(ctx)
+
+MCP ..> E5 : 订阅
+Obs ..> E1 : 订阅
+Obs ..> E2 : 订阅
+Obs ..> E6 : 订阅
+Obs ..> E9 : 订阅
+Obs ..> E10 : 订阅
+Obs ..> E12 : 订阅
+Obs ..> E14 : 订阅
+Sched ..> E1 : 订阅
+Sched ..> E4 : 订阅
+Skills ..> E6 : 订阅
+SubAgent ..> E9 : 订阅
+Super ..> E1 : 订阅
+Super ..> E10 : 订阅
+Policy ..> E8 : 订阅
+Policy ..> E9 : 订阅
+
+@enduml
+```
+
+---
+
+## 3. 上下文处理管道图
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam activity {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontSize 12
+}
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FF8F00
+}
+
+start
+
+:消息进入 Agent Loop;
+
+partition "ContextPipeline" {
+  :ContextProcessor;
+
+  if (消息处理) then (是)
+    :CompressProcessor;
+    note right
+      上下文压缩：
+      - LLM 总结历史
+      - 保留尾部消息
+      - 自动 fork 归档
+    end note
+
+    :CacheOptimizeProcessor;
+    note right
+      缓存优化：
+      - 重复内容检测
+      - Token 预算管理
+    end note
+  endif
+}
+
+partition "记忆召回" {
+  :MemoryRecall (HybridRecaller);
+  note right
+    召回策略：
+    - FTS5 全文搜索
+    - JSON 文件检索
+    - 相关性排序
+  end note
+}
+
+:注入到 LLM 上下文;
+
+stop
+
+@enduml
+```
+
+---
+
+## 4. 记忆系统架构图（Save + Recall 双链路）
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam activity {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontSize 12
+}
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FF8F00
+}
+
+package "Memory System" {
+  rectangle "Save 链路" as Save #LightGreen
+  rectangle "Recall 链路" as Recall #LightBlue
+}
+
+package "Save 链路" {
+  rectangle "Hook 触发点" as Hooks #LightYellow
+  note bottom of Hooks
+    触发事件：
+    - command.remember
+    - session.destroy
+  end note
+
+  rectangle "MemorySaveStrategy" as Strategy #LightYellow
+  note bottom of Strategy
+    策略实现：
+    - ExplicitRememberStrategy
+    - SessionEndExtractStrategy
+  end note
+
+  rectangle "MemorySavePipeline" as Pipeline #LightYellow
+  note bottom of Pipeline
+    处理步骤：
+    - SourceEnricher
+    - DedupProcessor
+  end note
+
+  rectangle "MemoryStore" as Store #LightYellow
+  rectangle "backends/json_backend.py" as Backend #LightYellow
+}
+
+package "Recall 链路" {
+  rectangle "MemoryRecaller\n(HybridRecaller)" as Recaller #LightYellow
+  note bottom of Recaller
+    召回策略：
+    - FTS5 全文检索
+    - JSON 文件搜索
+    - 相关性评分
+  end note
+
+  rectangle "SessionStore" as Session #LightYellow
+  note bottom of Session
+    历史会话召回：
+    - session_search.py
+    - FTS5 索引
+  end note
+}
+
+Hooks --> Strategy : emit(event)
+Strategy --> Pipeline : SaveItem
+Pipeline --> Store : save()
+Store --> Backend : persist
+
+Recaller --> Store : recall()
+Recaller --> Session : session_search()
+
+@enduml
+```
+
+---
+
+## 5. 事件驱动架构图（Hooks 发布订阅）
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam activity {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontSize 12
+}
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FF8F00
+}
+
+package "HookRegistry (事件总线)" {
+  database "事件表" as Events #LightYellow
+}
+
+package "事件发布者 (Producer)" {
+  rectangle "Agent Loop" as Agent #LightGreen
+  rectangle "ToolRegistry" as Tools #LightGreen
+  rectangle "MemorySavePipeline" as Memory #LightGreen
+  rectangle "MCPManager" as MCP #LightGreen
+  rectangle "PluginManager" as Plugins #LightGreen
+  rectangle "SubAgentManager" as SubAgent #LightGreen
+}
+
+package "事件订阅者 (Consumer)" {
+  rectangle "Observer\n(可观察性)" as Observer #LightBlue
+  note bottom of Observer
+    订阅事件：
+    - agent.start/stop
+    - llm.chat
+    - tool.after_execute
+    - conversation.turn
+  end note
+
+  rectangle "AuditLogger\n(审计日志)" as Audit #LightBlue
+  note bottom of Audit
+    订阅事件：
+    - session.create/destroy
+    - tool.before/after_execute
+  end note
+
+  rectangle "TracingSpan\n(链路追踪)" as Tracing #LightBlue
+  note bottom of Tracing
+    订阅事件：
+    - llm.before/after_chat
+    - tool.before_execute
+  end note
+
+  rectangle "Memory Strategies\n(记忆策略)" as MemoryStrat #LightBlue
+  note bottom of MemoryStrat
+    订阅事件：
+    - command.remember
+    - session.destroy
+  end note
+
+  rectangle "SchedulerPlugin\n(定时任务)" as Scheduler #LightBlue
+  note bottom of Scheduler
+    订阅事件：
+    - agent.start
+    - session.destroy
+  end note
+}
+
+Agent --> Events : emit(event)
+Tools --> Events : emit(event)
+Memory --> Events : emit(event)
+MCP --> Events : emit(event)
+Plugins --> Events : emit(event)
+SubAgent --> Events : emit(event)
+
+Events --> Observer : on(event)
+Events --> Audit : on(event)
+Events --> Tracing : on(event)
+Events --> MemoryStrat : on(event)
+Events --> Scheduler : on(event)
+
+@enduml
+```
+
+---
 
 ## 模块集成架构
 
-各子模块应通过 Agent Loop 完成调用链连接。**v0.2.0 状态：3 条主链已连接**：
+Agent Loop 作为主心骨，协调所有子系统调用链：
 
 ```
 Agent.run(prompt)
   │
-  ├─ Hooks → emit("agent.start")                  ← Phase 6 计划
-  ├─ Memory.Recall → 注入相关记忆                  ← Phase 5 计划
-  ├─ Skills.RelevantSkills → 注入到 system prompt ← ⚠️ SkillViewTool 已接，get_relevant() keyword 匹配未注入
-  ├─ SessionStore.resume_or_create() → 恢复会话    ← ✅ v0.2.0
+  ├─ Hooks → emit("agent.start")                    ← ✅ v0.3.0
+  ├─ Hooks → emit("session.create")                 ← ✅ v0.3.0
+  ├─ Hooks → emit("message.receive")                ← ✅ v0.3.0
+  │
+  ├─ Plugins.on_init()                              ← ✅ PluginContext
+  ├─ Memory.Recall → 注入相关记忆                   ← ✅ HybridRecaller
+  ├─ Skills.RelevantSkills → 注入到 system prompt   ← ✅ SkillViewTool
+  ├─ SessionStore.resume_or_create() → 恢复会话     ← ✅ v0.2.0
   │
   └─ _agent_loop()
        │
-       ├─ ToolGuard.check() → 拦截/确认/放行       ← ✅ v0.2.0 (30 条默认 ask 规则)
-       ├─ Hooks → emit("llm.chat")                ← ✅ v0.2.0
-       ├─ ToolRegistry.execute() + ToolHooks       ← ✅ v0.2.0
-       ├─ Observer._on_tool() / _on_error()        ← ✅ v0.2.0 (订阅 hooks)
-       ├─ Hooks → emit("tool.after_execute")      ← ✅ v0.2.0
-       ├─ ResultPipeline.process()                 ← ✅ v0.2.0 (TruncationProcessor + SkillViewProcessor)
+       ├─ Hooks → emit("llm.before_chat")           ← ✅ v0.3.0
+       ├─ LLM.chat()                                ← ✅ v0.1.0
+       ├─ Hooks → emit("llm.chat")                  ← ✅ v0.2.0
+       ├─ Hooks → emit("llm.after_chat")            ← ✅ v0.3.0
        │
-       ├─ SessionStore.save_message()              ← ✅ v0.2.0 (增量写 SQLite)
+       ├─ Hooks → emit("conversation.turn")         ← ✅ v0.3.0
        │
-       ├─ RecoveryPipeline (LLM error 重试)        ← ✅ v0.2.0
-       ├─ EmptyResponsePipeline (空回复回调)       ← ✅ v0.2.0
+       ├─ ToolGuard.check() → 拦截/确认/放行        ← ✅ v0.2.0 (30 条默认 ask 规则)
+       ├─ Hooks → emit("tool.before_execute")       ← ✅ v0.3.0
+       ├─ ToolRegistry.execute() + ToolHooks        ← ✅ v0.2.0
+       ├─ Observer._on_tool() / _on_error()         ← ✅ v0.2.0 (订阅 hooks)
+       ├─ Hooks → emit("tool.after_execute")        ← ✅ v0.2.0
+       ├─ Hooks → emit("tool.error")                ← ✅ v0.2.0
        │
-       ├─ _ask_continuation() → LLM 自评续命       ← ✅ 已实现 (max_tool_calls)
+       ├─ ResultPipeline.process()                  ← ✅ v0.2.0
+       │    (TruncationProcessor + SkillViewProcessor)
        │
-       └─ Memory.SavePipeline → 持久化记忆         ← ✅ v0.3.0 (Strategy + Pipeline + Hook 模式)
+       ├─ SessionStore.save_message()               ← ✅ v0.2.0 (增量写 SQLite)
+       │
+       ├─ RecoveryPipeline (LLM error 重试)         ← ✅ v0.2.0
+       ├─ EmptyResponsePipeline (空回复回调)        ← ✅ v0.2.0
+       │
+       ├─ _ask_continuation() → LLM 自评续命        ← ✅ max_tool_calls
+       │
+       ├─ ContextPipeline.process()                 ← ✅ v0.3.0
+       │    (CompressProcessor + CacheOptimizeProcessor)
+       ├─ Hooks → emit("context.compact")           ← ✅ v0.3.0
+       │
+       ├─ Memory.SavePipeline → 持久化记忆          ← ✅ v0.3.0
+       │    (Strategy + Pipeline + Hook 模式)
+       │
+       └─ Hooks → emit("agent.stop")                ← ✅ v0.3.0
+            emit("session.destroy")                  ← ✅ v0.3.0
 ```
+
+---
+
+## Agent Loop 详细流程图
+
+以下是 Agent Loop 的完整执行流程，展示了从用户输入到最终输出的所有关键步骤和 Hook 事件：
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam activity {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontSize 12
+}
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FF8F00
+}
+skinparam arrowColor #2E7D32
+skinparam diamondBackgroundColor #FFF3E0
+skinparam diamondBorderColor #FF9800
+
+|=== 入口阶段 ===|
+
+start
+
+:用户输入 prompt;
+:Agent.run(prompt);
+
+:Hooks emit("agent.start");
+note right
+  事件：agent.start
+  订阅者：Observer
+end note
+
+:Hooks emit("session.create");
+note right
+  事件：session.create
+  订阅者：AuditLogger
+end note
+
+:Hooks emit("message.receive");
+note right
+  事件：message.receive
+end note
+
+|=== 初始化阶段 ===|
+
+:SessionStore.resume_or_create();
+note right
+  恢复上次会话或创建新会话
+  SQLite WAL 模式，支持增量写
+end note
+
+:Plugins.on_init();
+note right
+  PluginContext 注入所有子系统
+  8 个内置插件初始化
+end note
+
+:Memory Recall (HybridRecaller);
+note right
+  召回策略：
+  - FTS5 全文搜索
+  - JSON 文件检索
+  - 相关性排序
+end note
+
+:Skills.RelevantSkills;
+note right
+  注入到 system prompt
+  SkillViewTool 展示可用技能
+end note
+
+|=== 主循环阶段 (_agent_loop) ===|
+
+while (循环条件) is (未达到 max_tool_calls)
+  
+  :Hooks emit("llm.before_chat");
+  note right
+    事件：llm.before_chat
+    订阅者：TracingSpan
+  end note
+  
+  :LLM.chat(messages);
+  note right
+    调用 LLM API
+    注入 system prompt + 记忆 + 上下文
+  end note
+  
+  :Hooks emit("llm.chat");
+  note right
+    事件：llm.chat
+    订阅者：Observer, TracingSpan
+  end note
+  
+  :Hooks emit("llm.after_chat");
+  note right
+    事件：llm.after_chat
+    订阅者：TracingSpan
+  end note
+  
+  :Hooks emit("conversation.turn");
+  note right
+    事件：conversation.turn
+    订阅者：Observer
+  end note
+  
+  if (有 tool_calls?) then (是)
+    
+    :遍历 tool_calls;
+    
+    while (每个 tool_call) is (未处理完)
+      
+      :ToolGuard.check();
+      note right
+        规则链匹配：
+        - 30 条默认 ask 规则
+        - 用户自定义规则优先级最高
+        - action: ask / deny / allow
+      end note
+      
+      if (需要用户确认?) then (ask 模式)
+        :Confirm UI 弹窗确认;
+        note right
+          - 命令内容预览
+          - 风险说明
+          - 确认/取消选项
+        end note
+        
+        if (用户取消?) then (是)
+          :result = {error: "操作已被取消"};
+          stop
+        else (否)
+          :继续执行;
+        end if
+      endif
+      
+      :Hooks emit("tool.before_execute");
+      note right
+        事件：tool.before_execute
+        订阅者：TracingSpan, AuditLogger
+      end note
+      
+      :ToolRegistry.execute();
+      note right
+        调用具体工具：
+        - BashTools
+        - FileTools
+        - WebTools
+        - MCPTools
+        - SkillTools
+        - TaskTools
+      end note
+      
+      :Hooks emit("tool.after_execute");
+      note right
+        事件：tool.after_execute
+        订阅者：Observer, AuditLogger
+      end note
+      
+      :SessionStore.save_message();
+      note right
+        增量写入 SQLite
+        仅写入新消息
+      end note
+      
+    endwhile (处理完成)
+    
+  else (否，无 tool_calls)
+    :ResultPipeline.process();
+    note right
+      - TruncationProcessor
+      - SkillViewProcessor
+    end note
+    
+    :Hooks emit("agent.stop");
+    note right
+      事件：agent.stop
+      订阅者：Observer, AuditLogger
+    end note
+    
+    :Hooks emit("session.destroy");
+    note right
+      事件：session.destroy
+      订阅者：MemorySaveStrategy, AuditLogger
+    end note
+    
+    stop
+    
+  endif
+  
+  :RecoveryPipeline (LLM error 重试);
+  note right
+    LLM 调用异常重试机制
+  end note
+  
+  :EmptyResponsePipeline;
+  note right
+    空回复回调处理
+  end note
+  
+endwhile (达到 max_tool_calls)
+
+|=== 收尾阶段 ===|
+
+:_wrap_up_call(_wrap_up_messages());
+note right
+  工具预算耗尽收尾：
+  - 追加 user 消息要求最终回复
+  - tools=[] + tool_choice="none"
+  - LLM 纯文字回答
+end note
+
+:LLM.chat() 收尾调用;
+
+:Hooks emit("agent.stop");
+:Hooks emit("session.destroy");
+
+stop
+
+@enduml
+```
+
+**流程说明：**
+
+| 阶段 | 组件 | 说明 |
+|------|------|------|
+| **入口** | Agent.run() | 接收用户输入，触发 start/session/create/message.receive 事件 |
+| **初始化** | SessionStore | 恢复或创建会话，加载历史消息 |
+| **初始化** | Memory Recall | HybridRecaller 召回相关记忆注入上下文 |
+| **初始化** | Skills | 注入相关技能到 system prompt |
+| **主循环** | LLM.chat() | 调用 LLM，支持 tool_calls 循环 |
+| **主循环** | ToolGuard | 规则链匹配，决定放行/拦截/询问 |
+| **主循环** | ToolRegistry | 执行具体工具，异常捕获转为结构化错误 |
+| **主循环** | ContextPipeline | 上下文压缩与缓存优化 |
+| **收尾** | Wrap-Up Pattern | 工具预算耗尽时强制 LLM 输出最终回答 |
+
+**Hook 事件时序：**
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam sequence {
+  ArrowColor #2E7D32
+  LifeLineBorderColor #2E7D32
+  LifeLineBackgroundColor #E8F5E9
+  ParticipantBorderColor #2E7D32
+  ParticipantBackgroundColor #E8F5E9
+}
+
+participant "Agent" as A
+participant "LLM" as L
+participant "Tools" as T
+participant "Observer" as O
+participant "Memory" as M
+
+== 会话生命周期 ==
+
+A -> A : emit("agent.start")
+A -> A : emit("session.create")
+A -> A : emit("message.receive")
+
+== 主循环 ==
+
+loop 每次 LLM 调用
+
+    A -> A : emit("llm.before_chat")
+    A -> L : chat(messages)
+    activate L
+
+    L -> A : response
+    deactivate L
+
+    A -> A : emit("llm.chat")
+    A -> A : emit("llm.after_chat")
+    A -> A : emit("conversation.turn")
+
+    alt 有 tool_calls
+
+        loop 每个 tool_call
+
+            A -> A : emit("tool.before_execute")
+            A -> T : execute()
+            activate T
+
+            T -> A : result
+            deactivate T
+
+            alt 成功
+                A -> A : emit("tool.after_execute")
+                A -> O : _on_tool()
+            else 失败
+                A -> A : emit("tool.error")
+                A -> O : _on_error()
+            end
+
+        end
+
+    else 无 tool_calls
+
+        A -> A : emit("agent.stop")
+        A -> A : emit("session.destroy")
+        A -> M : MemorySaveStrategy
+
+    end
+
+end
+
+@enduml
+```
+
+---
+
+## Hooks 事件完整状态表
+
+| 事件 | 定义位置 | agent.py emit | 其他模块 emit | 订阅者 |
+|------|----------|---------------|---------------|--------|
+| `agent.start` | lifecycle.py | ✅ | - | Observer |
+| `agent.stop` | lifecycle.py | ✅ | - | Observer, AuditLogger |
+| `session.create` | lifecycle.py | ✅ | - | AuditLogger |
+| `session.destroy` | lifecycle.py | ✅ | - | MemorySaveStrategy, AuditLogger |
+| `message.receive` | chat_hooks.py | ✅ | - | - |
+| `llm.before_chat` | (inline) | ✅ | - | TracingSpan |
+| `llm.chat` | (inline) | ✅ | - | Observer, TracingSpan |
+| `llm.after_chat` | (inline) | ✅ | - | TracingSpan |
+| `tool.before_execute` | tool_hooks.py | ✅ | - | TracingSpan, AuditLogger |
+| `tool.after_execute` | tool_hooks.py | ✅ | - | Observer, AuditLogger |
+| `tool.error` | tool_hooks.py | ✅ | - | Observer |
+| `context.compact` | chat_hooks.py | ✅ | - | - |
+| `conversation.turn` | (inline) | ✅ | - | Observer |
+| `memory.saved` | (inline) | - | MemorySavePipeline | - |
+| `memory.failed` | (inline) | - | MemorySavePipeline | - |
+| `subagent.completed` | (inline) | - | SubAgentManager | - |
+| `mcp.connect` | (inline) | - | MCPServerManager | - |
+| `mcp.tool_call` | (inline) | - | MCPServerManager | - |
+| `mcp.error` | (inline) | - | MCPServerManager | - |
+| `plugin.activated` | (inline) | - | PluginManager | - |
+| `plugin.deactivated` | (inline) | - | PluginManager | - |
+| `plugin.error` | (inline) | - | PluginManager | - |
+
+**状态：大部分事件已实现并 emit，仅 memory.* 事件仅被 save_pipeline emit 而无订阅者。**
+
+---
 
 ## 架构模式
 
@@ -159,7 +969,7 @@ Exception → {error: "TypeName: message"}                 # 通用兜底
 
 Observer 不直接埋点，而是订阅 HookRegistry 的事件流。业务代码只关心 `await self.hooks.emit(...)`，Observer/MetricsCollector/AuditLogger 各自订阅。
 
-**核心结构**：
+**核心结构：**
 
 ```python
 class Observer:
@@ -173,7 +983,7 @@ class Observer:
         hooks.on("conversation.turn", self._on_turn)  # turn count
 ```
 
-**双计数器（live + acc_map）**：
+**双计数器（live + acc_map）：**
 - `_live` — 当前运行（`/new` / `/sessions` 切换时 `reset()`）
 - `_acc_map` — 跨运行累计（持久化到 `session.metadata` JSON 字段，重启时 `restore()`）
 
@@ -183,126 +993,23 @@ for k, v in self._live.get_counters().items():
     self._acc_map[k] = self._acc_map.get(k, 0) + v
 ```
 
-**设计原则**：
+**设计原则：**
 - **解耦**：业务代码零侵入式埋点，加新指标不改 agent.py
 - **可组合**：MetricsCollector + AuditLogger + TracingSpan 可同时订阅同一事件
 - **持久化**：Observer.snapshot() 存 session.metadata，重启不丢统计
 - **多视角**：`/report` 命令同时显示本次（live）和累计（acc）数据
 
-**对比直接埋点**：
+**对比直接埋点：**
 - 旧：agent.py 导入 MetricsCollector，6+ 处 `metrics.increment("llm_calls")` 散落
 - 新：agent.py 只 `await self.hooks.emit(...)`，Observer 订阅。改 1 行加新指标
 
-### Hooks → Agent (事件发布订阅系统)
+---
 
-Hooks 是一个**事件发布订阅系统**——业务代码在关键节点发出事件，其他模块订阅这些事件来响应。解耦核心业务和辅助功能（可观察性、审计、日志等）。
-
-**现状**：
-
-| 事件 | 定义位置 | agent.py emit 了？ |
-|------|----------|-------------------|
-| `agent.start` | lifecycle.py | ❌ 没有 |
-| `agent.stop` | lifecycle.py | ❌ 没有 |
-| `session.create` | lifecycle.py | ❌ 没有 |
-| `session.destroy` | lifecycle.py | ❌ 没有 |
-| `message.receive` | chat_hooks.py | ❌ 没有 |
-| `message.send` | chat_hooks.py | ❌ 没有 |
-| `context.compact` | chat_hooks.py | ❌ 没有 |
-| `tool.before_execute` | tool_hooks.py | ❌ 没有 |
-| `tool.after_execute` | tool_hooks.py | ✅ 有 |
-| `tool.error` | tool_hooks.py | ✅ 有 |
-| `llm.chat` | (inline) | ✅ 有 |
-| `conversation.turn` | (inline) | ✅ 有 |
-
-骨架有了，但大部分事件没发出去，订阅者收不到通知。
-
-**打通后的完整事件流**：
-
-```plantuml
-@startuml
-skinparam backgroundColor #FEFEFE
-skinparam activity {
-  BackgroundColor #E8F5E9
-  BorderColor #2E7D32
-  FontSize 12
-}
-
-start
-
-:Agent 初始化;
-:HookRegistry 创建;
-:Observer 订阅事件;
-
-:emit("agent.start");
-:emit("session.create", session_id);
-
-:用户输入消息;
-:emit("message.receive", message);
-
-:LLM 调用;
-:emit("llm.chat", duration, tokens_in, tokens_out);
-
-:工具执行前;
-:emit("tool.before_execute", tool_name, args);
-
-if (ToolGuard 检查) then (ASK)
-  :用户确认;
-endif
-
-:emit("tool.after_execute", tool_name, result);
-note right: 目前只发了这个
-
-:emit("tool.error", tool_name, error);
-note right: 目前只发了这个
-
-:上下文压缩;
-:emit("context.compact", strategy);
-
-:Agent 退出;
-:emit("agent.stop");
-:emit("session.destroy", session_id);
-
-stop
-
-@enduml
-```
-
-**订阅者示例**（用于可观察性、审计等）：
-
-```plantuml
-@startuml
-skinparam backgroundColor #FEFEFE
-
-rectangle "Agent Loop" as Agent {
-  :emit("llm.chat")
-  :emit("tool.before_execute")
-  :emit("tool.after_execute")
-  :emit("tool.error")
-}
-
-rectangle "HookRegistry" as Hooks {
-  database "事件表" as events
-}
-
-rectangle "订阅者" as Subscribers {
-  card "Observer\n(可观察性)" as Observer
-  card "AuditLogger\n(审计日志)" as Audit
-  card "TracingSpan\n(链路追踪)" as Tracing
-}
-
-Agent -> Hooks : emit(event)
-Hooks -> Observer : on(event)
-Hooks -> Audit : on(event)
-Hooks -> Tracing : on(event)
-
-@enduml
-```
-
-### ToolGuard (规则链守卫)
+## ToolGuard (规则链守卫)
 
 工具执行前的细粒度敏感命令守卫。每条规则 = `tool + pattern + action`，链式匹配首个命中生效。
 
-**核心结构**：
+**核心结构：**
 
 ```python
 @dataclass
@@ -344,13 +1051,13 @@ _DEFAULT_RULES = [
 }
 ```
 
-**设计原则**：
+**设计原则：**
 - **默认 ask 不硬拦截** — 阻断正常开发不如让用户决策
 - **规则链优先级** — user 规则在链首，用户可覆盖默认
 - **ToolGuard.check() 由 agent 集成** — 工具自身不感知，业务解耦
 - **可拓展到任意工具** — 不仅 bash，可约束 write_file/edit_file
 
-**接入位置**（agent.py:474）：
+**接入位置**（agent.py）：
 ```python
 approved = await self.guard.check(tool_name, arguments)
 if not approved:
@@ -359,11 +1066,127 @@ elif self.tool_registry:
     result = await self.tool_registry.execute(tool_name, **arguments)
 ```
 
-### SessionStore (SQLite 持久化)
+---
+
+## 6. 工具执行时序图
+
+```plantuml
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam sequence {
+  ArrowColor #2E7D32
+  LifeLineBorderColor #2E7D32
+  LifeLineBackgroundColor #E8F5E9
+  ParticipantBorderColor #2E7D32
+  ParticipantBackgroundColor #E8F5E9
+}
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FF8F00
+}
+
+participant "Agent Loop" as Agent
+participant "ToolGuard" as Guard
+participant "ToolRegistry" as Registry
+participant "Confirm UI" as Confirm
+participant "BashTools" as Bash
+participant "FileTools" as File
+participant "HookRegistry" as Hooks
+
+== 安全检查阶段 ==
+
+Agent -> Registry : execute(tool_name, args)
+activate Registry
+
+Registry -> Guard : check(tool_name, args)
+activate Guard
+
+alt ASK 模式
+
+    Guard -> Confirm : 显示确认提示
+    activate Confirm
+
+    Confirm -> Confirm : 等待用户输入
+
+    alt 用户取消
+        Confirm -> Guard : Cancel
+        destroy Confirm
+        Guard -> Registry : False
+        destroy Guard
+        Registry -> Agent : {error: "操作已被取消"}
+        destroy Registry
+    else 用户确认
+        Confirm -> Guard : Confirm
+        destroy Confirm
+    end
+
+else ALLOW / DENY
+
+    Guard -> Guard : 自动决策
+
+end
+
+Guard -> Registry : True / False
+destroy Guard
+
+alt 检查未通过
+
+    Registry -> Agent : {error: "操作已被拦截"}
+    destroy Registry
+
+else 检查通过
+
+    == 工具执行阶段 ==
+
+    Registry -> Bash : execute(args)
+    activate Bash
+
+    alt 执行成功
+        Bash -> Registry : ToolResult
+    else 执行异常
+        Bash -> Registry : {error: "TypeName: message"}
+    end
+
+    destroy Bash
+
+    Registry -> Agent : ToolResult
+    destroy Registry
+
+    == 事件通知阶段 ==
+
+    activate Hooks
+
+    alt 执行成功
+        Hooks -> Hooks : emit("tool.after_execute")
+        Hooks -> Hooks : Observer._on_tool()
+    else 执行异常
+        Hooks -> Hooks : emit("tool.error")
+        Hooks -> Hooks : Observer._on_error()
+    end
+
+    destroy Hooks
+
+end
+
+@enduml
+```
+
+**时序说明：**
+
+| 阶段 | 组件 | 说明 |
+|------|------|------|
+| 安全检查 | ToolGuard | 规则链匹配，决定放行/拦截/询问 |
+| 用户确认 | Confirm UI | ASK 模式下展示确认对话框 |
+| 工具执行 | BashTools 等 | 调用具体工具实现 |
+| 事件通知 | HookRegistry | 发布 tool.after_execute / tool.error 事件 |
+
+---
+
+## SessionStore (SQLite 持久化)
 
 SQLite 会话存储替代 JSON 文件，支持并发读 + 增量写 + 全文检索。
 
-**表结构**：
+**表结构：**
 
 ```sql
 CREATE TABLE sessions (
@@ -372,7 +1195,7 @@ CREATE TABLE sessions (
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL,
     message_count INTEGER DEFAULT 0,
-    parent_id     TEXT,              -- 支持 Session Fork（Phase 5）
+    parent_id     TEXT,              -- 支持 Session Fork
     metadata      TEXT DEFAULT '{}'  -- Observer snapshot 存在这
 );
 
@@ -391,14 +1214,14 @@ CREATE TABLE messages (
 CREATE INDEX idx_msg_session ON messages(session_id, id);
 ```
 
-**关键设计**：
+**关键设计：**
 - **WAL 模式** (`PRAGMA journal_mode=WAL`) — 并发读 + 单写，性能 > 默认 rollback
 - **FOREIGN KEY** — 删 session 联动删 messages
 - **增量写** — `count_messages` 查 DB 已有 N 条，只写 `messages[N:]`
 - **metadata JSON 字段** — Observer snapshot 存这，重启不丢统计
-- **parent_id 字段** — 预留 Session Fork（Phase 5 启用）
+- **parent_id 字段** — 预留 Session Fork
 
-**接入位置**（agent.py:234-236）：
+**接入位置**（agent.py 启动装配）：
 
 ```python
 from merco.memory.session_store import SessionStore
@@ -407,21 +1230,23 @@ self.session = Session.resume_or_create(self._session_store)
 self._restore_context()  # 从 SQLite 灌入历史消息 + observer.restore()
 ```
 
-**Session 生命周期**：
+**Session 生命周期：**
 1. 启动 → `resume_or_create()` 自动恢复上次会话
 2. 每轮 → `session.add_message()` 不立即写盘
 3. 循环结束 → `session.save()` 增量写 + `save_metadata(observer.snapshot())`
 4. `/new` / 退出 → 合并 live→acc → 持久化
 
-**对比 JSON 文件**：
+**对比 JSON 文件：**
 - 旧：每轮 `json.dump` 全量，1MB 会话 = 1MB IO × N 轮
 - 新：增量写 1-2 条消息 = 几十字节 IO
 
-### Memory Save Pipeline (Strategy + Pipeline + Hook)
+---
+
+## Memory Save Pipeline (Strategy + Pipeline + Hook)
 
 记忆保存侧（"存"和"什么时候存"）采用三模式组合：Strategy 触发 + Pipeline 处理 + Hook 解耦。Recall 链路（HybridRecaller）早已通，本次补齐保存侧实现双向闭环。
 
-**核心结构**：
+**核心结构：**
 
 ```python
 # 1. Hook 触发（业务代码零感知）
@@ -452,7 +1277,7 @@ class MemorySavePipeline:
         return True
 ```
 
-**三个关键设计**：
+**三个关键设计：**
 
 1. **Source 优先级保护**：`SOURCE_PRIORITY = {user: 3, extracted: 2, system: 1}`，user 显式存的永远不被 extracted（LLM 自动抽）覆盖。`DedupProcessor._infer_source` 从已有 tag 反推优先级，对抗自动抽取污染。
 
@@ -460,7 +1285,7 @@ class MemorySavePipeline:
 
 3. **Hook 双向解耦**：业务代码只 emit 事件，Strategy 监听 + 写库 + emit `memory.saved` + Observer 计数。CLI `/remember`/Strategy/Observer/未来的 Audit 全部订阅同一事件流，加新订阅者零侵入。
 
-**对比直接调用**：
+**对比直接调用：**
 - 旧：业务代码 `store.save(...)` 散落各处，新增触发源要改所有调用点
 - 新：业务只 emit，Strategy 抽象让新触发源（webhook/scheduler/MCP）扩展只需一个类
 
@@ -488,39 +1313,47 @@ for strat in self.memory_strategies:
 - MemoryStore backend 抽象（SQLite 后端）
 - 跨 agent 共享 Memory
 
-### Sandbox 扩展路线（从规则守卫到容器隔离）
+---
+
+## Sandbox 扩展路线（从规则守卫到容器隔离）
 
 当前 `ToolGuard` 不是真正的沙箱——它只是**规则匹配 + 用户确认**，无法提供进程级隔离。
 
-**现状**：
+**现状：**
 
 | 文件 | 状态 |
 |------|------|
-| `guard.py` | ✅ 规则守卫（已接通 Tools） |
-| `isolation.py` | 🟡 目录白名单（骨架，未接入） |
-| `permissions.py` | 🟡 权限管理（骨架） |
+| `guard.py` | ✅ ToolGuard 规则守卫（已接通 Tools） |
 | `security.py` | ✅ SecurityChecker 正则检测 |
 | `confirm.py` | ✅ 确认 UI |
 | `snapshot.py` | ✅ 快照（中断恢复用） |
 
-**扩展路线**：
+**已删除：**
+- `sandbox/isolation.py` — 已删除
+- `sandbox/permissions.py` — 已删除
+
+**扩展路线：**
 
 #### 阶段 1: 本地增强（轻量）
 
 ```plantuml
 @startuml
 skinparam backgroundColor #FEFEFE
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
 
-box "当前架构"
-  component "ToolGuard\n(规则匹配)" as Guard #LightGreen
-end box
+package "当前架构" {
+  rectangle "ToolGuard\n(规则匹配)" as Guard #LightGreen
+  rectangle "SecurityChecker\n(正则硬拦截)" as Security #LightGreen
+}
 
-box "接上 SandboxIsolation"
-  component "SandboxIsolation\n(目录白名单)" as Isolation #LightYellow
-  component "work_dir = /tmp/merco_xxx" as TempDir
-end box
+package "扩展方向" {
+  rectangle "SandboxIsolation\n(目录白名单)" as Isolation #LightYellow
+  rectangle "work_dir = /tmp/merco_xxx" as TempDir #LightGray
+}
 
 Guard -> Isolation : 检查路径
+Security -> Isolation : 系统路径拦截
 Isolation -> TempDir : 限制访问
 
 note top of Isolation
@@ -538,6 +1371,11 @@ end note
 ```plantuml
 @startuml
 skinparam backgroundColor #FEFEFE
+skinparam activity {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontSize 12
+}
 
 card "Agent" as Agent
 
@@ -578,6 +1416,11 @@ Bubblewrap -> Gvisor : 隔离
 ```plantuml
 @startuml
 skinparam backgroundColor #FEFEFE
+skinparam activity {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontSize 12
+}
 
 card "Docker Container" as Docker #LightBlue
 
@@ -605,6 +1448,11 @@ end note
 ```plantuml
 @startuml
 skinparam backgroundColor #FEFEFE
+skinparam activity {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontSize 12
+}
 
 cloud "Cloud Provider" {
   card "AWS ECS / GCP Cloud Run / Azure Container" as Cloud #LightBlue
@@ -636,7 +1484,7 @@ end note
 
 对接 AWS/GCP 的容器服务 API，创建临时容器执行工具。
 
-**扩展点汇总**：
+**扩展点汇总：**
 
 | 扩展 | 实现方式 | 难度 |
 |------|----------|------|
