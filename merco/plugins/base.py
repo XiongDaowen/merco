@@ -60,7 +60,7 @@ class PluginContext:
         memory_save_pipeline: "MemorySavePipeline",
         recaller: "HybridRecaller",
         config: "MercoConfig",
-        observer: "Observer",
+        observer: "Observer" = None,
         todo_manager: "TodoManager" = None,
         sub_agent_manager: "SubAgentManager" = None,
         context_pipeline: "ContextPipeline" = None,
