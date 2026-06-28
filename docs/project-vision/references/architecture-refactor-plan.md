@@ -119,7 +119,7 @@ Agent 硬初始化 SubAgentManager + TodoManager → SubAgentPlugin。
 
 `SubAgentPlugin` 负责创建 TodoManager + SubAgentManager 并注入 TaskTool；新增 CLI e2e smoke test 防止 import-time 回归。
 
-### 3.5 web_tools → WebPlugin
+### 3.5 web_tools → WebPlugin ✅ 已完成
 
 WebFetch / WebSearch 是拓展而非原子。
 
