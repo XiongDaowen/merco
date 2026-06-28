@@ -438,6 +438,7 @@ class Agent:
         from merco.plugins.builtin.mcp.plugin import MCPPlugin
         from merco.plugins.builtin.subagent.plugin import SubAgentPlugin
         from merco.plugins.builtin.web.plugin import WebPlugin
+        from merco.plugins.builtin.scheduler.plugin import SchedulerPlugin
         from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
 
         # ── Context Pipeline ──
@@ -495,6 +496,7 @@ class Agent:
         self.plugin_manager.register(MCPPlugin())
         self.plugin_manager.register(SubAgentPlugin())
         self.plugin_manager.register(WebPlugin())
+        self.plugin_manager.register(SchedulerPlugin())
         self.plugin_manager.register(SuperpowerPlugin())
 
         # 激活所有 enabled 插件（同步调用，Agent.__init__ 是同步的）
@@ -544,6 +546,7 @@ class Agent:
         await self.plugin_manager.activate("mcp")
         await self.plugin_manager.activate("subagent")
         await self.plugin_manager.activate("web")
+        await self.plugin_manager.activate("scheduler")
         await self.plugin_manager.activate_all()
 
     async def run(self, prompt: str) -> str:

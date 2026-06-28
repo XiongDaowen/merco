@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from merco.core.loop_policy import LoopPolicyRegistry
     from merco.skills.registry import SkillRegistry
     from merco.mcp.manager import MCPServerManager
+    from merco.scheduler.cron import CronScheduler
     from typing import Callable
 
 
@@ -72,6 +73,7 @@ class PluginContext:
         agent: "Agent" = None,
         skill_registry: "SkillRegistry" = None,
         mcp_manager: "MCPServerManager" = None,
+        scheduler: "CronScheduler" = None,
     ):
         self.hooks = hooks
         self.tool_registry = tool_registry
@@ -91,6 +93,7 @@ class PluginContext:
         self.agent = agent
         self.skill_registry = skill_registry
         self.mcp_manager = mcp_manager
+        self.scheduler = scheduler
 
     def on(self, event: str, handler: "Callable") -> None:
         """Subscribe to event (convenience method)"""

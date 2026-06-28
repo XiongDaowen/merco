@@ -123,9 +123,11 @@ Agent 硬初始化 SubAgentManager + TodoManager → SubAgentPlugin。
 
 WebFetch / WebSearch 是拓展而非原子。
 
-### 3.6 scheduler → SchedulerPlugin
+### 3.6 scheduler → SchedulerPlugin ✅ 已完成
 
 已有 cron 骨架，接入 CLI 启动。
+
+`SchedulerPlugin` 创建 CronScheduler 实例；调度器不自动启动，由调用方显式触发。
 
 ### 3.7 HookRegistry 升级 → HookResult + 拦截型 Hook
 
