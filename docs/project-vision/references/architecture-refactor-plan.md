@@ -101,9 +101,11 @@ class ObservabilityPlugin(Plugin):
 |--------|--------|
 | Agent.__init__ 创建 Observer | ObservabilityPlugin.activate() |
 
-### 3.2 skills → SkillPlugin
+### 3.2 skills → SkillPlugin ✅ 已完成
 
 Agent 硬初始化 SkillRegistry → SkillPlugin。
+
+`SkillPlugin` 负责加载 SkillRegistry 并注入 Agent + SkillViewTool；生产内部创建路径已迁移到 `Agent.create(...)`。
 
 ### 3.3 mcp → MCPPlugin
 
