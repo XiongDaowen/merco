@@ -659,8 +659,18 @@ class Agent:
             logger.debug("→ Agent 循环 #%d: %d 条消息", self._tool_calls_count, len(messages))
             t0 = time.monotonic()
             try:
-                response = await self._provider.get_response(
-                    self, messages, tools or None)
+                before = await self.hooks.emit("llm.before_chat", messages=messages, tools=tools)
+                if before and before.data:
+                    messages = before.data.get("messages", messages)
+                    tools = before.data.get("tools", tools)
+                    if before.stop:
+                        response = before.data["response"]
+                    else:
+                        response = await self._provider.get_response(
+                            self, messages, tools or None)
+                else:
+                    response = await self._provider.get_response(
+                        self, messages, tools or None)
             except Exception as e:
                 _recovery_attempts += 1
                 if _recovery_attempts > 3:
