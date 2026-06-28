@@ -436,6 +436,7 @@ class Agent:
         from merco.plugins.builtin.observability.plugin import ObservabilityPlugin
         from merco.plugins.builtin.skills.plugin import SkillPlugin
         from merco.plugins.builtin.mcp.plugin import MCPPlugin
+        from merco.plugins.builtin.subagent.plugin import SubAgentPlugin
         from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
 
         # ── Context Pipeline ──
@@ -457,12 +458,9 @@ class Agent:
         for p in BUILTIN_PROFILES:
             self.agent_profiles.register(p)
 
-        # ── Todo + SubAgent 系统 ──
-        from merco.todo.manager import TodoManager
-        from merco.agents.subagent import SubAgentManager
-
-        self.todo_manager = TodoManager(f"{config.memory_path}/../todos.db")
-        self.sub_agent_manager = SubAgentManager(self, self.agent_profiles)
+        # Todo + SubAgent 由 SubAgentPlugin 激活时创建
+        self.todo_manager = None
+        self.sub_agent_manager = None
 
         # ── Loop Policy ──
         from merco.core.loop_policy import LoopPolicyRegistry, DefaultLoopPolicy
@@ -494,6 +492,7 @@ class Agent:
         self.plugin_manager.register(ObservabilityPlugin())
         self.plugin_manager.register(SkillPlugin())
         self.plugin_manager.register(MCPPlugin())
+        self.plugin_manager.register(SubAgentPlugin())
         self.plugin_manager.register(SuperpowerPlugin())
 
         # 激活所有 enabled 插件（同步调用，Agent.__init__ 是同步的）
@@ -510,12 +509,6 @@ class Agent:
                     loop.close()
                 except Exception:
                     pass
-
-        # 注入到 TaskTool（全局 tool_registry 中的 TaskTool 实例）
-        task_tool = self.tool_registry.get("task")
-        if task_tool:
-            task_tool._todo_manager = self.todo_manager
-            task_tool._sub_agent_manager = self.sub_agent_manager
 
         # ── MCP 客户端（由 MCPPlugin 激活时创建；legacy 路径下保持 None）──
         self.mcp_manager = None
@@ -547,6 +540,7 @@ class Agent:
         self._restore_context()
         await self.plugin_manager.activate("skills")
         await self.plugin_manager.activate("mcp")
+        await self.plugin_manager.activate("subagent")
         await self.plugin_manager.activate_all()
 
     async def run(self, prompt: str) -> str:

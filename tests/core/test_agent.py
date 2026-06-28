@@ -495,3 +495,54 @@ def test_agent_init_no_longer_accepts_skill_registry(monkeypatch, tmp_path):
 
     with pytest.raises(TypeError):
         Agent(config=cfg, skill_registry=object())
+
+
+@pytest.mark.asyncio
+async def test_agent_create_initializes_sub_agent_manager(monkeypatch, tmp_path):
+    """Agent.create initializes SubAgentManager via SubAgentPlugin."""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from merco.agents.subagent import SubAgentManager
+    from merco.todo.manager import TodoManager
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "factory_subagent.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    agent = await Agent.create(config=cfg, tool_registry=make_test_registry())
+
+    assert isinstance(agent.todo_manager, TodoManager)
+    assert isinstance(agent.sub_agent_manager, SubAgentManager)
+    assert "subagent" in agent.plugin_manager.active_plugins
+
+
+@pytest.mark.asyncio
+async def test_agent_create_injects_managers_into_task_tool(monkeypatch, tmp_path):
+    """Agent.create injects todo_manager and sub_agent_manager into the task tool."""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "factory_tasktool.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    agent = await Agent.create(config=cfg, tool_registry=make_test_registry())
+    task_tool = agent.tool_registry.get("task")
+
+    assert task_tool is not None
+    assert task_tool._todo_manager is agent.todo_manager
+    assert task_tool._sub_agent_manager is agent.sub_agent_manager

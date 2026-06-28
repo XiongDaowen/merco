@@ -17,6 +17,9 @@ from merco.tools.base import BaseTool            # noqa: E402
 from merco.tools.skill_tools import SkillViewTool  # noqa: E402
 
 
+from merco.tools.task_tools import TaskTool  # noqa: E402
+
+
 # ── 内置测试工具 ──────────────────────────────────────────
 
 class MockEchoTool(BaseTool):
@@ -88,6 +91,7 @@ def make_test_registry() -> ToolRegistry:
     reg.register(MockBashTool())
     reg.register(MockEditTool())
     reg.register(SkillViewTool())
+    reg.register(TaskTool())
     return reg
 
 

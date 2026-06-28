@@ -20,6 +20,11 @@ class TaskTool(BaseTool):
         "required": ["title"],
     }
 
+    def __init__(self):
+        super().__init__()
+        self._todo_manager = None
+        self._sub_agent_manager = None
+
     def check(self) -> bool:
         """激活！"""
         return True
