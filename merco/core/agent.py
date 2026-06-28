@@ -294,7 +294,7 @@ class Agent:
     """AI Agent 核心类，负责对话循环与工具调度"""
 
 
-    def __init__(self, config: MercoConfig, tool_registry=None, _defer_plugin_init: bool = False):
+    def __init__(self, config: MercoConfig, tool_registry=None):
         self.config = config
         self.session = Session()
         from merco.sandbox import snapshot
@@ -323,12 +323,9 @@ class Agent:
 
         # ── 可观察性 ──
         from merco.hooks.registry import HookRegistry
+        from merco.observability.observer import Observer
         self.hooks = HookRegistry()
-        if _defer_plugin_init:
-            self.observer = None
-        else:
-            from merco.observability.observer import Observer
-            self.observer = Observer(self.hooks)
+        self.observer = Observer(self.hooks)
 
         # ── 守卫：敏感命令执行前确认 ──
         from merco.sandbox.guard import (
@@ -353,8 +350,7 @@ class Agent:
         self._session_store = SessionStore(_get_db_path())
         self._search = SessionSearch(self._session_store)
         self.session = Session.resume_or_create(self._session_store)
-        if not _defer_plugin_init:
-            self._restore_context()
+        # _restore_context() 在 Agent.create()._initialize_async_plugins() 中执行
 
         # ── 工厂：根据 config 选响应策略 ──
         if self.config.streaming:
@@ -460,9 +456,11 @@ class Agent:
         for p in BUILTIN_PROFILES:
             self.agent_profiles.register(p)
 
-        # Todo + SubAgent 由 SubAgentPlugin 激活时创建
-        self.todo_manager = None
-        self.sub_agent_manager = None
+        # Todo + SubAgent 由 SubAgentPlugin 激活时接管
+        from merco.todo.manager import TodoManager
+        from merco.agents.subagent import SubAgentManager
+        self.todo_manager = TodoManager(f"{config.memory_path}/../todos.db")
+        self.sub_agent_manager = SubAgentManager(self, self.agent_profiles)
 
         # ── Loop Policy ──
         from merco.core.loop_policy import LoopPolicyRegistry, DefaultLoopPolicy
@@ -499,21 +497,6 @@ class Agent:
         self.plugin_manager.register(SchedulerPlugin())
         self.plugin_manager.register(SuperpowerPlugin())
 
-        # 激活所有 enabled 插件（同步调用，Agent.__init__ 是同步的）
-        if not _defer_plugin_init:
-            try:
-                loop = asyncio.get_running_loop()
-                # 已在 async 上下文，用 create_task
-                asyncio.ensure_future(self.plugin_manager.activate_all())
-            except RuntimeError:
-                # 没有运行中的 event loop，创建新的
-                try:
-                    loop = asyncio.new_event_loop()
-                    loop.run_until_complete(self.plugin_manager.activate_all())
-                    loop.close()
-                except Exception:
-                    pass
-
         # ── MCP 客户端（由 MCPPlugin 激活时创建；legacy 路径下保持 None）──
         self.mcp_manager = None
 
@@ -528,11 +511,7 @@ class Agent:
     @classmethod
     async def create(cls, config: MercoConfig, tool_registry=None) -> "Agent":
         """Create an Agent with deterministic async plugin initialization."""
-        agent = cls(
-            config=config,
-            tool_registry=tool_registry,
-            _defer_plugin_init=True,
-        )
+        agent = cls(config=config, tool_registry=tool_registry)
         await agent._initialize_async_plugins()
         return agent
 
