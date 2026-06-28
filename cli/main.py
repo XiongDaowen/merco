@@ -138,7 +138,7 @@ class Dashboard:
 
 # ── 共享的 Agent 启动逻辑 ────────────────────────────────────────────────
 
-def _setup_agent(config_path: str | None, model: str | None, api_key: str | None, debug: bool):
+async def _setup_agent(config_path: str | None, model: str | None, api_key: str | None, debug: bool):
     from merco.core.config import MercoConfig
     from merco.core.agent import Agent
     import merco
@@ -195,23 +195,7 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
     from merco.skills.builtin import install_builtin_skills
     install_builtin_skills()
 
-    # ── 技能注册 ──
-    from merco.skills.registry import SkillRegistry
-    skill_registry = SkillRegistry()
-    if cfg.skills_paths:
-        skill_registry.load_from_paths(cfg.skills_paths)
-
-    # 注入 skill_registry 给 SkillViewTool（动态描述 + 可用性检查）
-    sv = tool_registry.get("skill_view")
-    if sv and hasattr(sv, "set_skill_registry"):
-        sv.set_skill_registry(skill_registry)
-
-    agent = Agent(config=cfg, tool_registry=tool_registry)
-
-    # SkillPlugin 激活后同步 skill_registry，完成 SkillViewTool 注入
-    # 注意：legacy Agent(...) 路径中 activate_all() 是 fire-and-forget，
-    # 因此同时保留手动注入作为安全后备。
-    agent.skill_registry = skill_registry
+    agent = await Agent.create(config=cfg, tool_registry=tool_registry)
 
     # 显示加载的配置来源
     config_source = "默认值"
@@ -531,7 +515,7 @@ def main_callback(
 ):
     if ctx.invoked_subcommand is not None:
         return
-    agent, dashboard, config_source = _setup_agent(config, model, api_key, debug)
+    agent, dashboard, config_source = asyncio.run(_setup_agent(config, model, api_key, debug))
     run_repl(agent, dashboard, config_source)
 
 
@@ -544,7 +528,7 @@ def run_cmd(
     api_key: str = typer.Option(None, "--api-key", "-k", help="API Key"),
     debug: bool = typer.Option(False, "--debug", "-d", help="开启调试日志"),
 ):
-    agent, dashboard, config_source = _setup_agent(config, model, api_key, debug)
+    agent, dashboard, config_source = asyncio.run(_setup_agent(config, model, api_key, debug))
     run_repl(agent, dashboard, config_source)
 
 
