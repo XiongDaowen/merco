@@ -7,17 +7,13 @@
 from cli.main import _fmt
 
 
-def test_fmt_returns_dash_when_is_estimate():
-    """修复核心：is_estimate=True 一律占位 "—"，不管 n 是 0 还是估算值（如 12K）。
-
-    启动后到第 1 次 API 响应前，n 实际是估算值（~12K），不是 0。
-    占位条件只看 is_estimate，不看 n，避免用户看到偏大估算误判。
-    """
-    assert _fmt(0, is_estimate=True) == "—"
-    # 关键：估算值（如 12000）也必须占位
-    assert _fmt(12000, is_estimate=True) == "—"
-    # 任意非零估算值都占位
-    assert _fmt(500, is_estimate=True) == "—"
+def test_fmt_returns_tilde_prefix_when_is_estimate():
+    """is_estimate=True 时 n<1000 显示 ~N，n>=1000 显示 ~N.NK。
+    波浪号表达估算语义，非占位符。"""
+    assert _fmt(0, is_estimate=True) == "~0"
+    assert _fmt(500, is_estimate=True) == "~500"
+    assert _fmt(12000, is_estimate=True) == "~11.7K"
+    assert _fmt(6700, is_estimate=True) == "~6.5K"
 
 
 def test_fmt_returns_zero_string_when_actual_zero():
