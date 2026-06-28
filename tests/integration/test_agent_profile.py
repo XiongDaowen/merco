@@ -21,7 +21,7 @@ async def test_task_tool_dispatches_with_agent_name(test_agent):
     mock_result = "研究发现"
 
     # Mock 子代理执行 — 无真实 LLM
-    manager._create_sub_agent = MagicMock(return_value=MagicMock(
+    manager._create_sub_agent = AsyncMock(return_value=MagicMock(
         session=MagicMock(id="sub_researcher_1"),
         run=AsyncMock(return_value=mock_result),
     ))
