@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from merco.memory.backend import MemoryBackendRegistry
     from merco.core.loop_policy import LoopPolicyRegistry
     from merco.skills.registry import SkillRegistry
+    from merco.mcp.manager import MCPServerManager
     from typing import Callable
 
 
@@ -70,6 +71,7 @@ class PluginContext:
         loop_policies: "LoopPolicyRegistry" = None,
         agent: "Agent" = None,
         skill_registry: "SkillRegistry" = None,
+        mcp_manager: "MCPServerManager" = None,
     ):
         self.hooks = hooks
         self.tool_registry = tool_registry
@@ -88,6 +90,7 @@ class PluginContext:
         self.loop_policies = loop_policies
         self.agent = agent
         self.skill_registry = skill_registry
+        self.mcp_manager = mcp_manager
 
     def on(self, event: str, handler: "Callable") -> None:
         """Subscribe to event (convenience method)"""
