@@ -13,6 +13,10 @@
 
 ### 本次会话更新 (2026-06-28)
 
+- **edit.py sandbox 解耦（架构重构 Phase 2.3）**:
+  - `edit.py` 移除对 sandbox 的直接依赖（`confirm_edit`、`snapshot`），确认逻辑通过 ToolMiddleware 中间件链处理
+  - 验证：grep 确认 edit.py 中无 sandbox/confirm_edit/snapshot 引用
+
 - **ToolRegistry 中间件链（架构重构 Phase 2.2）**:
   - 新增 `ToolContext` / `ToolMiddleware` ABC / `ToolMiddlewareChain` 洋葱模型，支持 `before` / `after` / `on_error` 钩子
   - `GuardMiddleware` + `ErrorHandlingMiddleware` — 内置安全守卫和错误处理中间件

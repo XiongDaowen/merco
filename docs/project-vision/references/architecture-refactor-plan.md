@@ -66,7 +66,7 @@ registry.use(ErrorHandlingMiddleware())
 |------|--------|------|
 | ToolRegistry 路由 | ToolMiddleware 中间件 | 中等 |
 
-### 2.3 edit.py 移除 sandbox 直接依赖
+### 2.3 edit.py 移除 sandbox 直接依赖 ✅ 已完成
 
 `edit.py` 直接调用 `confirm_edit()` / `snapshot.track()` → 移到中间件。
 
