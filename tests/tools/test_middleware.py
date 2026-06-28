@@ -251,3 +251,10 @@ async def test_error_handling_returns_tool_error():
     result = await mw.on_error(ctx)
     assert "error" in result
     assert result["tool"] == "bash"
+
+
+def test_tools_errors_module_imports():
+    from merco.tools.errors import tool_error, classify_error, empty_response
+    assert tool_error.__name__ == "tool_error"
+    assert classify_error.__name__ == "classify_error"
+    assert empty_response.__name__ == "empty_response"
