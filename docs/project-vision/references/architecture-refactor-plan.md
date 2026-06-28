@@ -74,7 +74,7 @@ registry.use(ErrorHandlingMiddleware())
 
 `pipeline.py` 内置的 WaitRecovery / ContextCompressRecovery / TruncationProcessor 等移到各自的子系统。
 
-### 2.5 self_healing.py 拆分
+### 2.5 self_healing 拆分 ✅ 已完成
 
 `tool_error` 留 core，`llm_error` 归 llm.py。
 

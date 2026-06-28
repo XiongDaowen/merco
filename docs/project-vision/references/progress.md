@@ -17,6 +17,12 @@
   - `edit.py` 移除对 sandbox 的直接依赖（`confirm_edit`、`snapshot`），确认逻辑通过 ToolMiddleware 中间件链处理
   - 验证：grep 确认 edit.py 中无 sandbox/confirm_edit/snapshot 引用
 
+- **self_healing 拆分（架构重构 Phase 2.5）**:
+  - `core/self_healing.py` 仅保留 `register_handler` 可扩展 hook
+  - 工具错误迁至 `merco/tools/errors.py`（tool_error/classify_error/empty_response）
+  - LLM 错误迁至 `merco/core/llm/errors.py`（llm_error/_is_retryable_llm_error）
+  - core 不再 import openai
+
 - **ToolRegistry 中间件链（架构重构 Phase 2.2）**:
   - 新增 `ToolContext` / `ToolMiddleware` ABC / `ToolMiddlewareChain` 洋葱模型，支持 `before` / `after` / `on_error` 钩子
   - `GuardMiddleware` + `ErrorHandlingMiddleware` — 内置安全守卫和错误处理中间件
