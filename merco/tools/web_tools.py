@@ -70,7 +70,3 @@ class WebSearch(BaseTool):
         except Exception as e:
             return {"error": str(e), "results": []}
 
-
-from .registry import tool_registry  # noqa: E402 — 模块末尾自注册
-tool_registry.register(WebFetch())
-tool_registry.register(WebSearch())
