@@ -22,7 +22,7 @@ class SubAgentManager:
     async def dispatch(self, todo_id: str, prompt: str, agent_name: str = "default") -> str:
         """派发子代理执行任务，返回 subagent_id"""
         # 1. 创建子 Agent
-        sub_agent = self._create_sub_agent(agent_name)
+        sub_agent = await self._create_sub_agent(agent_name)
 
         # 2. 更新 Todo 状态
         self._parent.todo_manager.update(todo_id, status="in_progress", assigned_to=sub_agent.session.id)
@@ -45,7 +45,7 @@ class SubAgentManager:
 
         return sub_agent.session.id
 
-    def _create_sub_agent(self, agent_name: str) -> "Agent":
+    async def _create_sub_agent(self, agent_name: str) -> "Agent":
         """创建子代理，根据 profile 配置 prompt/tools/model/limits"""
         from merco.core.agent import Agent
         from merco.core.session import Session
@@ -76,8 +76,8 @@ class SubAgentManager:
                     if tool:
                         tool_registry.register(tool)
 
-        sub_agent = Agent(config=config, tool_registry=tool_registry)
-        # 强制新 session（Agent.__init__ 会 resume_or_create 恢复父会话）
+        sub_agent = await Agent.create(config=config, tool_registry=tool_registry)
+        # 强制新 session（Agent.create 会 resume_or_create 恢复父会话）
         sub_agent.session = Session(store=sub_agent._session_store)
         sub_agent._session_store.create_session(sub_agent.session.id)
 

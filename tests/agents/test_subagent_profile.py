@@ -5,7 +5,8 @@ from merco.agents.profile import AgentProfile
 
 
 class TestSubAgentProfile:
-    def test_create_with_researcher_profile(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_create_with_researcher_profile(self, test_agent):
         """researcher profile 工具过滤"""
         from merco.agents.subagent import SubAgentManager
         from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
@@ -15,14 +16,15 @@ class TestSubAgentProfile:
             reg.register(p)
 
         manager = SubAgentManager(test_agent, reg)
-        sub_agent = manager._create_sub_agent("researcher")
+        sub_agent = await manager._create_sub_agent("researcher")
 
         # researcher 有限制工具列表
         tool_names = [t.name for t in sub_agent.tool_registry.list_tools()]
         for name in tool_names:
             assert name in ["read_file", "web_fetch", "web_search"]
 
-    def test_default_when_profile_not_found(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_default_when_profile_not_found(self, test_agent):
         """不存在的 profile 回退到 default"""
         from merco.agents.subagent import SubAgentManager
         from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
@@ -32,11 +34,12 @@ class TestSubAgentProfile:
             reg.register(p)
 
         manager = SubAgentManager(test_agent, reg)
-        sub_agent = manager._create_sub_agent("nonexistent")
+        sub_agent = await manager._create_sub_agent("nonexistent")
         # default 不限制工具，应继承全部
         assert sub_agent.tool_registry == test_agent.tool_registry
 
-    def test_profile_prompt_injected(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_profile_prompt_injected(self, test_agent):
         """profile prompt chunk 被注入"""
         from merco.agents.subagent import SubAgentManager
         from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
@@ -46,11 +49,12 @@ class TestSubAgentProfile:
             reg.register(p)
 
         manager = SubAgentManager(test_agent, reg)
-        sub_agent = manager._create_sub_agent("debugger")
+        sub_agent = await manager._create_sub_agent("debugger")
         chunks = sub_agent.prompt_builder._chunks
         assert any(c.name == "agent_profile" for c in chunks)
 
-    def test_model_override_from_profile(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_model_override_from_profile(self, test_agent):
         """profile 指定 model 时覆盖子代理的 config"""
         from merco.agents.subagent import SubAgentManager
         from merco.agents.profile import AgentProfileRegistry
@@ -64,13 +68,14 @@ class TestSubAgentProfile:
         ))
 
         manager = SubAgentManager(test_agent, reg)
-        sub_agent = manager._create_sub_agent("gpt4")
+        sub_agent = await manager._create_sub_agent("gpt4")
         assert sub_agent.config.model.provider == "openai"
         assert sub_agent.config.model.model == "gpt-4o"
         # parent config should not be mutated
         assert test_agent.config.model.model == "test-model"
 
-    def test_limits_applied(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_limits_applied(self, test_agent):
         """profile.limits.max_tool_calls 覆盖子代理限制"""
         from merco.agents.subagent import SubAgentManager
         from merco.agents.profile import AgentProfileRegistry
@@ -84,15 +89,16 @@ class TestSubAgentProfile:
         ))
 
         manager = SubAgentManager(test_agent, reg)
-        sub_agent = manager._create_sub_agent("limited")
+        sub_agent = await manager._create_sub_agent("limited")
         assert sub_agent._max_tool_calls == 10
 
-    def test_backward_compat_no_registry(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_backward_compat_no_registry(self, test_agent):
         """profile_registry=None 时正常创建子代理（向后兼容）"""
         from merco.agents.subagent import SubAgentManager
 
         manager = SubAgentManager(test_agent)
-        sub_agent = manager._create_sub_agent("default")
+        sub_agent = await manager._create_sub_agent("default")
         # 应继承父的全部配置
         assert sub_agent.config == test_agent.config
         assert sub_agent.tool_registry == test_agent.tool_registry

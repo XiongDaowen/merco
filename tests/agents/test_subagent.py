@@ -4,12 +4,13 @@ from unittest.mock import MagicMock, AsyncMock
 
 
 class TestSubAgentManager:
-    def test_create_sub_agent(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_create_sub_agent(self, test_agent):
         """创建子代理继承父配置"""
         from merco.agents.subagent import SubAgentManager
 
         manager = SubAgentManager(test_agent)
-        sub_agent = manager._create_sub_agent("default")
+        sub_agent = await manager._create_sub_agent("default")
 
         # 继承父的 config
         assert sub_agent.config == test_agent.config
@@ -34,7 +35,7 @@ class TestSubAgentManager:
 
             # Mock 子代理执行
             mock_result = "子代理完成"
-            manager._create_sub_agent = MagicMock(return_value=MagicMock(
+            manager._create_sub_agent = AsyncMock(return_value=MagicMock(
                 session=MagicMock(id="sub_1"),
                 run=AsyncMock(return_value=mock_result),
             ))

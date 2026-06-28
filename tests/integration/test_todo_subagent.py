@@ -26,7 +26,7 @@ class TestTodoSubAgentE2E:
 
         # ── 4. Mock 子代理执行 ──
         mock_result = "子代理完成了任务"
-        manager._create_sub_agent = MagicMock(return_value=MagicMock(
+        manager._create_sub_agent = AsyncMock(return_value=MagicMock(
             session=MagicMock(id="sub_1"),
             run=AsyncMock(return_value=mock_result),
         ))
@@ -57,7 +57,7 @@ class TestTodoSubAgentE2E:
         todo = todo_manager.create("会失败的任务")
 
         # Mock 子代理执行抛出异常
-        manager._create_sub_agent = MagicMock(return_value=MagicMock(
+        manager._create_sub_agent = AsyncMock(return_value=MagicMock(
             session=MagicMock(id="sub_err"),
             run=AsyncMock(side_effect=RuntimeError("boom")),
         ))
@@ -99,7 +99,7 @@ class TestTodoSubAgentE2E:
                 run=AsyncMock(return_value=mock_results[idx]),
             )
 
-        manager._create_sub_agent = MagicMock(side_effect=make_sub)
+        manager._create_sub_agent = AsyncMock(side_effect=make_sub)
 
         await manager.dispatch(todo_a.id, "执行 A")
         await manager.dispatch(todo_b.id, "执行 B")
@@ -126,7 +126,7 @@ class TestTodoSubAgentE2E:
         todo = todo_manager.create("事件测试")
 
         mock_result = "完成"
-        manager._create_sub_agent = MagicMock(return_value=MagicMock(
+        manager._create_sub_agent = AsyncMock(return_value=MagicMock(
             session=MagicMock(id="sub_hook"),
             run=AsyncMock(return_value=mock_result),
         ))
