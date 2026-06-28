@@ -5,7 +5,8 @@
 
 import httpx
 import pytest
-from merco.core.pipeline import RecoveryPipeline, WaitRecovery
+from merco.core.pipeline import RecoveryPipeline
+from merco.core.recovery.wait import WaitRecovery
 from merco.core.session import Session
 from merco.sandbox.guard import ToolGuard, GuardAction
 from openai import APIStatusError

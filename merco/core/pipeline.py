@@ -209,53 +209,6 @@ class RecoveryPipeline:
         return False
 
 
-# ── 内置恢复策略 ──────────────────────────────────────────
-
-class WaitRecovery(Recovery):
-    """等待：瞬时 429/5xx 给网关冷却窗口"""
-
-    name = "wait"
-
-    def __init__(self, delay: float = 3.0, max_delay: float = 30.0):
-        self.delay = delay
-        self.max_delay = max_delay
-
-    async def attempt(self, ctx: RecoveryContext) -> bool:
-        if not _is_retryable(ctx):
-            return False
-        # 413 等待没用，跳过让 ContextCompressRecovery 压缩
-        if ctx.status_code == 413:
-            return False
-        # 动态退避：每次重试翻倍，上限 max_delay
-        delay = min(self.delay * (2 ** ctx.attempt_count), self.max_delay)
-        logger.info("→ 等待 %.1fs 后重试 LLM…", delay)
-        ctx.extra_wait = max(ctx.extra_wait, delay)
-        return True
-
-
-class ContextCompressRecovery(Recovery):
-    """压缩上下文：请求体过大触发 429 时的核心恢复手段"""
-
-    name = "compress_context"
-
-    def __init__(self, min_context_bytes: int = 30000):
-        # 低于此大小不压缩（压缩有损，尽量不碰）
-        self.min_context_bytes = min_context_bytes
-
-    async def attempt(self, ctx: RecoveryContext) -> bool:
-        if not _is_retryable(ctx):
-            return False
-        if ctx.compress_count >= ctx.max_compress:
-            return False
-        # 动态判断：上下文 < min 时可能只是瞬时限流，让 WaitRecovery 处理
-        if ctx.context_tokens > 0 and ctx.context_tokens * 4 < self.min_context_bytes:
-            return False  # 上下文很小，压缩无意义
-        logger.info("→ 压缩上下文后重试 LLM（第 %d/%d 次）",
-                     ctx.compress_count + 1, ctx.max_compress)
-        ctx.compress = True
-        return True
-
-
 # ── 空回复处理管线 ─────────────────────────────────────────
 
 @dataclass
@@ -310,74 +263,9 @@ class EmptyResponsePipeline:
         return False
 
 
-class CallbackEmptyResponse(EmptyResponseStrategy):
-    """空回复回调：注入 user 消息让 LLM 自愈。
-
-    适用于支持 function calling 但偶尔忘记调用工具的模型。
-    """
-
-    name = "callback"
-
-    async def attempt(self, ctx: EmptyResponseContext) -> bool:
-        if ctx.retry_count >= ctx.max_retries:
-            return False
-        from merco.core.self_healing import empty_response
-        err = empty_response()
-        ctx.inject_error = err["error"]
-        return True
-
-
 # ── 辅助函数 ─────────────────────────────────────────────
 
 def _is_retryable(ctx: RecoveryContext) -> bool:
     """判断错误是否可重试"""
     from merco.core.self_healing import _is_retryable_llm_error
     return _is_retryable_llm_error(ctx.error)
-
-
-# ── 框架预留：动态恢复策略（当前未实现，接口已就绪）─────────
-# 使用方式：
-#   pipeline.use(ToolReduceRecovery(min_tools=5))
-#   pipeline.use(ModelFallbackRecovery(fallback_model="gpt-4o-mini"))
-
-
-class ToolReduceRecovery(Recovery):
-    """精简工具：上下文过大时关闭非关键工具集 [框架预留]
-
-    需要 Agent 支持 reduce_tools 标志位后启用。
-    """
-
-    name = "reduce_tools"
-
-    def __init__(self, min_tools: int = 5):
-        self.min_tools = min_tools
-
-    async def attempt(self, ctx: RecoveryContext) -> bool:
-        if not _is_retryable(ctx):
-            return False
-        if ctx.compress_count >= ctx.max_reduce:
-            return False
-        if ctx.tool_count <= self.min_tools:
-            return False  # 工具已经很少，不再精简
-        ctx.reduce_tools = True
-        return True
-
-
-class ModelFallbackRecovery(Recovery):
-    """模型降级：当前模型不可用时切换到备选 [框架预留]
-
-    需要 Agent 支持 switch_model 标志位后启用。
-    """
-
-    name = "model_fallback"
-
-    def __init__(self, fallback_model: str = ""):
-        self.fallback_model = fallback_model
-
-    async def attempt(self, ctx: RecoveryContext) -> bool:
-        if not _is_retryable(ctx):
-            return False
-        if not self.fallback_model:
-            return False
-        ctx.switch_model = self.fallback_model
-        return True
