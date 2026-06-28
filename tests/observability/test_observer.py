@@ -184,7 +184,8 @@ def test_snapshot_restore_roundtrip(obs):
 
 # ── Hook 事件计数 during agent loop ───────────────────────
 
-def test_observer_counts_hook_events_in_agent_loop(test_agent, monkeypatch):
+@pytest.mark.asyncio
+async def test_observer_counts_hook_events_in_agent_loop(test_agent, monkeypatch):
     """agent.run() 触发后，Observer 内部计数应正确更新。
 
     验证 _live 计数器在一次 run（包含 LLM 调用 + 工具执行 + conversation turn）之后
@@ -213,8 +214,7 @@ def test_observer_counts_hook_events_in_agent_loop(test_agent, monkeypatch):
     ])
 
     # 跑一轮带工具调用
-    import asyncio
-    asyncio.run(test_agent.run("echo hi"))
+    await test_agent.run("echo hi")
 
     # 验证 Observer live 计数（key 名以 observer.py:36, 47, 55 为准）
     counters = observer._live.get_counters()

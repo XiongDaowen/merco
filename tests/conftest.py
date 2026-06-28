@@ -123,7 +123,7 @@ class MockLLMClient:
 # ── Test Agent Factory ────────────────────────────────────
 
 @pytest.fixture
-def test_agent(monkeypatch, tmp_path):
+async def test_agent(monkeypatch, tmp_path):
     """创建带有 mock LLM + 测试工具 + 临时 session store 的 Agent"""
     db_path = str(tmp_path / "test.db")
 
@@ -138,5 +138,5 @@ def test_agent(monkeypatch, tmp_path):
     cfg.memory_path = str(tmp_path / "memory")  # 隔离 memory 目录，不污染 ~/.merco/memory
 
     reg = make_test_registry()
-    agent = Agent(config=cfg, tool_registry=reg)
+    agent = await Agent.create(config=cfg, tool_registry=reg)
     return agent

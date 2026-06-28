@@ -209,7 +209,8 @@ class TestCompressAutoFork:
 class TestRestoreWithCheckpoint:
     """Tests for checkpoint-based context restore (fix-3)."""
 
-    def test_restore_with_checkpoint_uses_summary(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_restore_with_checkpoint_uses_summary(self, test_agent):
         """When compress_checkpoint exists, only summary + tail are loaded."""
         agent = test_agent
         agent.session.metadata["compress_checkpoint"] = {
@@ -224,7 +225,8 @@ class TestRestoreWithCheckpoint:
         assert len(agent.context.messages) <= 5  # summary + ~4 tail msgs
         assert "user asked about X" in agent.context.messages[0]["content"]
 
-    def test_restore_without_checkpoint_loads_all(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_restore_without_checkpoint_loads_all(self, test_agent):
         """Without checkpoint, all session messages are loaded."""
         agent = test_agent
         agent.session.add_message("user", "msg1")
@@ -232,7 +234,8 @@ class TestRestoreWithCheckpoint:
         agent._restore_context()
         assert len(agent.context.messages) >= 2
 
-    def test_restore_with_checkpoint_no_summary(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_restore_with_checkpoint_no_summary(self, test_agent):
         """Checkpoint with empty summary: still loads tail only."""
         agent = test_agent
         agent.session.metadata["compress_checkpoint"] = {
@@ -247,7 +250,8 @@ class TestRestoreWithCheckpoint:
         # 1 tail turn = 2 msgs
         assert len(agent.context.messages) == 2
 
-    def test_restore_with_checkpoint_preserves_tool_calls(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_restore_with_checkpoint_preserves_tool_calls(self, test_agent):
         """Tail messages with tool_calls are loaded correctly."""
         agent = test_agent
         agent.session.metadata["compress_checkpoint"] = {
@@ -296,7 +300,8 @@ class TestRestorePreservesEmptyToolCallId:
     会丢弃空字符串 tool_call_id 字段。改用 `"tool_call_id" in msg` 保留字段。
     """
 
-    def test_restore_context_preserves_empty_tool_call_id_main_branch(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_restore_context_preserves_empty_tool_call_id_main_branch(self, test_agent):
         """主分支：无 checkpoint 时，空 tool_call_id 必须保留在 context。"""
         agent = test_agent
         agent.session.add_message("tool", "取消", tool_call_id="")
@@ -309,7 +314,8 @@ class TestRestorePreservesEmptyToolCallId:
         assert msgs[-1]["role"] == "tool"
         assert msgs[-1]["content"] == "取消"
 
-    def test_restore_context_preserves_empty_tool_call_id_checkpoint_branch(self, test_agent):
+    @pytest.mark.asyncio
+    async def test_restore_context_preserves_empty_tool_call_id_checkpoint_branch(self, test_agent):
         """压缩分支：有 checkpoint 时，tail 中的空 tool_call_id 必须保留。"""
         agent = test_agent
         # 设 tail_count=2 → 拉最近 2*2=4 条消息
