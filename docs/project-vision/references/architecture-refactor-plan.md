@@ -82,9 +82,11 @@ registry.use(ErrorHandlingMiddleware())
 
 ## Phase 3 — 模块插件化迁移（P2）
 
-### 3.1 observability → ObservabilityPlugin
+### 3.1 observability → ObservabilityPlugin ✅ 已完成
 
 Agent 硬初始化 Observer → 改为 `ObservabilityPlugin` 在 activate 中创建。
+
+已新增 `Agent.create(...)` async factory，作为后续插件化迁移的确定性初始化路径；legacy `Agent(...)` 暂保留兼容。
 
 ```python
 class ObservabilityPlugin(Plugin):
