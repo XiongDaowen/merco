@@ -695,6 +695,10 @@ class Agent:
                 from merco.core.llm.errors import llm_error
                 return llm_error(e)
 
+            after = await self.hooks.emit("llm.after_chat", response=response)
+            if after and after.data:
+                response = after.data.get("response", response)
+
             # 记录 API 返回的实测 token（流式可能无 usage，fallback 到估算值）
             usage = response.get("usage")
             if usage and usage.get("prompt_tokens"):

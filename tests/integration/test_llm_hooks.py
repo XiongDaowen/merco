@@ -45,3 +45,23 @@ async def test_llm_before_chat_can_short_circuit_with_response(test_agent):
 
     assert result == "from hook"
     assert agent.llm.calls == []
+
+
+@pytest.mark.asyncio
+async def test_llm_after_chat_can_replace_response(test_agent):
+    """llm.after_chat can replace the LLM response before Agent processes it."""
+    agent = test_agent
+    agent.llm.responses = [{"content": "original", "finish_reason": "stop"}]
+
+    async def after_chat(response, **kwargs):
+        assert response["content"] == "original"
+        return HookResult(
+            data={"response": {"content": "modified", "finish_reason": "stop"}}
+        )
+
+    agent.hooks.on("llm.after_chat", after_chat)
+
+    result = await agent.run("hello")
+
+    assert result == "modified"
+    assert agent.session.messages[-1]["content"] == "modified"
