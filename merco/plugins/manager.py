@@ -24,6 +24,8 @@ class PluginManager:
 
     async def activate(self, name: str) -> None:
         """Activate a single plugin"""
+        if name in self._active:
+            return
         plugin = self._plugins.get(name)
         if not plugin:
             logger.warning("Plugin '%s' not registered", name)

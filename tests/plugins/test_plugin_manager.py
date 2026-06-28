@@ -127,3 +127,38 @@ async def test_activate_failure_isolated(manager, ctx):
     await manager.activate_all()
     assert "failing" in events
     assert manager._plugins["fake"].activated is True
+
+
+class CountingPlugin(Plugin):
+    name = "counting"
+    version = "1.0.0"
+    description = "counts activations"
+
+    def __init__(self):
+        self.activate_count = 0
+
+    async def activate(self, ctx):
+        self.activate_count += 1
+
+
+async def test_activate_is_idempotent(manager):
+    """Activating an already-active plugin does not call activate twice."""
+    plugin = CountingPlugin()
+    manager.register(plugin)
+
+    await manager.activate("counting")
+    await manager.activate("counting")
+
+    assert plugin.activate_count == 1
+    assert manager.active_plugins.count("counting") == 1
+
+
+async def test_activate_all_skips_already_active_plugins(manager):
+    """activate_all does not re-activate plugins already in _active."""
+    plugin = CountingPlugin()
+    manager.register(plugin)
+
+    await manager.activate("counting")
+    await manager.activate_all()
+
+    assert plugin.activate_count == 1
