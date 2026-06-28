@@ -338,9 +338,10 @@ class Agent:
         ))
         self.guard = ToolGuard(pipeline=self._security_pipeline)
 
-        # ── Middleware：Guard + ErrorHandling 装配到 ToolRegistry ──
-        from merco.tools.middleware import GuardMiddleware, ErrorHandlingMiddleware
+        # ── Middleware：Guard + EditApply + ErrorHandling 装配到 ToolRegistry ──
+        from merco.tools.middleware import GuardMiddleware, EditApplyMiddleware, ErrorHandlingMiddleware
         self.tool_registry.use(GuardMiddleware(self.guard))
+        self.tool_registry.use(EditApplyMiddleware(diff_view=config.diff_view))
         self.tool_registry.use(ErrorHandlingMiddleware())
 
         # ── 会话持久化 ──
