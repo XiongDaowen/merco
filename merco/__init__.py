@@ -6,6 +6,6 @@ try:
     __version__ = _pkg_version("merco")
 except PackageNotFoundError:
     # 源码直接运行（未安装）时，从 pyproject.toml 读不到，回退到内置字面量
-    __version__ = "0.3.0"
+    __version__ = "0.4.0"
 
 __author__ = "Mercury Code Contributors"
