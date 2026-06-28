@@ -2,6 +2,12 @@
 
 | 日期 | 决策 | 原因 |
 |------|------|------|
+| 2026-06-29 | 估算 token 显示 `~N` 前缀 | 流式 API 无法实时获取 usage，估算值用 `~` 前缀区分实测值（如 `~8.5K`），用户可据此判断精度 |
+| 2026-06-28 | Async Agent Factory 统一初始化 | 原 `Agent.__init__` 双路径（直接/工厂），各插件在 `__init__` 中注册逻辑分散。改为 `Agent.create()` 工厂方法，插件注册集中，测试可替换为 MockAgent |
+| 2026-06-28 | 预存测试失败全部修复 | 9 个失败根因明确（4 类），与 Phase 3/4 修改无关；修复后全量回归通过 |
+| 2026-06-28 | InterruptCleanupPipeline 替代 `_inject_interrupted_tool_results` | 原方法分散在 agent.py，逻辑与中断处理耦合。Pipeline 模式支持可插拔处理器：InjectCancelMessages/TerminateSubprocesses/CloseMCPConnections/EmitInterruptHooks/SavePartialState |
+| 2026-06-28 | `_strip_think_tags`/`_clean_content` 导出 | 测试需直接调用验证行为；`__all__` 明确公开接口 |
+|------|------|------|
 | 2026-06-15 | Memory 保存侧采用 Strategy + Pipeline + Hook 三模式组合 | Recall 链路（HybridRecaller）已通，保存侧需要同时支持多触发源（/remember CLI + session 结束 LLM 抽取）和多处理（dedup/filter/enrich）。直接调用 `store.save` 散落各处无法扩展。三模式各司其职：Strategy 监听事件构造 SaveItem、Pipeline 串联 Processor 链、Hook 解耦业务与可观察性/审计。新触发源扩展只需一个 Strategy 类。 |
 | 2026-06-15 | SOURCE_PRIORITY = {user: 3, extracted: 2, system: 1} 保护显式 /remember | LLM 自动抽取的 extracted 永远不应覆盖用户显式存的记忆（用户明确说"我喜欢中文"，LLM 不该改成"用户偶尔用中文"）。`DedupProcessor` 在已有 key 时比较 source 优先级，新低则 skip。`DedupProcessor._infer_source` 从已有 tag 反推 source，应对未来读取老数据的场景。 |
 | 2026-06-15 | SessionEndExtractStrategy 默认 opt-in (config.memory_auto_extract_on_session_end = False) | LLM 抽取消耗 token 且质量不可控，对小项目/开发环境是负担。默认关闭 + 文档提醒，让用户主动开启。`/remember` 显式存不存在任何疑虑。 |

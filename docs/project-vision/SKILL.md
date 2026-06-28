@@ -38,7 +38,7 @@ merco skills -l        # 列出技能
 
 ## 当前状态
 
-**Phase 2 → v0.2.0** | 24 REAL + 6 PARTIAL + 8 SKELETON + 3 NOT WIRED | v0.2.0 关键集成：Observer+Hooks 驱动可观察性、ToolGuard 敏感命令守卫、SessionStore SQLite 持久化、ProviderInfo+setup 向导 | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-06-03
+**Phase 2 已完成** | 插件系统：Plugin 基类 + PluginContext（15扩展点）+ PluginManager + 内置插件（mcp/observability/scheduler/skills/subagent/web/superpower）| 所有 superpowers 计划已完成 | README.md 已更新反映当前状态 | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-06-29
 
 ## 详细文档
 
@@ -78,12 +78,9 @@ merco skills -l        # 列出技能
 修改 `docs/project-vision/` 下任何文件后，需同步到 agent 的 skill 目录:
 
 ```bash
-# 同步到 opencode agent skill 目录
-cp docs/project-vision/SKILL.md .opencode/skills/project-vision/
-cp docs/project-vision/references/*.md .opencode/skills/project-vision/references/
-# 同步到 opencode 全局配置
-cp docs/project-vision/SKILL.md ~/.config/opencode/skills/project-vision/
-cp docs/project-vision/references/*.md ~/.config/opencode/skills/project-vision/
+# 同步到 .merco/skills/
+cp docs/project-vision/SKILL.md ~/.merco/skills/project-vision/
+cp docs/project-vision/references/*.md ~/.merco/skills/project-vision/references/
 ```
 
 **更新纪律**：每次重大提交后，必须根据提交内容更新 `progress.md`（模块状态变更）、`decisions.md`（新决策）、`architecture.md`（架构变更），然后同步到所有位置。不要在代码变更后留下过期的 skill 文档。

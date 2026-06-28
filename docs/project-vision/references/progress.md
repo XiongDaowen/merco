@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-28
+> 最后更新: 2026-06-29
 
 ## 目标对标
 
@@ -9,7 +9,36 @@
 
 ## 当前状态
 
-**阶段**: Phase 2 深入 | **焦点**: MemoryBackend 插件化 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+**阶段**: Phase 3 收尾 | **焦点**: 技术债务清理 + Phase 4 准备 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+
+### 本次会话更新 (2026-06-29)
+
+- **技术债务清理与测试修复**:
+  - 解析并修复 9 个预先存在的测试失败
+  - 验证完整回归测试通过
+  - 移除 agent init 双路径（agent init dual-path）
+  - CLI 迁移至异步 agent factory
+  - 测试 agent fixture 迁移至异步工厂
+
+- **Scheduler 插件接入 Runtime**:
+  - 添加 scheduler 插件（`merco/plugins/builtin/scheduler/`）
+  - 定时任务可在 Agent 生命周期内执行
+  - SchedulerPlugin 激活时注册调度器到 PluginContext
+
+- **Web 插件完成**:
+  - web 插件迁移完成（`merco/plugins/builtin/web/`）
+  - 移除 import-time tool registration
+  - 改为插件激活时注册工具
+
+- **MCP 插件集成**:
+  - MCP 插件迁移完成（`merco/plugins/builtin/mcp/`）
+  - MCPServerManager 接入插件系统
+  - 工具发现和注册通过插件生命周期管理
+
+- **Agent 异步工厂化**:
+  - Agent 创建迁移至异步工厂模式
+  - CLI 和测试 fixture 使用统一的 async factory
+  - 移除旧的同步初始化路径
 
 ### 本次会话更新 (2026-06-28)
 
@@ -248,8 +277,8 @@
 
 - [x] Phase 0: 项目初始化与 vision skill 创建
 - [x] Phase 1: 核心 Agent-Loop 与基础工具
-- [ ] Phase 2: Skill 系统与 MCP 集成
-- [ ] Phase 3: 记忆系统与上下文管理
+- [x] Phase 2: Skill 系统与 MCP 集成
+- [x] Phase 3: 记忆系统与上下文管理
 - [ ] Phase 4: TUI 与 Web 界面
 - [ ] Phase 5: 多代理协作与定时任务
 - [ ] Phase 6: 可观测性与沙箱 (容器化)
@@ -291,7 +320,7 @@
 |------|--------|---------|
 | `loader.py` | 🟢 REAL | 递归扫描 SKILL.md，YAML frontmatter。|
 | `registry.py` | 🟢 REAL | register/get/list/get_relevant/load_from_paths。|
-| `builtin/` | 🔴 SKELETON | 空目录。|
+| `builtin/` | 🟢 REAL | 已安装 14 个 superpowers 技能（TDD、debugging、subagent、code review 等）。|
 
 ### merco/memory/ — Memory System
 
@@ -312,11 +341,12 @@
 
 | Module | Status |
 |--------|--------|
-| `hooks/` | 🔴 SKELETON — 未集成 |
+| `hooks/` | 🟢 POLISHED — HookRegistry 已成熟，15+ 事件类型，Agent/Plugin/Observer 全链路接入 |
 | `sandbox/` | 🟢 POLISHED — PermissionPolicy ABC + PolicyPipeline + BuiltinDefaultPolicy + ToolGuard facade。10 个测试覆盖 |
-| `scheduler/` | 🟢 REAL — CLI 未启动 |
-| `observability/` | 🟢 REAL — Observer 已接入 Agent（中断/Report），hooks 未触发 |
-| `mcp/` | 🟢 NEW — MCPServerManager stdio+HTTP 传输，工具发现+注册，沙箱集成 |
+| `scheduler/` | 🟢 REAL — SchedulerPlugin 已接入 Agent 生命周期，CLI 启动时加载定时任务 |
+| `observability/` | 🟢 POLISHED — Observer 已接入 Agent（中断/Report/内存保存），所有事件已 emit |
+| `mcp/` | 🟢 REAL — MCPServerManager stdio+HTTP 传输，工具发现+注册，沙箱集成，插件化完成 |
+| `web/` | 🟢 NEW — WebPlugin 迁移完成，移除 import-time tool registration |
 | `gateway/` | 🔴 SKELETON |
 
 ### merco/context/ — Context Pipeline
@@ -335,6 +365,11 @@
 | `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（15 扩展点 + 5 便捷方法）。新增 security_pipeline 扩展点。|
 | `manager.py` | 🟢 NEW | PluginManager 生命周期管理：register/activate/deactivate/activate_all，失败隔离，事件 emit。|
 | `builtin/superpower/plugin.py` | 🟢 NEW | SuperpowerPlugin 示例：prompt chunk 注入 + 事件订阅。|
+| `builtin/mcp/plugin.py` | 🟢 NEW | MCPPlugin：MCPServerManager 接入插件生命周期管理，工具发现和注册通过 activate。|
+| `builtin/scheduler/plugin.py` | 🟢 NEW | SchedulerPlugin：定时任务在 Agent 生命周期内执行，注册调度器到 PluginContext。|
+| `builtin/web/plugin.py` | 🟢 NEW | WebPlugin：移除 import-time tool registration，改为插件激活时注册工具。|
+| `builtin/skills/plugin.py` | 🟢 NEW | SkillsPlugin：技能加载和管理，get_relevant 接入。|
+| `builtin/subagent/plugin.py` | 🟢 NEW | SubAgentPlugin：子代理能力扩展。|
 
 ### merco/todo/ — Todo System
 
@@ -354,7 +389,8 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `main.py` | 🟢 POLISHED | Dashboard + PromptDecorator 可组合架构。REPL 完整。 |
+| `main.py` | 🟢 POLISHED | Dashboard + PromptDecorator 可组合架构。REPL 完整。异步 agent factory 统一初始化。|
+| `commands.py` | 🟢 POLISHED | `/agents`/`/agent` 列出 AgentProfile，`/plugins` 查看插件状态。异步工厂模式。|
 | `tui.py` | 🔴 SKELETON | `"coming soon"`。|
 
 ---
@@ -367,16 +403,19 @@
 | Retry → RecoveryPipeline | ✅ WIRED | LLM 不重试，错误上抛 → RecoveryPipeline。 |
 | Hooks → Agent | ✅ WIRED | agent.start/stop, session.create/destroy, message.receive, tool.before_execute, context.compact 已 emit |
 | Sandbox → Tools | ✅ WIRED | `Registry.execute()` 调 `ToolGuard.check()`，SecurityChecker 正则兜底 + 规则链 ask/deny/allow。 |
-| Observability → Agent | ✅ WIRED | Observer 订阅所有事件：llm.chat, tool.after_execute, tool.error, conversation.turn, agent.interrupted, agent.start/stop, context.compact |
+| Observability → Agent | ✅ WIRED | Observer 订阅所有事件：llm.chat, tool.after_execute, tool.error, conversation.turn, agent.interrupted, agent.start/stop, context.compact, memory.saved, plugin.activated |
 | MCP → Agent | ✅ WIRED | MCPServerManager 接管 MCP config 加载 + 工具注册 + 沙箱守卫。 |
 | Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
 | Memory Save → Agent | ✅ WIRED | Agent 启动装配 MemorySavePipeline + Strategies，/remember 触发保存，session.destroy 触发 LLM 抽取。 |
 | MemoryBackend → Agent | ✅ WIRED | Agent 构造 MemoryBackendRegistry + JSONBackend，按 config `memory.backend` 选取，注入 MemoryStore/MemoryRecaller/MemorySavePipeline + PluginContext。 |
 | PermissionPolicy → Agent | ✅ WIRED | Agent 构造 PolicyPipeline + BuiltinDefaultPolicy，注入 ToolGuard facade，注入 PluginContext。插件可注册自定义 PermissionPolicy。 |
-| Plugin → Agent | ✅ WIRED | Agent.__init__ 装配 PluginManager + SuperpowerPlugin，activate_all 激活 enabled 插件，/plugins 命令查看状态。 |
+| Plugin → Agent | ✅ WIRED | Agent.__init__ 装配 PluginManager + 8 个内置插件，activate_all 激活 enabled 插件，/plugins 命令查看状态。 |
 | Todo + SubAgent → Agent | ✅ WIRED | Agent.__init__ 装配 TodoManager + SubAgentManager，注入 PluginContext。TaskTool 创建 Todo + 派发子代理。subagent.completed hook 可订阅。|
 | AgentProfile → Agent | ✅ WIRED | Agent.__init__ 创建 AgentProfileRegistry + 注册 BUILTIN_PROFILES + 注入 PluginContext + 注入 SubAgentManager。SubAgentManager._create_sub_agent() 按 profile 配置子代理（tools allowlist / model override / ProfilePromptChunk / limits）。|
 | Context Pipeline → Agent | ✅ WIRED | Agent.__init__ 装配 ContextPipeline（CacheOptimize + Compress），注入 PluginContext。_compress_context 替换为 pipeline.run()。|
+| Scheduler → Agent | ✅ WIRED | SchedulerPlugin 激活时注册调度器到 PluginContext，CLI 启动时加载定时任务。|
+| Web → Agent | ✅ WIRED | WebPlugin 激活时注册 web 工具，移除 import-time tool registration。|
+| MCP Plugin → Agent | ✅ WIRED | MCPPlugin 激活时初始化 MCPServerManager，工具发现和注册通过插件生命周期管理。|
 
 ---
 
@@ -384,35 +423,37 @@
 
 | Status | Count |
 |--------|-------|
-| 🟢 POLISHED | 11 |
-| 🟢 NEW | 21 |
-| 🟢 REAL | 7 |
-| 🟡 PARTIAL | 6 |
-| 🔴 SKELETON | 7 |
-| ✅ WIRED | 10 |
+| 🟢 POLISHED | 13 |
+| 🟢 NEW | 27 |
+| 🟢 REAL | 6 |
+| 🟡 PARTIAL | 3 |
+| 🔴 SKELETON | 1 |
+| ✅ WIRED | 12 |
 
-## 三家对标 (2026-05-29)
+## 三家对标 (2026-06-29)
 
 | 特性 | hermes | opencode | openclaw | merco |
 |------|--------|----------|----------|-------|
 | Session CRUD | ✓ | ✓ | ✓ | ✓ |
 | FTS5 全文搜索 | ✓✓ 双tokenizer | ✗ | ✓ | ✓ |
-| Fork/Branch | ✓ | ✓ | ✓ | **✓ (新增)** |
+| Fork/Branch | ✓ | ✓ | ✓ | ✓ |
 | Revert/Undo | ✗ | ✓ | ✗ | ✗ |
 | 压缩保留尾轮 | ✓ | ✓ | ✓ | ✓ |
 | 压缩 checkpoint | ✗ | ✗ | ✓ | ✓ |
 | 消息原文件持久化 | ✓ | ✓ | ✓ | ✓ |
-| Memory 召回 | ✓ | ✗ | ✓ | **✓ (新增)** |
+| Memory 召回 | ✓ | ✗ | ✓ | ✓ |
 | 成本追踪 | ✓ | ✓ | ✓ | ✗ |
 | 会话清理/归档 | ✓ | ✓ | ✓ | ✗ |
 | 跨会话搜索 | ✓ | ✗ | ✓ | ✓ |
 | 观察性报告 | ✗ | ✗ | ✗ | ✓ 独有 |
-| 插件系统 | ✗ | ✗ | ✓ | **✓ (新增)** |
-| Todo + 子代理 | ✗ | ✗ | ✗ | **✓ 独有** |
-| Context Pipeline | ✗ | ✗ | ✗ | **✓ 独有** |
-| AgentProfile 插件化 | ✗ | ✗ | ✗ | **✓ 独有** |
+| 插件系统 | ✗ | ✗ | ✓ | ✓ 独有 |
+| Todo + 子代理 | ✗ | ✗ | ✗ | ✓ 独有 |
+| Context Pipeline | ✗ | ✗ | ✗ | ✓ 独有 |
+| AgentProfile 插件化 | ✗ | ✗ | ✗ | ✓ 独有 |
+| 定时任务调度 | ✗ | ✗ | ✓ | ✓ |
+| 异步 Agent Factory | ✗ | ✗ | ✗ | ✓ 独有 |
 
-**总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 10**
+**总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 12**
 
 ## 已知问题 / 技术债
 
@@ -424,11 +465,14 @@
 
 ## 下一步（按优先级）
 
-1. **Scheduler → Runtime** — CronScheduler 已有，接入 CLI 启动时加载 + 按时触发
-2. **TUI 实现** — Textual 重写 REPL，多会话切换/分支树/记忆管理
-3. **集成测试补全** — mock LLM 的 Agent-Loop 全覆盖（压缩/恢复/工具调用/记忆召回） ✅ 已完成
-4. **插件系统** ✅ 已完成 — Plugin 基类 + PluginManager + Superpower 示例 + 12 测试
-5. **Todo + SubAgent 系统** ✅ 已完成 — TodoManager + SubAgentManager + TaskTool + PluginContext 扩展 + Agent 装配 + 14 测试
-6. **通一个 Gateway** — Telegram 端到端（Bot API + webhook/polling）
-7. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
-8. **MemoryBackend 插件化** ✅ 已完成 — MemoryBackend ABC + JSONBackend + MemoryStore facade + Registry + PluginContext 14 扩展点 + Config + Agent 装配 + 11 测试
+1. **TUI 实现** — Textual 重写 REPL，多会话切换/分支树/记忆管理
+2. **Gateway 集成** — Telegram 端到端（Bot API + webhook/polling）
+3. **Skills get_relevant 接入** — SkillRegistry.get_relevant() 接入 Agent prompt 构建
+4. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
+5. **Scheduler → Runtime** ✅ 已完成 — SchedulerPlugin 接入 Agent 生命周期，CLI 启动时加载定时任务
+6. **集成测试补全** ✅ 已完成 — mock LLM 的 Agent-Loop 全覆盖（压缩/恢复/工具调用/记忆召回）
+7. **插件系统** ✅ 已完成 — Plugin 基类 + PluginManager + Superpower 示例 + 12 测试
+8. **Todo + SubAgent 系统** ✅ 已完成 — TodoManager + SubAgentManager + TaskTool + PluginContext 扩展 + Agent 装配 + 14 测试
+9. **MemoryBackend 插件化** ✅ 已完成 — MemoryBackend ABC + JSONBackend + MemoryStore facade + Registry + PluginContext 14 扩展点 + Config + Agent 装配 + 11 测试
+10. **AgentProfile 插件化** ✅ 已完成 — AgentProfile ABC + Registry + 4 builtins + SubAgentManager 集成 + PluginContext 扩展
+11. **Context Pipeline** ✅ 已完成 — ContextProcessor ABC + ContextPipeline + CompressProcessor + CacheOptimizeProcessor
