@@ -107,9 +107,11 @@ Agent 硬初始化 SkillRegistry → SkillPlugin。
 
 `SkillPlugin` 负责加载 SkillRegistry 并注入 Agent + SkillViewTool；生产内部创建路径已迁移到 `Agent.create(...)`。
 
-### 3.3 mcp → MCPPlugin
+### 3.3 mcp → MCPPlugin ✅ 已完成
 
 Agent 硬初始化 MCPServerManager → MCPPlugin。
+
+`MCPPlugin` 只负责创建 `MCPServerManager`，激活阶段不触发任何网络/stdio I/O；加载 MCP 服务器仍由调用方显式触发。
 
 ### 3.4 agents + todo → SubAgentPlugin
 
