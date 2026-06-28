@@ -5,8 +5,6 @@ import logging
 from pathlib import Path
 from .base import BaseTool
 from .registry import tool_registry
-from merco.sandbox.confirm import confirm_edit
-from merco.sandbox import snapshot
 
 logger = logging.getLogger("merco.tools.edit")
 
@@ -20,16 +18,6 @@ def _generate_diff(filepath: str, old: str, new: str) -> str:
         tofile=filepath,
     ))
     return "".join(diff_lines)
-
-
-def _get_diff_view() -> str:
-    """从配置读取 diff 显示模式"""
-    try:
-        from merco.core.config import MercoConfig
-        cfg = MercoConfig.load()
-        return cfg.diff_view
-    except Exception:
-        return "unified"
 
 
 def _validate_search(content: str, search: str, path: str) -> str | None:
@@ -82,7 +70,6 @@ class EditFile(BaseTool):
             search: 原内容（必须唯一）
             replace: 新内容
         """
-        diff_view = _get_diff_view()
         file_path = Path(path)
         if not file_path.exists():
             return {"error": f"文件 '{path}' 不存在"}
@@ -102,22 +89,12 @@ class EditFile(BaseTool):
             return {"success": True, "path": path,
                     "message": "文件内容无变化", "diff": ""}
 
-        # 审批
-        approved = await confirm_edit(diff_text, path, 1, old_content, new_content, diff_view)
-        if not approved:
-            return {"success": False, "path": path,
-                    "message": "用户已取消修改", "diff": diff_text}
-
-        # 写入前记录快照
-        snapshot.track(path, old_content)
-        file_path.write_text(new_content, encoding="utf-8")
-        logger.info("已修改 %s", path)
-
         return {
-            "success": True,
+            "planned_edit": True,
             "path": path,
+            "old_content": old_content,
+            "new_content": new_content,
             "diff": diff_text,
-            "message": f"已修改 `{path}`",
         }
 
 
