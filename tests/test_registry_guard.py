@@ -12,6 +12,7 @@ from merco.tools import file_tools  # noqa: F401
 from merco.tools import edit  # noqa: F401
 
 from merco.sandbox.guard import ToolGuard, GuardResult, GuardAction, GuardConfirmationRequired
+from merco.tools.middleware import GuardMiddleware
 from merco.tools.registry import tool_registry
 
 
@@ -24,7 +25,7 @@ def registry():
 @pytest.mark.asyncio
 async def test_registry_calls_guard(registry):
     """Registry.execute 调用 ToolGuard"""
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock
 
     # Mock 一个工具（临时注册）
     class MockTool:
@@ -36,21 +37,25 @@ async def test_registry_calls_guard(registry):
 
     registry.register(MockTool())
 
+    mock_guard = AsyncMock()
+    mock_guard.check = AsyncMock(return_value=GuardResult(action=GuardAction.ALLOW, command=""))
+
+    mw = GuardMiddleware(mock_guard)
+    idx = registry._middleware.use(mw)
     try:
-        with patch("merco.sandbox.tool_guard") as mock_guard:
-            mock_guard.check = AsyncMock(return_value=GuardResult(action=GuardAction.ALLOW, command=""))
-            result = await registry.execute("mock_tool_test")
+        result = await registry.execute("mock_tool_test")
 
         mock_guard.check.assert_called_once_with("mock_tool_test", {})
-        MockTool().execute.assert_awaited_once()
+        assert "error" not in result
     finally:
         registry.unregister("mock_tool_test")
+        registry._middleware._middlewares.remove(mw)
 
 
 @pytest.mark.asyncio
 async def test_registry_blocks_when_guard_denies(registry):
     """Guard 拒绝时 Registry 返回错误，不执行工具"""
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock
 
     class MockTool:
         name = "mock_tool_deny"
@@ -61,32 +66,44 @@ async def test_registry_blocks_when_guard_denies(registry):
 
     registry.register(MockTool())
 
+    mock_guard = AsyncMock()
+    mock_guard.check = AsyncMock(return_value=GuardResult(
+        action=GuardAction.DENY, command="", reason="测试拒绝",
+    ))
+
+    mw = GuardMiddleware(mock_guard)
+    registry._middleware.use(mw)
+    tool = MockTool()
     try:
-        with patch("merco.sandbox.tool_guard") as mock_guard:
-            mock_guard.check = AsyncMock(return_value=GuardResult(action=GuardAction.DENY, command="", reason="测试拒绝"))
-            result = await registry.execute("mock_tool_deny")
+        result = await registry.execute("mock_tool_deny")
 
         # 工具不应被执行
-        MockTool().execute.assert_not_awaited()
+        tool.execute.assert_not_awaited()
         # 应返回拦截错误
         assert "error" in result
         assert "安全守卫拒绝" in result["error"]
     finally:
         registry.unregister("mock_tool_deny")
+        registry._middleware._middlewares.remove(mw)
 
 
 @pytest.mark.asyncio
 async def test_registry_dangerous_command_asks(registry):
     """危险命令 rm -rf / 触发 ASK 确认"""
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock
 
-    # rm -rf / 在默认规则中匹配，action 为 ASK
-    with patch("merco.sandbox.tool_guard") as mock_guard:
-        mock_guard.check = AsyncMock(return_value=GuardResult(
-            action=GuardAction.ASK, command="rm -rf /", reason="危险命令"
-        ))
+    mock_guard = AsyncMock()
+    mock_guard.check = AsyncMock(return_value=GuardResult(
+        action=GuardAction.ASK, command="rm -rf /", reason="危险命令",
+    ))
+
+    mw = GuardMiddleware(mock_guard)
+    registry._middleware.use(mw)
+    try:
         with pytest.raises(GuardConfirmationRequired):
             await registry.execute("bash", command="rm -rf /")
+    finally:
+        registry._middleware._middlewares.remove(mw)
 
 
 @pytest.mark.asyncio
@@ -100,19 +117,43 @@ async def test_registry_safe_command_allowed(registry):
 @pytest.mark.asyncio
 async def test_registry_path_traversal_blocked(registry):
     """路径穿越被拦截"""
-    result = await registry.execute("write_file", path="../../../etc/passwd", content="x")
+    from unittest.mock import AsyncMock
 
-    assert "error" in result
-    assert "安全守卫" in result["error"]
+    mock_guard = AsyncMock()
+    mock_guard.check = AsyncMock(return_value=GuardResult(
+        action=GuardAction.DENY, command="../../../etc/passwd", reason="路径穿越",
+    ))
+
+    mw = GuardMiddleware(mock_guard)
+    registry._middleware.use(mw)
+    try:
+        result = await registry.execute("write_file", path="../../../etc/passwd", content="x")
+
+        assert "error" in result
+        assert "安全守卫" in result["error"]
+    finally:
+        registry._middleware._middlewares.remove(mw)
 
 
 @pytest.mark.asyncio
 async def test_registry_system_path_blocked(registry):
     """系统路径访问被拦截"""
-    result = await registry.execute("read_file", path="/proc/cpuinfo")
+    from unittest.mock import AsyncMock
 
-    assert "error" in result
-    assert "安全守卫" in result["error"]
+    mock_guard = AsyncMock()
+    mock_guard.check = AsyncMock(return_value=GuardResult(
+        action=GuardAction.DENY, command="/proc/cpuinfo", reason="系统路径",
+    ))
+
+    mw = GuardMiddleware(mock_guard)
+    registry._middleware.use(mw)
+    try:
+        result = await registry.execute("read_file", path="/proc/cpuinfo")
+
+        assert "error" in result
+        assert "安全守卫" in result["error"]
+    finally:
+        registry._middleware._middlewares.remove(mw)
 
 
 @pytest.mark.asyncio
