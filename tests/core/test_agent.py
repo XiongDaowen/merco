@@ -404,3 +404,75 @@ async def test_agent_create_still_activates_superpower_plugin(monkeypatch, tmp_p
     assert "superpower" in agent.plugin_manager.active_plugins
     chunk_names = [chunk.name for chunk in agent.prompt_builder._chunks]
     assert "superpower_hint" in chunk_names
+
+
+@pytest.mark.asyncio
+async def test_agent_create_initializes_skill_registry(monkeypatch, tmp_path):
+    """Agent.create loads SkillRegistry via SkillPlugin."""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from merco.skills.registry import SkillRegistry
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "factory_skills.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+    cfg.skills_paths = []
+
+    agent = await Agent.create(config=cfg, tool_registry=make_test_registry())
+
+    assert isinstance(agent.skill_registry, SkillRegistry)
+    assert "skills" in agent.plugin_manager.active_plugins
+
+
+@pytest.mark.asyncio
+async def test_agent_create_injects_skill_registry_into_skill_view_tool(monkeypatch, tmp_path):
+    """Agent.create makes SkillViewTool aware of the registry."""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from merco.tools.skill_tools import SkillViewTool
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "factory_skill_view.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+    cfg.skills_paths = []
+
+    agent = await Agent.create(config=cfg, tool_registry=make_test_registry())
+    skill_tool = agent.tool_registry.get("skill_view")
+
+    assert skill_tool is not None
+    assert isinstance(skill_tool, SkillViewTool)
+    assert skill_tool._skill_registry is agent.skill_registry
+
+
+def test_agent_init_no_longer_accepts_skill_registry(monkeypatch, tmp_path):
+    """Agent.__init__ rejects skill_registry keyword argument."""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from tests.conftest import MockLLMClient
+
+    db_path = str(tmp_path / "factory_init_kw.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    with pytest.raises(TypeError):
+        Agent(config=cfg, skill_registry=object())

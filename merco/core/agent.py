@@ -294,14 +294,14 @@ class Agent:
     """AI Agent 核心类，负责对话循环与工具调度"""
 
 
-    def __init__(self, config: MercoConfig, tool_registry=None, skill_registry=None, _defer_plugin_init: bool = False):
+    def __init__(self, config: MercoConfig, tool_registry=None, _defer_plugin_init: bool = False):
         self.config = config
         self.session = Session()
         from merco.sandbox import snapshot
         snapshot.set_current_session(self.session.id)
         self.context = ContextManager(max_tokens=config.max_input_tokens)
         self.tool_registry = tool_registry
-        self.skill_registry = skill_registry
+        self.skill_registry = None
 
         # 初始化 LLM 客户端
         api_key = config.model.api_key or self._get_api_key(config.model.provider)
@@ -434,6 +434,7 @@ class Agent:
         from merco.plugins.base import PluginContext
         from merco.plugins.manager import PluginManager
         from merco.plugins.builtin.observability.plugin import ObservabilityPlugin
+        from merco.plugins.builtin.skills.plugin import SkillPlugin
         from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
 
         # ── Context Pipeline ──
@@ -485,10 +486,12 @@ class Agent:
             agent_profiles=self.agent_profiles,
             loop_policies=self.loop_policies,
         )
+        self._plugin_ctx.agent = self
         self.plugin_manager = PluginManager(self._plugin_ctx)
 
         # 注册内置插件
         self.plugin_manager.register(ObservabilityPlugin())
+        self.plugin_manager.register(SkillPlugin())
         self.plugin_manager.register(SuperpowerPlugin())
 
         # 激活所有 enabled 插件（同步调用，Agent.__init__ 是同步的）
@@ -528,12 +531,11 @@ class Agent:
             .use(SavePartialState()))
 
     @classmethod
-    async def create(cls, config: MercoConfig, tool_registry=None, skill_registry=None) -> "Agent":
+    async def create(cls, config: MercoConfig, tool_registry=None) -> "Agent":
         """Create an Agent with deterministic async plugin initialization."""
         agent = cls(
             config=config,
             tool_registry=tool_registry,
-            skill_registry=skill_registry,
             _defer_plugin_init=True,
         )
         await agent._initialize_async_plugins()
@@ -545,6 +547,7 @@ class Agent:
         self.observer = self._plugin_ctx.observer
         assert self.observer is not None
         self._restore_context()
+        await self.plugin_manager.activate("skills")
         await self.plugin_manager.activate_all()
 
     async def run(self, prompt: str) -> str:

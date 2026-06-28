@@ -14,6 +14,7 @@ from merco.core.agent import Agent              # noqa: E402
 from merco.memory.session_store import SessionStore  # noqa: E402
 from merco.tools.registry import ToolRegistry    # noqa: E402
 from merco.tools.base import BaseTool            # noqa: E402
+from merco.tools.skill_tools import SkillViewTool  # noqa: E402
 
 
 # ── 内置测试工具 ──────────────────────────────────────────
@@ -86,6 +87,7 @@ def make_test_registry() -> ToolRegistry:
     reg.register(MockReadTool())
     reg.register(MockBashTool())
     reg.register(MockEditTool())
+    reg.register(SkillViewTool())
     return reg
 
 
