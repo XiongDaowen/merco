@@ -3,8 +3,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from merco.sandbox.guard import GuardAction
+from merco.sandbox.confirm import confirm_edit
+import merco.sandbox.snapshot as snapshot
 
 
 @dataclass
@@ -118,3 +121,45 @@ class ErrorHandlingMiddleware(ToolMiddleware):
             ctx.tool_name,
             getattr(ctx.tool, 'parameters', None) if ctx.tool else None,
         )
+
+
+class EditApplyMiddleware(ToolMiddleware):
+    """应用 EditFile planned_edit：确认、快照、写入"""
+    name = "edit_apply"
+
+    def __init__(self, diff_view: str = "unified"):
+        self.diff_view = diff_view
+
+    async def before(self, ctx: ToolContext):
+        return None
+
+    async def after(self, ctx: ToolContext):
+        result = ctx.result or {}
+        if not isinstance(result, dict) or not result.get("planned_edit"):
+            return None
+
+        path = result["path"]
+        old_content = result["old_content"]
+        new_content = result["new_content"]
+        diff = result["diff"]
+
+        approved = await confirm_edit(diff, path, 1, old_content, new_content, self.diff_view)
+        if not approved:
+            return {
+                "success": False,
+                "path": path,
+                "message": "用户已取消修改",
+                "diff": diff,
+            }
+
+        snapshot.track(path, old_content)
+        Path(path).write_text(new_content, encoding="utf-8")
+        return {
+            "success": True,
+            "path": path,
+            "diff": diff,
+            "message": f"已修改 `{path}`",
+        }
+
+    async def on_error(self, ctx: ToolContext):
+        return None
