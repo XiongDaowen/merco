@@ -206,8 +206,12 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
     if sv and hasattr(sv, "set_skill_registry"):
         sv.set_skill_registry(skill_registry)
 
-    agent = Agent(config=cfg, tool_registry=tool_registry,
-                  skill_registry=skill_registry)
+    agent = Agent(config=cfg, tool_registry=tool_registry)
+
+    # SkillPlugin 激活后同步 skill_registry，完成 SkillViewTool 注入
+    # 注意：legacy Agent(...) 路径中 activate_all() 是 fire-and-forget，
+    # 因此同时保留手动注入作为安全后备。
+    agent.skill_registry = skill_registry
 
     # 显示加载的配置来源
     config_source = "默认值"
