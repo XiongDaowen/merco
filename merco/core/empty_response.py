@@ -18,7 +18,7 @@ class CallbackEmptyResponse(EmptyResponseStrategy):
     async def attempt(self, ctx: EmptyResponseContext) -> bool:
         if ctx.retry_count >= ctx.max_retries:
             return False
-        from merco.core.self_healing import empty_response
+        from merco.tools.errors import empty_response
         err = empty_response()
         ctx.inject_error = err["error"]
         return True

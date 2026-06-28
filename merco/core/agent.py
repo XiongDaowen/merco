@@ -664,7 +664,7 @@ class Agent:
             except Exception as e:
                 _recovery_attempts += 1
                 if _recovery_attempts > 3:
-                    from .self_healing import llm_error
+                    from merco.core.llm.errors import llm_error
                     return llm_error(e)
                 from openai import APIStatusError
                 from .pipeline import RecoveryContext
@@ -682,7 +682,7 @@ class Agent:
                         logger.info("→ 切换模型: %s", ctx.switch_model)
                         self.llm.model = ctx.switch_model
                     continue
-                from .self_healing import llm_error
+                from merco.core.llm.errors import llm_error
                 return llm_error(e)
 
             # 记录 API 返回的实测 token（流式可能无 usage，fallback 到估算值）

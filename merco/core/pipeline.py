@@ -267,5 +267,5 @@ class EmptyResponsePipeline:
 
 def _is_retryable(ctx: RecoveryContext) -> bool:
     """判断错误是否可重试"""
-    from merco.core.self_healing import _is_retryable_llm_error
+    from merco.core.llm.errors import _is_retryable_llm_error
     return _is_retryable_llm_error(ctx.error)

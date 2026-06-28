@@ -1,6 +1,6 @@
 """self_healing 错误分类测试"""
 import pytest
-from merco.core.self_healing import _is_retryable_llm_error
+from merco.core.llm.errors import _is_retryable_llm_error
 
 
 class FakeAPIStatusError(Exception):
@@ -72,3 +72,16 @@ def test_llm_errors_module_imports():
     from merco.core.llm.errors import llm_error, _is_retryable_llm_error
     assert llm_error.__name__ == "llm_error"
     assert _is_retryable_llm_error.__name__ == "_is_retryable_llm_error"
+
+
+def test_core_self_healing_does_not_import_openai():
+    """core 不应再 import openai（拆分到 llm/errors.py）"""
+    import inspect
+    from merco.core import self_healing
+    src = inspect.getsource(self_healing)
+    assert "openai" not in src.lower()
+    assert "tool_error" not in src
+    assert "classify_error" not in src
+    assert "empty_response" not in src
+    assert "llm_error" not in src
+    assert "_is_retryable_llm_error" not in src

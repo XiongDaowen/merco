@@ -115,7 +115,7 @@ class ErrorHandlingMiddleware(ToolMiddleware):
         return None
 
     async def on_error(self, ctx: ToolContext):
-        from merco.core.self_healing import tool_error
+        from merco.tools.errors import tool_error
         return tool_error(
             ctx.error,
             ctx.tool_name,
