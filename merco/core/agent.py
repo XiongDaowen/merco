@@ -435,6 +435,7 @@ class Agent:
         from merco.plugins.manager import PluginManager
         from merco.plugins.builtin.observability.plugin import ObservabilityPlugin
         from merco.plugins.builtin.skills.plugin import SkillPlugin
+        from merco.plugins.builtin.mcp.plugin import MCPPlugin
         from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
 
         # ── Context Pipeline ──
@@ -492,6 +493,7 @@ class Agent:
         # 注册内置插件
         self.plugin_manager.register(ObservabilityPlugin())
         self.plugin_manager.register(SkillPlugin())
+        self.plugin_manager.register(MCPPlugin())
         self.plugin_manager.register(SuperpowerPlugin())
 
         # 激活所有 enabled 插件（同步调用，Agent.__init__ 是同步的）
@@ -515,12 +517,8 @@ class Agent:
             task_tool._todo_manager = self.todo_manager
             task_tool._sub_agent_manager = self.sub_agent_manager
 
-        # ── MCP 客户端 ──
-        from merco.mcp.manager import MCPServerManager
-        self.mcp_manager = MCPServerManager(
-            tool_registry=self.tool_registry,
-            hooks=self.hooks,
-        )
+        # ── MCP 客户端（由 MCPPlugin 激活时创建；legacy 路径下保持 None）──
+        self.mcp_manager = None
 
         # ── 中断清理管线 ──
         self._cleanup_pipeline = (InterruptCleanupPipeline()
@@ -548,6 +546,7 @@ class Agent:
         assert self.observer is not None
         self._restore_context()
         await self.plugin_manager.activate("skills")
+        await self.plugin_manager.activate("mcp")
         await self.plugin_manager.activate_all()
 
     async def run(self, prompt: str) -> str:

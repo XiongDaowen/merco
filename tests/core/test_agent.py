@@ -266,10 +266,29 @@ class TestRestoreWithCheckpoint:
         assert "tool_calls" in assistant_msg[0]
 
 
-def test_agent_has_mcp_manager(test_agent):
-    assert hasattr(test_agent, 'mcp_manager')
+
+@pytest.mark.asyncio
+async def test_agent_create_initializes_mcp_manager(monkeypatch, tmp_path):
+    """Agent.create initializes MCPPlugin-created MCPServerManager."""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
     from merco.mcp.manager import MCPServerManager
-    assert isinstance(test_agent.mcp_manager, MCPServerManager)
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "factory_mcp.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    agent = await Agent.create(config=cfg, tool_registry=make_test_registry())
+
+    assert isinstance(agent.mcp_manager, MCPServerManager)
+    assert "mcp" in agent.plugin_manager.active_plugins
 
 
 class TestRestorePreservesEmptyToolCallId:
