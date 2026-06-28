@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from merco.hooks.registry import HookRegistry
     from merco.tools.registry import ToolRegistry
-    from merco.core.agent import PromptBuilder, PromptChunk
+    from merco.core.agent import PromptBuilder, PromptChunk, Agent
     from merco.core.pipeline import RecoveryPipeline, ResultPipeline
     from merco.memory.save_pipeline import MemorySavePipeline
     from merco.memory.recall import HybridRecaller, BaseRecaller
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from merco.context.pipeline import ContextPipeline
     from merco.memory.backend import MemoryBackendRegistry
     from merco.core.loop_policy import LoopPolicyRegistry
+    from merco.skills.registry import SkillRegistry
     from typing import Callable
 
 
@@ -67,6 +68,8 @@ class PluginContext:
         agent_profiles: "AgentProfileRegistry" = None,
         memory_backends: "MemoryBackendRegistry" = None,
         loop_policies: "LoopPolicyRegistry" = None,
+        agent: "Agent" = None,
+        skill_registry: "SkillRegistry" = None,
     ):
         self.hooks = hooks
         self.tool_registry = tool_registry
@@ -83,6 +86,8 @@ class PluginContext:
         self.agent_profiles = agent_profiles
         self.memory_backends = memory_backends
         self.loop_policies = loop_policies
+        self.agent = agent
+        self.skill_registry = skill_registry
 
     def on(self, event: str, handler: "Callable") -> None:
         """Subscribe to event (convenience method)"""
