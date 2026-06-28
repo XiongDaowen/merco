@@ -66,3 +66,9 @@ def test_retryable_on_temporarily_unavailable_keyword():
 
 def test_not_retryable_on_irrelevant_400():
     assert _is_retryable_llm_error(FakeAPIStatusError(400, "invalid model name")) is False
+
+
+def test_llm_errors_module_imports():
+    from merco.core.llm.errors import llm_error, _is_retryable_llm_error
+    assert llm_error.__name__ == "llm_error"
+    assert _is_retryable_llm_error.__name__ == "_is_retryable_llm_error"
