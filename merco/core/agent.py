@@ -294,7 +294,7 @@ class Agent:
     """AI Agent 核心类，负责对话循环与工具调度"""
 
 
-    def __init__(self, config: MercoConfig, tool_registry=None, skill_registry=None):
+    def __init__(self, config: MercoConfig, tool_registry=None, skill_registry=None, _defer_plugin_init: bool = False):
         self.config = config
         self.session = Session()
         from merco.sandbox import snapshot
@@ -323,9 +323,12 @@ class Agent:
 
         # ── 可观察性 ──
         from merco.hooks.registry import HookRegistry
-        from merco.observability.observer import Observer
         self.hooks = HookRegistry()
-        self.observer = Observer(self.hooks)
+        if _defer_plugin_init:
+            self.observer = None
+        else:
+            from merco.observability.observer import Observer
+            self.observer = Observer(self.hooks)
 
         # ── 守卫：敏感命令执行前确认 ──
         from merco.sandbox.guard import (
@@ -350,7 +353,8 @@ class Agent:
         self._session_store = SessionStore(_get_db_path())
         self._search = SessionSearch(self._session_store)
         self.session = Session.resume_or_create(self._session_store)
-        self._restore_context()
+        if not _defer_plugin_init:
+            self._restore_context()
 
         # ── 工厂：根据 config 选响应策略 ──
         if self.config.streaming:
@@ -429,6 +433,7 @@ class Agent:
         # ── 插件系统 ──
         from merco.plugins.base import PluginContext
         from merco.plugins.manager import PluginManager
+        from merco.plugins.builtin.observability.plugin import ObservabilityPlugin
         from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
 
         # ── Context Pipeline ──
@@ -483,21 +488,23 @@ class Agent:
         self.plugin_manager = PluginManager(self._plugin_ctx)
 
         # 注册内置插件
+        self.plugin_manager.register(ObservabilityPlugin())
         self.plugin_manager.register(SuperpowerPlugin())
 
         # 激活所有 enabled 插件（同步调用，Agent.__init__ 是同步的）
-        try:
-            loop = asyncio.get_running_loop()
-            # 已在 async 上下文，用 create_task
-            asyncio.ensure_future(self.plugin_manager.activate_all())
-        except RuntimeError:
-            # 没有运行中的 event loop，创建新的
+        if not _defer_plugin_init:
             try:
-                loop = asyncio.new_event_loop()
-                loop.run_until_complete(self.plugin_manager.activate_all())
-                loop.close()
-            except Exception:
-                pass
+                loop = asyncio.get_running_loop()
+                # 已在 async 上下文，用 create_task
+                asyncio.ensure_future(self.plugin_manager.activate_all())
+            except RuntimeError:
+                # 没有运行中的 event loop，创建新的
+                try:
+                    loop = asyncio.new_event_loop()
+                    loop.run_until_complete(self.plugin_manager.activate_all())
+                    loop.close()
+                except Exception:
+                    pass
 
         # 注入到 TaskTool（全局 tool_registry 中的 TaskTool 实例）
         task_tool = self.tool_registry.get("task")
@@ -519,6 +526,26 @@ class Agent:
             .use(CloseMCPConnections())
             .use(EmitInterruptHooks())
             .use(SavePartialState()))
+
+    @classmethod
+    async def create(cls, config: MercoConfig, tool_registry=None, skill_registry=None) -> "Agent":
+        """Create an Agent with deterministic async plugin initialization."""
+        agent = cls(
+            config=config,
+            tool_registry=tool_registry,
+            skill_registry=skill_registry,
+            _defer_plugin_init=True,
+        )
+        await agent._initialize_async_plugins()
+        return agent
+
+    async def _initialize_async_plugins(self) -> None:
+        """Initialize plugins in deterministic order for Agent.create()."""
+        await self.plugin_manager.activate("observability")
+        self.observer = self._plugin_ctx.observer
+        assert self.observer is not None
+        self._restore_context()
+        await self.plugin_manager.activate_all()
 
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""

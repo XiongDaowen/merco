@@ -324,3 +324,83 @@ class TestRestorePreservesEmptyToolCallId:
         assert len(tool_msgs) == 1
         assert "tool_call_id" in tool_msgs[0]
         assert tool_msgs[0]["tool_call_id"] == ""
+
+
+@pytest.mark.asyncio
+async def test_agent_create_initializes_observer_via_plugin(monkeypatch, tmp_path):
+    """Agent.create initializes observer through ObservabilityPlugin."""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from merco.observability.observer import Observer
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "factory.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    agent = await Agent.create(config=cfg, tool_registry=make_test_registry())
+
+    assert isinstance(agent.observer, Observer)
+    assert "observability" in agent.plugin_manager.active_plugins
+
+
+@pytest.mark.asyncio
+async def test_agent_create_restores_observer_snapshot_after_plugin_activation(monkeypatch, tmp_path):
+    """Factory path restores observer snapshot after ObservabilityPlugin creates observer."""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from merco.memory.session_store import SessionStore
+    from merco.core.session import Session
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "factory.db")
+    store = SessionStore(db_path)
+    existing = Session(store=store)
+    existing.metadata["observer"] = {"acc": {"turns": 3}, "live": {}}
+    existing.add_message("user", "hello")
+    existing.save()
+    store.save_metadata(existing.id, existing.metadata)
+
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    agent = await Agent.create(config=cfg, tool_registry=make_test_registry())
+
+    report = agent.observer.report()
+    assert "3 轮" in report
+
+
+@pytest.mark.asyncio
+async def test_agent_create_still_activates_superpower_plugin(monkeypatch, tmp_path):
+    """Factory path activates remaining enabled plugins after observability."""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "factory.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    agent = await Agent.create(config=cfg, tool_registry=make_test_registry())
+
+    assert "superpower" in agent.plugin_manager.active_plugins
+    chunk_names = [chunk.name for chunk in agent.prompt_builder._chunks]
+    assert "superpower_hint" in chunk_names
