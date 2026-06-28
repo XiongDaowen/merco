@@ -359,10 +359,11 @@ class Agent:
             self._provider: ResponseProvider = NonStreamingProvider()
 
         # ── Pipeline 初始化 ──
-        from .pipeline import (ResultPipeline, TruncationProcessor,
-                               SkillViewProcessor, RecoveryPipeline,
+        from .pipeline import (ResultPipeline, RecoveryPipeline,
                                WaitRecovery, ContextCompressRecovery,
                                EmptyResponsePipeline, CallbackEmptyResponse)
+        from merco.tools.processors.truncation import TruncationProcessor
+        from merco.skills.processors import SkillViewProcessor
         self.result_pipeline = ResultPipeline()
         self.result_pipeline.use(TruncationProcessor(max_bytes=16000))
         self.result_pipeline.use(SkillViewProcessor())

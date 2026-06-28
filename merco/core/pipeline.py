@@ -10,14 +10,9 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
-import os
-import time
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from pathlib import Path
 
 logger = logging.getLogger("merco.pipeline")
 
@@ -88,7 +83,6 @@ class ResultPipeline:
                 logger.warning("管线处理器 '%s' 异常", p.name, exc_info=True)
 
 
-# ── 内置处理器 ─────────────────────────────────────────────
 
 def _walk_truncate(obj, max_per_value: int, filepath: str, pagination: dict | None = None):
     """递归截断字典/列表中所有超长字符串，附加分页信息。
@@ -129,196 +123,6 @@ def _is_reading_trunc_file(ctx: ProcessContext, trunc_dir: str) -> bool:
     # 未来可扩展其他工具
     return False
 
-
-class TruncationProcessor(Processor):
-    """通用结果截断：任意工具结果 → 写入完整 JSON 文件 → 返回递归截断版。
-
-    对标 OpenCode truncate.ts 的缓存策略：
-
-    - **触发条件**：整个 result dict 序列化为 JSON，超过 max_bytes 则截断
-    - **缓存位置**：~/.merco/trunc/
-    - **文件命名**：{timestamp_ms}_{safe_tool_name}.json（毫秒时间戳防冲突）
-    - **缓存格式**：完整 JSON（保留所有字段结构）
-    - **文件上限**：单文件最大 max_file_bytes（默认 50 MB），超限拒绝
-    - **清理策略**：7 天过期自动删除（OpenCode 同款）
-    - **清理频率**：懒清理 — 每次新写入时检查，距上次清理 > 1 小时才执行
-    - **可配置**::
-
-        pipeline.disable("truncation")                   # 调试时关闭
-        TruncationProcessor(max_bytes=8000)              # 调大上下文窗口
-        TruncationProcessor(retention_days=3)            # 加快清理
-    """
-
-    name = "truncation"
-    _last_cleanup = 0.0          # 上次清理时间戳（类级，所有实例共享）
-    _cleanup_interval = 3600     # 清理间隔（秒），1 小时
-
-    def __init__(self, max_bytes: int = 4000, *,
-                 retention_days: int = 7,
-                 max_file_bytes: int = 50 * 1024 * 1024,
-                 trunc_dir: str | None = None):
-        self.max_bytes = max_bytes
-        self.retention_days = retention_days
-        self.max_file_bytes = max_file_bytes
-        self._trunc_dir = trunc_dir
-
-    @property
-    def trunc_dir(self) -> str:
-        if self._trunc_dir is None:
-            self._trunc_dir = os.path.expanduser("~/.merco/trunc")
-        return self._trunc_dir
-
-    async def process(self, ctx: ProcessContext) -> bool:
-        # 序列化整个结果判断是否需截断
-        try:
-            serialized = json.dumps(ctx.result, ensure_ascii=False)
-        except (TypeError, ValueError):
-            return False
-
-        if len(serialized) <= self.max_bytes:
-            return False
-
-        reading_trunc_file = _is_reading_trunc_file(ctx, self.trunc_dir)
-        per_value = max(int(self.max_bytes * 0.5), 500)
-        total_chars = len(serialized)
-        total_pages = (total_chars + per_value - 1) // per_value
-
-        # 文件大小安全上限（超限不写文件）
-        if total_chars > self.max_file_bytes:
-            ctx.result["_truncated"] = True
-            ctx.result["_pagination"] = {
-                "total_chars": total_chars,
-                "page_size": per_value,
-                "total_pages": total_pages,
-                "current_page": 1,
-                "next_page_offset": per_value,
-            }
-            ctx.result["_hint"] = (
-                f"结果过长（{total_chars:,} 字符，超过缓存上限 {self.max_file_bytes:,}），"
-                f"已截断且未缓存至本地。可缩小请求范围重新执行。"
-            )
-            ctx.result = _walk_truncate(ctx.result, per_value, "[超出缓存上限，未保存]")
-            return False
-
-        # 分页元数据
-        pagination = {
-            "total_chars": total_chars,
-            "page_size": per_value,
-            "total_pages": total_pages,
-            "current_page": 1,
-            "next_page_offset": per_value,
-        }
-
-        if reading_trunc_file:
-            # 防套娃：读截断缓存文件 → 截断内容但不写新文件
-            ctx.result["_truncated"] = True
-            ctx.result["_pagination"] = pagination
-            ctx.result["_hint"] = (
-                f"结果过长（{total_chars:,} 字符，第 1/{total_pages} 页）。"
-                f"这是截断缓存文件，请用 read_file 的 offset/limit 翻页，"
-                f"或用 bash grep 搜索关键信息。"
-            )
-            ctx.result = _walk_truncate(ctx.result, per_value,
-                                        "[截断缓存文件]", pagination)
-            return False
-
-        # 正常截断：写缓存文件 + 分页
-        os.makedirs(self.trunc_dir, exist_ok=True)
-        self._maybe_cleanup()
-
-        ts = int(time.time() * 1000)
-        safe_name = ctx.tool_name.replace("/", "_")
-        filepath = os.path.join(self.trunc_dir, f"{ts}_{safe_name}.json")
-        try:
-            Path(filepath).write_text(serialized, encoding="utf-8")
-        except OSError:
-            logger.warning("截断文件写入失败: %s", filepath)
-            return False
-
-        ctx.result["_truncated"] = True
-        ctx.result["_full_output_path"] = filepath
-        ctx.result["_pagination"] = pagination
-        lines_per_page = max(1, per_value // 60)
-        ctx.result["_hint"] = (
-            f"结果过长（{total_chars:,} 字符，共 {total_pages} 页）。"
-            f"当前第 1 页。"
-            f"➡️ 下一页: read_file {filepath} offset={lines_per_page + 1} limit={lines_per_page}"
-            f" 或 bash grep 搜索关键信息。"
-        )
-        ctx.result = _walk_truncate(ctx.result, per_value, filepath, pagination)
-
-        return False
-
-    def _maybe_cleanup(self) -> None:
-        """懒清理：距上次清理超过间隔才执行，删除超过 retention_days 的文件。"""
-        now = time.time()
-        if now - TruncationProcessor._last_cleanup < TruncationProcessor._cleanup_interval:
-            return
-
-        TruncationProcessor._last_cleanup = now
-        cutoff = now - self.retention_days * 86400  # 秒
-        removed = 0
-
-        try:
-            for entry in Path(self.trunc_dir).iterdir():
-                if not entry.is_file():
-                    continue
-                if not entry.name.endswith(".json"):
-                    continue
-                try:
-                    if entry.stat().st_mtime < cutoff:
-                        entry.unlink()
-                        removed += 1
-                except OSError:
-                    pass
-        except OSError:
-            pass  # 目录不存在等
-
-        if removed:
-            logger.info("截断缓存清理: 删除 %d 个过期文件 (> %d 天)", removed, self.retention_days)
-
-
-class SkillViewProcessor(Processor):
-    """Skill 注入：skill_view 结果以 user message 注入上下文。
-
-    对标 Hermes：skill 内容以 role=user 注入（高优先级 + prompt cache 友好）。
-    不追加到 system prompt（跨 provider 兼容更好）。
-    """
-
-    name = "skill_view"
-
-    async def process(self, ctx: ProcessContext) -> bool:
-        if ctx.tool_name != "skill_view":
-            return False
-        if "error" in ctx.result:
-            return False
-        if "content" not in ctx.result:
-            return False
-
-        skill_name = ctx.result.get("name", "unknown")
-        skill_content = ctx.result["content"]
-        content_len = len(skill_content)
-
-        # 工具结果只留占位信息
-        ctx.result["content"] = (
-            f"技能 {skill_name} 已加载（{content_len:,} 字符），详见上下文。"
-        )
-
-        # 完整内容以 user message 注入
-        user_msg = (
-            f"技能 **{skill_name}** 已加载，请遵循以下指引：\n\n"
-            f"{skill_content}"
-        )
-        # 仍然截断保护：user message 上限 8000
-        if len(user_msg) > 8000:
-            user_msg = user_msg[:7800] + "\n\n...(技能内容过长，已截断)"
-
-        ctx.extra_messages.append({
-            "role": "user",
-            "content": user_msg,
-        })
-
-        return False  # 不停止管线
 
 
 # ── LLM 调用恢复管线 ──────────────────────────────────────
