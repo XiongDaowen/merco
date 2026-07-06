@@ -6,6 +6,7 @@ Zero side effects: no logging, no openai import (duck-typing only).
 from __future__ import annotations
 
 import re
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import AsyncIterator
 
@@ -124,7 +125,18 @@ def build_error_panel(info: ErrorInfo):
       <blank line>
       <sanitized detail> (dim)
     """
-    raise NotImplementedError
+    from rich.panel import Panel
+    from rich.text import Text
+    detail = sanitize_message(info.exc)
+    text = Text.from_markup(
+        f"[bold red]❌ {info.label}[/bold red]\n"
+        f"[red]{info.hint}[/red]\n\n"
+        f"[dim]{detail}[/dim]"
+    )
+    return Panel(
+        text, border_style="red",
+        title="⚠ API 错误", title_align="left", padding=(0, 1),
+    )
 
 
 def build_retry_line(info: ErrorInfo, attempt: int, max_attempts: int,
@@ -133,10 +145,13 @@ def build_retry_line(info: ErrorInfo, attempt: int, max_attempts: int,
 
     Example: "↻ API 请求限流（第 1/3 次）— 等待 3s + 压缩上下文…"
     """
-    raise NotImplementedError
+    action_str = " + ".join(actions) if actions else "立即重试"
+    return (f"[yellow]↻ API {info.label}（第 {attempt}/{max_attempts} 次）"
+            f"— {action_str}…[/yellow]")
 
 
-def retry_spinner(label: str, seconds: float, console):
+@asynccontextmanager
+async def retry_spinner(label: str, seconds: float, console):
     """Async context manager showing a transient spinner during a wait.
 
     Usage::
@@ -148,7 +163,41 @@ def retry_spinner(label: str, seconds: float, console):
     and is transient (disappears on exit). If ``seconds <= 1`` it's a no-op
     (the wait is too short to justify a spinner).
     """
-    raise NotImplementedError
+    import asyncio
+    import itertools
+    from rich.live import Live
+    from rich.text import Text
+
+    if seconds <= 1:
+        yield
+        return
+
+    spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+
+    async def _tick(live, total):
+        waited = 0.0
+        try:
+            while waited < total:
+                await asyncio.sleep(0.1)
+                waited += 0.1
+                remain = max(0.0, total - waited)
+                live.update(Text.from_markup(
+                    f"[yellow]{next(spinner)} 等待 {remain:.1f}s 冷却中…[/yellow]"
+                ))
+        except asyncio.CancelledError:
+            pass
+
+    with Live(Text.from_markup(f"[yellow]{next(spinner)} 等待 {seconds:.1f}s 冷却中…[/yellow]"),
+              console=console, refresh_per_second=8, transient=True) as live:
+        ticker = asyncio.create_task(_tick(live, seconds))
+        try:
+            yield
+        finally:
+            ticker.cancel()
+            try:
+                await ticker
+            except asyncio.CancelledError:
+                pass
 
 
 def error_message(info: ErrorInfo) -> str:
@@ -157,4 +206,6 @@ def error_message(info: ErrorInfo) -> str:
     Used as the agent's return value on terminal failure; the REPL detects
     startswith("❌") and wraps it in a red Panel via Text.from_markup.
     """
-    raise NotImplementedError
+    detail = sanitize_message(info.exc)
+    return (f"❌ [bold red]{info.label}[/bold red]：[red]{info.hint}[/red]\n"
+            f"[dim]{detail}[/dim]")
