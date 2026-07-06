@@ -261,11 +261,3 @@ class EmptyResponsePipeline:
             except Exception:
                 logger.warning("空回复策略 '%s' 异常", s.name, exc_info=True)
         return False
-
-
-# ── 辅助函数 ─────────────────────────────────────────────
-
-def _is_retryable(ctx: RecoveryContext) -> bool:
-    """判断错误是否可重试"""
-    from merco.core.llm.errors import _is_retryable_llm_error
-    return _is_retryable_llm_error(ctx.error)

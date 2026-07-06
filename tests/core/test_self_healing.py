@@ -1,81 +1,102 @@
-"""self_healing 错误分类测试"""
+"""self_healing / errors module tests (updated after _is_retryable_llm_error removal)."""
 import pytest
-from merco.core.llm.errors import _is_retryable_llm_error
+from merco.core.pipeline import RecoveryContext
 
 
-class FakeAPIStatusError(Exception):
-    """模拟 openai.APIStatusError，仅带 _is_retryable_llm_error 用到的属性"""
-    def __init__(self, status_code: int = 0, message: str = ""):
+class _FakeExc(Exception):
+    def __init__(self, msg="err", status_code=None):
+        super().__init__(msg)
         self.status_code = status_code
-        self._message = message
-
-    def __str__(self):
-        return self._message
 
 
-# 注入到 openai 模块，让 _is_retryable_llm_error 的 isinstance 检查通过
-@pytest.fixture(autouse=True)
-def _patch_api_status_error(monkeypatch):
-    import openai
-    monkeypatch.setattr(openai, "APIStatusError", FakeAPIStatusError, raising=False)
+# ── WaitRecovery covers the retryability logic formerly in _is_retryable_llm_error ──
+
+@pytest.mark.asyncio
+async def test_429_is_retryable_via_wait():
+    from merco.core.recovery.wait import WaitRecovery
+    rec = WaitRecovery()
+    ctx = RecoveryContext(error=_FakeExc("rate limit", status_code=429))
+    assert await rec.attempt(ctx) is True
 
 
-def test_retryable_on_429():
-    assert _is_retryable_llm_error(FakeAPIStatusError(429)) is True
-
-
-def test_retryable_on_5xx():
+@pytest.mark.asyncio
+async def test_5xx_is_retryable_via_wait():
+    from merco.core.recovery.wait import WaitRecovery
+    rec = WaitRecovery()
     for code in (500, 502, 503, 504):
-        assert _is_retryable_llm_error(FakeAPIStatusError(code)) is True
+        ctx = RecoveryContext(error=_FakeExc("err", status_code=code))
+        assert await rec.attempt(ctx) is True
 
 
-def test_retryable_on_413():
-    assert _is_retryable_llm_error(FakeAPIStatusError(413)) is True
+@pytest.mark.asyncio
+async def test_413_passes_to_compress_not_wait():
+    from merco.core.recovery.wait import WaitRecovery
+    rec = WaitRecovery()
+    ctx = RecoveryContext(error=_FakeExc("too long", status_code=413))
+    assert await rec.attempt(ctx) is False
+    # compress handles it
+    from merco.context.recovery import ContextCompressRecovery
+    crec = ContextCompressRecovery()
+    ctx2 = RecoveryContext(error=_FakeExc("too long", status_code=413), context_tokens=100)
+    assert await crec.attempt(ctx2) is True
 
 
-def test_not_retryable_on_400():
-    assert _is_retryable_llm_error(FakeAPIStatusError(400)) is False
+@pytest.mark.asyncio
+async def test_normal_exception_gets_backoff():
+    """Non-HTTP exceptions (network errors) get backoff now (no gating)."""
+    from merco.core.recovery.wait import WaitRecovery
+    rec = WaitRecovery()
+    ctx = RecoveryContext(error=ValueError("oops"))
+    assert await rec.attempt(ctx) is True  # unknown → shorter backoff
 
 
-def test_not_retryable_on_401():
-    assert _is_retryable_llm_error(FakeAPIStatusError(401)) is False
+@pytest.mark.asyncio
+async def test_rate_limit_keyword_detected():
+    from merco.core.recovery.wait import WaitRecovery
+    rec = WaitRecovery()
+    ctx = RecoveryContext(error=_FakeExc("rate limit exceeded", status_code=400))
+    assert await rec.attempt(ctx) is True
 
 
-def test_not_retryable_on_normal_exception():
-    assert _is_retryable_llm_error(ValueError("oops")) is False
-
-
-def test_retryable_on_rate_limit_keyword():
-    assert _is_retryable_llm_error(FakeAPIStatusError(400, "rate limit exceeded")) is True
-
-
-def test_retryable_on_context_too_long_keyword():
-    for msg in ("context length too long", "too long for this model",
-                "maximum context exceeded", "reduce the length",
+@pytest.mark.asyncio
+async def test_context_too_long_keyword_passes_to_compress():
+    from merco.core.recovery.wait import WaitRecovery
+    rec = WaitRecovery()
+    for msg in ("context length too long", "maximum context exceeded",
                 "prompt too long, please shorten"):
-        assert _is_retryable_llm_error(FakeAPIStatusError(400, msg)) is True
+        ctx = RecoveryContext(error=_FakeExc(msg, status_code=400))
+        assert await rec.attempt(ctx) is False
 
 
-def test_retryable_on_overloaded_keyword():
-    assert _is_retryable_llm_error(FakeAPIStatusError(503, "server overloaded")) is True
+@pytest.mark.asyncio
+async def test_too_long_and_context_in_body_passes_to_compress():
+    from merco.core.recovery.wait import WaitRecovery
+    rec = WaitRecovery()
+    ctx = RecoveryContext(error=_FakeExc("input too long for context window", status_code=400))
+    assert await rec.attempt(ctx) is False
 
 
-def test_retryable_on_temporarily_unavailable_keyword():
-    assert _is_retryable_llm_error(FakeAPIStatusError(502, "temporarily unavailable")) is True
+@pytest.mark.asyncio
+async def test_temporarily_unavailable_gets_backoff():
+    from merco.core.recovery.wait import WaitRecovery
+    rec = WaitRecovery()
+    ctx = RecoveryContext(error=_FakeExc("temporarily unavailable", status_code=503))
+    assert await rec.attempt(ctx) is True
 
 
-def test_not_retryable_on_irrelevant_400():
-    assert _is_retryable_llm_error(FakeAPIStatusError(400, "invalid model name")) is False
+def test_errors_module_no_longer_exports_is_retryable():
+    import merco.core.llm.errors as errors_mod
+    assert not hasattr(errors_mod, "_is_retryable_llm_error")
+    assert callable(errors_mod.llm_error)
 
 
 def test_llm_errors_module_imports():
-    from merco.core.llm.errors import llm_error, _is_retryable_llm_error
+    from merco.core.llm.errors import llm_error
     assert llm_error.__name__ == "llm_error"
-    assert _is_retryable_llm_error.__name__ == "_is_retryable_llm_error"
 
 
 def test_core_self_healing_does_not_import_openai():
-    """core 不应再 import openai（拆分到 llm/errors.py）"""
+    """core should not import openai (split to llm/error_ui.py)"""
     import inspect
     from merco.core import self_healing
     src = inspect.getsource(self_healing)

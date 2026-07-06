@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from merco.core.pipeline import Recovery, RecoveryContext, _is_retryable
+from merco.core.pipeline import Recovery, RecoveryContext
 
 logger = logging.getLogger("merco.pipeline")
 
@@ -19,8 +19,6 @@ class ToolReduceRecovery(Recovery):
         self.min_tools = min_tools
 
     async def attempt(self, ctx: RecoveryContext) -> bool:
-        if not _is_retryable(ctx):
-            return False
         if ctx.compress_count >= ctx.max_reduce:
             return False
         if ctx.tool_count <= self.min_tools:

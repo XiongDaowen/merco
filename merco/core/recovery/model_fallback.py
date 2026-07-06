@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from merco.core.pipeline import Recovery, RecoveryContext, _is_retryable
+from merco.core.pipeline import Recovery, RecoveryContext
 
 logger = logging.getLogger("merco.pipeline")
 
@@ -19,8 +19,6 @@ class ModelFallbackRecovery(Recovery):
         self.fallback_model = fallback_model
 
     async def attempt(self, ctx: RecoveryContext) -> bool:
-        if not _is_retryable(ctx):
-            return False
         if not self.fallback_model:
             return False
         ctx.switch_model = self.fallback_model
