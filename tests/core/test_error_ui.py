@@ -88,3 +88,9 @@ class TestSanitizeMessage:
         exc = Exception("simple error")
         msg = sanitize_message(exc)
         assert msg == "simple error"
+
+    def test_does_not_redact_word_tokens(self):
+        exc = Exception("This model's maximum context length is 8192 tokens")
+        msg = sanitize_message(exc)
+        assert "tokens" in msg
+        assert "脱敏" not in msg

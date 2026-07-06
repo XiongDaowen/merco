@@ -5,6 +5,7 @@ Zero side effects: no logging, no openai import (duck-typing only).
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import AsyncIterator
 
@@ -103,10 +104,9 @@ def sanitize_message(exc: Exception, max_len: int = 300) -> str:
     """Redact sensitive keywords (api_key/token/secret/authorization/bearer)
     and truncate to max_len characters (appending '…' if truncated)."""
     msg = str(exc)
-    low = msg.lower()
 
     for kw in _SENSITIVE_KEYWORDS:
-        if kw in low:
+        if re.search(r'(?i)\b' + re.escape(kw) + r'\b', msg):
             return "(包含敏感信息，已脱敏)"
 
     if len(msg) > max_len:
