@@ -176,6 +176,7 @@ class StreamingProvider(ResponseProvider):
                     nonlocal_thinking_panel[0] = _build_reasoning_panel(reasoning_buf)
                     live.update(_rebuild_group())
         refresh_task = asyncio.create_task(_refresh_thinking())
+        stream_error: Exception | None = None
 
         try:
             stream = agent.llm.chat_stream(messages, tools=tools)
@@ -256,6 +257,17 @@ class StreamingProvider(ResponseProvider):
                 content_panel.renderable = Markdown(content_buf)
             if reasoning_buf or (content_panel and content_buf.strip()):
                 live.update(_rebuild_group())
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            stream_error = e
+            logger.warning("StreamingProvider API 错误: %s", e, exc_info=True)
+            from merco.core.llm.error_ui import classify_error, build_error_panel
+            info = classify_error(e)
+            nonlocal_thinking_panel[0] = build_error_panel(info)
+            nonlocal_content_panel[0] = content_panel  # preserve partial content
+            live.update(_rebuild_group())
+            await asyncio.sleep(0.15)
         finally:
             if 'refresh_task' in locals():
                 refresh_task.cancel()
@@ -263,16 +275,22 @@ class StreamingProvider(ResponseProvider):
                     await refresh_task
                 except asyncio.CancelledError:
                     pass
+            transient = agent.config.stream_thinking_transient
             if live:
                 live.stop()
-            # When transient=True the Live panel was cleared on stop(),
-            # so print a static copy. When transient=False the Live panel
-            # already remains visible — printing again would duplicate it.
-            if reasoning_buf and agent.config.stream_thinking_transient:
+            if transient and reasoning_buf:
                 console.print(_build_reasoning_panel(reasoning_buf))
-            if content_buf and agent.config.stream_thinking_transient and agent.config.stream_content:
+            if transient and content_buf and agent.config.stream_content:
                 console.print(Panel(Markdown(content_buf), border_style="dim",
                                     title_align="left", padding=(0, 1)))
+            # Error path: print static red Panel if needed, then re-raise
+            if stream_error is not None:
+                from merco.core.llm.error_ui import classify_error, build_error_panel
+                need_static = transient or (not reasoning_buf and not content_buf)
+                if need_static:
+                    console.print(build_error_panel(classify_error(stream_error)))
+                agent._error_displayed_in_stream = True
+                raise stream_error
 
         assembled["reasoning"] = reasoning_buf
         assembled["content"] = content_buf
@@ -320,6 +338,10 @@ class Agent:
         self._tool_calls_count = 0
         self._max_tool_calls = self.config.max_tool_calls
         self._current_prompt = ""
+
+        # Flag set by response providers when they've already displayed an error
+        # panel inline (avoids duplicate Panel print at REPL layer).
+        self._error_displayed_in_stream = False
 
         # ── 可观察性 ──
         from merco.hooks.registry import HookRegistry
@@ -531,6 +553,7 @@ class Agent:
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
         self._current_prompt = prompt
+        self._error_displayed_in_stream = False
 
         # ── 生命周期事件：session.create（首次激活时）──
         await self.hooks.emit("session.create", session_id=self.session.id)
@@ -1121,6 +1144,7 @@ class Agent:
         self.context = ContextManager(max_tokens=self.config.max_input_tokens)
         self._tool_calls_count = 0
         self._current_prompt = ""
+        self._error_displayed_in_stream = False
 
     @staticmethod
     def _get_api_key(provider: str) -> str:
