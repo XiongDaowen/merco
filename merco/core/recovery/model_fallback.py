@@ -1,10 +1,7 @@
 """ModelFallbackRecovery — switches to a fallback model on failure."""
 from __future__ import annotations
 
-import logging
 from merco.core.pipeline import Recovery, RecoveryContext
-
-logger = logging.getLogger("merco.pipeline")
 
 
 class ModelFallbackRecovery(Recovery):

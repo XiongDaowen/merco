@@ -15,8 +15,6 @@ logger = logging.getLogger("merco.pipeline")
 
 # Status codes that are deterministic (wrong config) — fast retry once, then stop.
 SHORT_RETRY_STATUSES = frozenset({401, 403, 404})
-# Status codes where waiting is useless (compression handles them).
-NO_WAIT_STATUSES = frozenset({413})
 
 
 class WaitRecovery(Recovery):
