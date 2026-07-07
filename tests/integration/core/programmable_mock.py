@@ -56,8 +56,6 @@ class ProgrammableLLMClient:
         self._queue: list[Response] = []
         self._sequence_fn: Callable[[int], Response] | None = None
         self._conditions: list[tuple[Callable, Response]] = []
-        self._fallback: list[Response] = []
-        self._call_index = 0
         self.calls: list[dict] = []
 
     def expect(self, responses: list[Response]) -> "ProgrammableLLMClient":
@@ -90,8 +88,6 @@ class ProgrammableLLMClient:
             return self._sequence_fn(idx)
         if self._queue:
             return self._queue.pop(0)
-        if self._fallback:
-            return self._fallback.pop(0)
         raise RuntimeError("ProgrammableLLMClient: no more responses queued")
 
     async def chat(self, messages: list[dict], **kwargs) -> dict:

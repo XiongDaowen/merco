@@ -1,8 +1,6 @@
 """ProgrammableLLMClient 与 Response DSL 单元测试"""
 import pytest
-from tests.integration.core.programmable_mock import Response
-
-from tests.integration.core.programmable_mock import ProgrammableLLMClient
+from tests.integration.core.programmable_mock import ProgrammableLLMClient, Response
 
 
 class TestResponseDSL:
