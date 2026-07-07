@@ -6,7 +6,33 @@ from pathlib import Path
 
 from merco.core.agent import Agent
 from merco.core.config import MercoConfig
+from merco.sandbox.guard import (
+    GuardAction,
+    GuardResult,
+    PermissionPolicy,
+)
 from tests.integration.core.programmable_mock import ProgrammableLLMClient
+
+
+class _FixedActionPolicy(PermissionPolicy):
+    """测试用策略：对指定工具返回固定动作与原因"""
+
+    name = "test_fixed_action"
+
+    def __init__(self, tool_name: str, action: GuardAction, reason: str = ""):
+        self._tool_name = tool_name
+        self._action = action
+        self._reason = reason
+
+    async def check(self, tool_name, arguments):
+        if tool_name != self._tool_name:
+            return None
+        command = arguments.get("command", arguments.get("path", ""))
+        return GuardResult(
+            action=self._action,
+            command=command,
+            reason=self._reason,
+        )
 
 
 @dataclass
@@ -40,6 +66,13 @@ class TestScenario:
                 for tc in msg.get("tool_calls", []) or []:
                     calls.append(tc)
         return calls
+
+    def set_guard_action(self, tool_name: str, action: GuardAction, reason: str = "") -> None:
+        """为测试注入 guard 行为 — 在 pipeline 顶部插入固定动作策略"""
+        self.guard._pipeline._policies.insert(
+            0,
+            _FixedActionPolicy(tool_name, action, reason),
+        )
 
 
 async def build_scenario_agent(llm: ProgrammableLLMClient, tmp_path: Path, monkeypatch) -> Agent:

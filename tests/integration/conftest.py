@@ -28,6 +28,15 @@ async def scenario(
     guard_mw = GuardMiddleware(_isolation_services["guard"])
     agent.tool_registry.use(guard_mw)
 
+    # Agent 默认会拦截 GuardConfirmationRequired 并弹出 stdin 确认；
+    # 测试场景里我们让它直接重新抛出，便于断言。
+    from merco.sandbox.guard import GuardConfirmationRequired
+
+    async def _raise_guard_confirmation(result):
+        raise GuardConfirmationRequired(result)
+
+    monkeypatch.setattr(agent, "_ask_guard_confirmation", _raise_guard_confirmation)
+
     # 将隔离的SkillRegistry注入到Agent
     agent.skill_registry = _isolation_services["skill_registry"]
 

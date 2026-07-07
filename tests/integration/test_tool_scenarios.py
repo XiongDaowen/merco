@@ -1,6 +1,7 @@
 """工具调用集成测试 — 端到端覆盖工具链路"""
 import pytest
 from pathlib import Path
+from merco.sandbox.guard import GuardAction, GuardConfirmationRequired
 from tests.integration.core.programmable_mock import Response
 
 
@@ -86,3 +87,52 @@ class TestToolIntegrationBoundary:
         assert isinstance(result, str) and len(result) > 0
         # 消息链路：用户问题 + 助手回答（至少2条）
         assert len(scenario.messages) >= 2
+
+
+class TestGuardIntegration:
+    """Guard 中间件集成测试 — DENY / ASK / ALLOW"""
+
+    @pytest.mark.asyncio
+    async def test_guard_deny_blocks_tool(self, scenario):
+        """DENY: 工具调用被守卫拒绝，LLM收到错误后调整回答"""
+        scenario.set_guard_action("bash", GuardAction.DENY, reason="测试拒绝")
+
+        scenario.llm.expect([
+            Response.tool_call("bash", {"command": "ls"}),
+            Response.content("操作被拒绝，尝试其他方式"),
+        ])
+
+        result = await scenario.run("列出文件")
+
+        assert "拒绝" in result or "尝试其他方式" in result
+        tool_msg = next(m for m in scenario.messages if m["role"] == "tool")
+        assert "error" in tool_msg["content"]
+        assert "测试拒绝" in tool_msg["content"]
+
+    @pytest.mark.asyncio
+    async def test_guard_ask_triggers_confirmation(self, scenario):
+        """ASK: 守卫要求确认时抛出 GuardConfirmationRequired"""
+        scenario.set_guard_action("bash", GuardAction.ASK, reason="需要确认")
+
+        scenario.llm.expect([
+            Response.tool_call("bash", {"command": "rm -rf /tmp/test"}),
+        ])
+
+        with pytest.raises(GuardConfirmationRequired):
+            await scenario.run("删除测试目录")
+
+    @pytest.mark.asyncio
+    async def test_guard_allow_passes_through(self, scenario, tmp_path):
+        """ALLOW: 守卫放行后工具正常执行，链路完整"""
+        test_file = tmp_path / "ok.txt"
+        test_file.write_text("ok")
+
+        scenario.llm.expect([
+            Response.tool_call("read_file", {"path": str(test_file)}),
+            Response.content("读到了 ok"),
+        ])
+
+        result = await scenario.run("读文件")
+
+        assert "ok" in result
+        assert len(scenario.messages) == 4
