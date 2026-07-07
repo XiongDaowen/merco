@@ -2,6 +2,8 @@
 import pytest
 from tests.integration.core.programmable_mock import Response
 
+from tests.integration.core.programmable_mock import ProgrammableLLMClient
+
 
 class TestResponseDSL:
     def test_content_factory(self):
@@ -34,3 +36,78 @@ class TestResponseDSL:
     def test_delay_default_zero(self):
         r = Response.content("x")
         assert r.delay == 0.0
+
+
+class TestProgrammableLLMClient:
+    @pytest.mark.asyncio
+    async def test_expect_returns_queued_responses(self):
+        client = ProgrammableLLMClient()
+        client.expect([
+            Response.content("first"),
+            Response.content("second"),
+        ])
+
+        r1 = await client.chat(messages=[])
+        r2 = await client.chat(messages=[])
+        assert r1["content"] == "first"
+        assert r2["content"] == "second"
+
+    @pytest.mark.asyncio
+    async def test_expect_sequence_dynamic(self):
+        client = ProgrammableLLMClient()
+        client.expect_sequence(lambda i: Response.content(f"call_{i}"))
+
+        r1 = await client.chat(messages=[])
+        r2 = await client.chat(messages=[])
+        r3 = await client.chat(messages=[])
+        assert r1["content"] == "call_0"
+        assert r2["content"] == "call_1"
+        assert r3["content"] == "call_2"
+
+    @pytest.mark.asyncio
+    async def test_when_condition_routes(self):
+        client = ProgrammableLLMClient()
+        client.when(
+            lambda msgs: "tool" in str(msgs),
+            Response.content("with-tools"),
+        )
+        client.expect([Response.content("default")])
+
+        r1 = await client.chat(messages=[{"role": "user", "content": "use a tool"}])
+        r2 = await client.chat(messages=[{"role": "user", "content": "hello"}])
+        assert r1["content"] == "with-tools"
+        assert r2["content"] == "default"
+
+    @pytest.mark.asyncio
+    async def test_error_response_raises(self):
+        client = ProgrammableLLMClient()
+        client.expect([Response.error(RuntimeError("boom"))])
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await client.chat(messages=[])
+
+    @pytest.mark.asyncio
+    async def test_tool_call_response_format(self):
+        client = ProgrammableLLMClient()
+        client.expect([
+            Response.tool_call("read_file", {"path": "/tmp/x"}),
+        ])
+
+        r = await client.chat(messages=[])
+        assert "tool_calls" in r
+        assert r["tool_calls"][0]["name"] == "read_file"
+
+    @pytest.mark.asyncio
+    async def test_calls_recorded(self):
+        client = ProgrammableLLMClient()
+        client.expect([Response.content("x")])
+
+        await client.chat(messages=[{"role": "user", "content": "hi"}])
+        assert len(client.calls) == 1
+        assert client.calls[0]["messages"][0]["content"] == "hi"
+
+    @pytest.mark.asyncio
+    async def test_empty_queue_raises(self):
+        client = ProgrammableLLMClient()
+        with pytest.raises(RuntimeError, match="no more responses"):
+            await client.chat(messages=[])
