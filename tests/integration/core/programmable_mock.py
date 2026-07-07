@@ -1,8 +1,5 @@
 """可编程 LLM Mock + Response DSL"""
 from __future__ import annotations
-import asyncio
-from dataclasses import dataclass, field
-from typing import Callable
 
 
 _counter = [0]
