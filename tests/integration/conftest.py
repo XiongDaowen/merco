@@ -23,9 +23,10 @@ async def scenario(
     """集成测试场景入口"""
     agent = await build_scenario_agent(llm=programmable_llm, tmp_path=tmp_path, monkeypatch=monkeypatch)
 
-    # 将隔离的Guard实例注入到Agent的ToolRegistry的中间件
-    # 确保测试中的Guard配置生效
-    agent.tool_registry.use(_isolation_services["guard"])
+    # 将隔离的Guard实例通过GuardMiddleware包装后注入中间件链
+    from merco.tools.middleware import GuardMiddleware
+    guard_mw = GuardMiddleware(_isolation_services["guard"])
+    agent.tool_registry.use(guard_mw)
 
     # 将隔离的SkillRegistry注入到Agent
     agent.skill_registry = _isolation_services["skill_registry"]
