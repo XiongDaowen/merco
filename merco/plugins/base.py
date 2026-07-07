@@ -74,6 +74,7 @@ class PluginContext:
         skill_registry: "SkillRegistry" = None,
         mcp_manager: "MCPServerManager" = None,
         scheduler: "CronScheduler" = None,
+        metadata: dict = None,
     ):
         self.hooks = hooks
         self.tool_registry = tool_registry
@@ -94,6 +95,7 @@ class PluginContext:
         self.skill_registry = skill_registry
         self.mcp_manager = mcp_manager
         self.scheduler = scheduler
+        self.metadata = metadata if metadata is not None else {}
 
     def on(self, event: str, handler: "Callable") -> None:
         """Subscribe to event (convenience method)"""

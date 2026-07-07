@@ -17,6 +17,7 @@ class PluginManager:
         self._ctx = ctx
         self._plugins: dict[str, "Plugin"] = {}
         self._active: set[str] = set()
+        self._ever_activated: set[str] = set()
 
     def register(self, plugin: "Plugin") -> None:
         """Register a plugin instance"""
@@ -31,7 +32,9 @@ class PluginManager:
             logger.warning("Plugin '%s' not registered", name)
             return
         try:
-            await plugin.activate(self._ctx)
+            if name not in self._ever_activated:
+                await plugin.activate(self._ctx)
+                self._ever_activated.add(name)
             self._active.add(name)
             await self._ctx.hooks.emit("plugin.activated", plugin_name=name, version=plugin.version)
         except Exception as e:
