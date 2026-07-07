@@ -2,7 +2,18 @@
 import pytest
 from pathlib import Path
 from merco.sandbox.guard import GuardAction, GuardConfirmationRequired
+from merco.tools.base import BaseTool
 from tests.integration.core.programmable_mock import Response
+
+
+class BoomTool(BaseTool):
+    name = "boom"
+    description = "throws"
+    toolset = "test"
+    parameters = {"type": "object", "properties": {}}
+
+    async def execute(self, **kwargs):
+        raise RuntimeError("internal failure")
 
 
 class TestToolCallChain:
@@ -136,3 +147,105 @@ class TestGuardIntegration:
 
         assert "ok" in result
         assert len(scenario.messages) == 4
+
+
+class TestToolErrorHandling:
+    @pytest.mark.asyncio
+    async def test_tool_not_in_registry(self, scenario):
+        """LLM 调用未注册的工具 → 被过滤为幻觉 → fallback 到预设 content"""
+        scenario.llm.expect([
+            Response.tool_call("nonexistent_tool", {}),
+            Response.content("该工具不可用，我换个方式"),
+        ])
+
+        result = await scenario.run("调用不存在的工具")
+
+        assert isinstance(result, str) and len(result) > 0
+        # 不存在的工具被视为幻觉，valid_calls 为空时回退 content
+        assert len(scenario.messages) >= 2
+
+    @pytest.mark.asyncio
+    async def test_tool_execution_exception(self, scenario):
+        scenario.agent.tool_registry.register(BoomTool())
+
+        scenario.llm.expect([
+            Response.tool_call("boom", {}),
+            Response.content("抱歉工具失败了"),
+        ])
+
+        result = await scenario.run("调一下 boom")
+
+        assert "失败" in result
+        tool_msg = next(m for m in scenario.messages if m["role"] == "tool")
+        assert "internal failure" in tool_msg["content"]
+
+
+class TestBuiltinToolsE2E:
+    @pytest.fixture(autouse=True)
+    def _use_real_tools(self, scenario):
+        """e2e 测试用真实工具替换 mock 工具"""
+        from merco.tools.file_tools import ReadFile, WriteFile
+        from merco.tools.bash_tools import BashTool
+        from merco.tools.edit import EditFile
+
+        # 注销 mock 工具
+        for name in ("read_file", "write_file", "bash", "edit_file"):
+            scenario.agent.tool_registry.unregister(name)
+
+        # 注册真实工具
+        scenario.agent.tool_registry.register(ReadFile())
+        scenario.agent.tool_registry.register(WriteFile())
+        scenario.agent.tool_registry.register(BashTool())
+        scenario.agent.tool_registry.register(EditFile())
+
+    @pytest.mark.asyncio
+    async def test_write_file_creates_file(self, scenario):
+        target = scenario.tmp_path / "new.txt"
+        scenario.llm.expect([
+            Response.tool_call("write_file", {"path": str(target), "content": "hello"}),
+            Response.content("已创建文件"),
+        ])
+
+        await scenario.run("写一个新文件")
+
+        assert target.exists()
+        assert target.read_text() == "hello"
+
+    @pytest.mark.asyncio
+    async def test_edit_file_modifies_content(self, scenario, monkeypatch):
+        target = scenario.tmp_path / "code.py"
+        target.write_text("def foo():\n    return 1\n")
+
+        # auto-confirm 跳过交互式确认（confirm_edit 是 async 的）
+        async def _auto_confirm(*a, **kw):
+            return True
+
+        monkeypatch.setattr("merco.tools.middleware.confirm_edit", _auto_confirm)
+
+        scenario.llm.expect([
+            Response.tool_call("edit_file", {
+                "path": str(target),
+                "search": "return 1",
+                "replace": "return 42",
+            }),
+            Response.content("已修改"),
+        ])
+
+        await scenario.run("把 return 1 改成 return 42")
+
+        content = target.read_text()
+        assert "return 42" in content
+        assert "return 1" not in content
+
+    @pytest.mark.asyncio
+    async def test_bash_executes_real_command(self, scenario):
+        out_file = scenario.tmp_path / "out.txt"
+        scenario.llm.expect([
+            Response.tool_call("bash", {"command": f"echo test > {out_file}"}),
+            Response.content("命令已执行"),
+        ])
+
+        await scenario.run("写一个测试文件")
+
+        assert out_file.exists()
+        assert out_file.read_text().strip() == "test"
