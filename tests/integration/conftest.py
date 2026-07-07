@@ -39,6 +39,10 @@ async def scenario(
 
     # 将隔离的SkillRegistry注入到Agent
     agent.skill_registry = _isolation_services["skill_registry"]
+    # 同步更新 SkillViewTool 的 _skill_registry，确保 check()/describe()/execute() 使用隔离实例
+    skill_tool = agent.tool_registry.get("skill_view")
+    if skill_tool is not None and hasattr(skill_tool, "set_skill_registry"):
+        skill_tool.set_skill_registry(agent.skill_registry)
 
     return TestScenario(
         agent=agent,
