@@ -56,3 +56,9 @@ references/
 HERMES.md
 config/openmercury-config.json.example
 .claude/
+
+# Coverage
+.coverage
+
+# Superpowers
+.superpowers/
