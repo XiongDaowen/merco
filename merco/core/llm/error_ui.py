@@ -103,11 +103,26 @@ def classify_error(exc: Exception) -> ErrorInfo:
 
 def sanitize_message(exc: Exception, max_len: int = 300) -> str:
     """Redact sensitive keywords (api_key/token/secret/authorization/bearer)
-    and truncate to max_len characters (appending '…' if truncated)."""
+    and truncate to max_len characters (appending '…' if truncated).
+
+    兼容多种写法：
+    - "api_key"、"api-key"、"API key"、"API Key"（下划线/连字符/空格）
+    - "access_token"、"bearer_token"（下划线两侧都是词字母时也能命中）
+    """
     msg = str(exc)
 
     for kw in _SENSITIVE_KEYWORDS:
-        if re.search(r'(?i)\b' + re.escape(kw) + r'\b', msg):
+        # 兼容 "api_key" / "api-key" / "API key" 等写法：
+        # 把下划线视为可选空白（[ _-]?）。
+        # 当前关键词仅含字母与下划线，无需 re.escape；
+        # 如未来关键词含正则元字符，请改用 \Q...\E 包裹。
+        #
+        # 边界规则：用 (?<![a-zA-Z]) / (?![a-zA-Z]) 替代 \b。
+        #   \b 会在 _ 处产生边界 → "access_token" 中 token 不会被匹配。
+        #   字母边界不会在 _ 处产生边界 → "access_token" 命中；
+        #   但 "tokens"（s 是字母）不会命中，因为 token 右邻 s 是字母。
+        pattern_spaced = kw.replace("_", "[ _-]?")
+        if re.search(rf'(?i)(?<![a-zA-Z]){pattern_spaced}(?![a-zA-Z])', msg):
             return "(包含敏感信息，已脱敏)"
 
     if len(msg) > max_len:

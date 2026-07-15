@@ -213,13 +213,19 @@ class ThinkTagStrategy(ThinkingStrategy):
                             result["reasoning"] = thinking
                         result["content"] = before_open + after_close
                         return result
-                    else:
-                        # think 块跨 chunk，进入状态机
-                        self._in_thinking = True
-                        self._open_tag = ot
-                        self._close_tag = ct
-                        result: dict = {"reasoning": rest, "content": before_open}
-                        return result
+                    # 开标签命中但闭标签不匹配：尝试下一个标签对
+                    # （THINK_TAG_PAIRS 中可能有同开标签+不同闭标签，
+                    # 例如 ("<think>", "[/think]") 与 ("<think>", "</think>")）
+                    # 如果所有标签对都不匹配，再走跨 chunk 分支
+            # 全部标签对都不匹配：进入跨 chunk 状态机，等待闭标签
+            for ot, ct in THINK_TAG_PAIRS:
+                if ot in content:
+                    before_open, rest = content.split(ot, 1)
+                    self._in_thinking = True
+                    self._open_tag = ot
+                    self._close_tag = ct
+                    result: dict = {"reasoning": rest, "content": before_open}
+                    return result
             return {"content": content}
 
     def extract_from_message(self, message: Any) -> dict | None:

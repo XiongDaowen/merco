@@ -141,8 +141,9 @@ def revert(session_id: str, snapshot_index: int | None = None) -> list[dict]:
             })
 
     if snapshot_index is None:
-        # 全部撤销后删除会话文件
-        _session_path(session_id).unlink(missing_ok=True)
+        # 全部撤销后删除会话文件（仅当所有撤销都成功；失败时保留以便重试）
+        if all(r["reverted"] for r in results):
+            _session_path(session_id).unlink(missing_ok=True)
 
     return results
 
