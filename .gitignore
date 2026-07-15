@@ -62,3 +62,4 @@ config/openmercury-config.json.example
 
 # Superpowers
 .superpowers/
+docs/superpowers/plans/
