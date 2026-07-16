@@ -322,6 +322,52 @@ class PromptArea:
 
 # ── REPL 交互循环 ────────────────────────────────────────────────────────
 
+async def _run_one_turn(agent, prompt_area, driver, handle_command, current_task_ref, console_obj=None):
+    """处理一轮 REPL：渲染 → 读输入 → 命令分发 → 跑 agent → 异常分支。
+
+    返回:
+      "continue"   — 继续读下一行
+      "exit"       — 用户要求退出（/exit）
+      "back_input" — 处理完异常，回到读输入
+    """
+    c = console_obj if console_obj is not None else console
+
+    pre_text, prompt = prompt_area.render(agent)
+    c.print(pre_text)
+
+    user_input = (await driver.get_input(prompt)).strip()
+
+    if not user_input:
+        return "continue"
+
+    if user_input.startswith("/"):
+        if await handle_command(user_input, agent):
+            return "continue"
+        else:
+            return "exit"
+
+    c.rule("[bold]Agent[/bold]", style="dim")
+    try:
+        current_task_ref[0] = asyncio.current_task()
+        response = await agent.run(user_input)
+        current_task_ref[0] = None
+    except asyncio.CancelledError:
+        current_task_ref[0] = None
+        c.rule(style="dim")
+        c.print("[dim]操作已取消[/dim]")
+        return "back_input"
+    except Exception as e:
+        current_task_ref[0] = None
+        c.print(f"[red]错误: {e}[/red]")
+        return "back_input"
+
+    # 只在响应未被流式显示时打印
+    if not (agent.config.streaming and agent.config.stream_content):
+        c.print(Panel(Markdown(response), border_style="dim"))
+    c.rule(style="dim")
+    return "continue"
+
+
 def run_repl(agent, dashboard=None, config_source=""):
     import termios
 
@@ -378,51 +424,6 @@ def run_repl(agent, dashboard=None, config_source=""):
         .use(CancelTaskStrategy())
         .use(ClearInputStrategy(_clear_input_buffer))
         .use(ExitWithHooksStrategy(_exit_gracefully)))
-
-    async def _run_one_turn(agent, prompt_area, driver, handle_command, current_task_ref, console_obj=None):
-        """处理一轮 REPL：渲染 → 读输入 → 命令分发 → 跑 agent → 异常分支。
-
-        返回:
-          "continue"   — 继续读下一行
-          "exit"       — 用户要求退出（/exit）
-          "back_input" — 处理完异常，回到读输入
-        """
-        c = console_obj if console_obj is not None else console
-
-        pre_text, prompt = prompt_area.render(agent)
-        c.print(pre_text)
-
-        user_input = (await driver.get_input(prompt)).strip()
-
-        if not user_input:
-            return "continue"
-
-        if user_input.startswith("/"):
-            if await handle_command(user_input, agent):
-                return "continue"
-            else:
-                return "exit"
-
-        c.rule("[bold]Agent[/bold]", style="dim")
-        try:
-            current_task_ref[0] = asyncio.current_task()
-            response = await agent.run(user_input)
-            current_task_ref[0] = None
-        except asyncio.CancelledError:
-            current_task_ref[0] = None
-            c.rule(style="dim")
-            c.print("[dim]操作已取消[/dim]")
-            return "back_input"
-        except Exception as e:
-            current_task_ref[0] = None
-            c.print(f"[red]错误: {e}[/red]")
-            return "back_input"
-
-        # 只在响应未被流式显示时打印
-        if not (agent.config.streaming and agent.config.stream_content):
-            c.print(Panel(Markdown(response), border_style="dim"))
-        c.rule(style="dim")
-        return "continue"
 
     async def repl():
         loop = asyncio.get_running_loop()
