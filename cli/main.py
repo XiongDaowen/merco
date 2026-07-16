@@ -379,17 +379,63 @@ def run_repl(agent, dashboard=None, config_source=""):
         .use(ClearInputStrategy(_clear_input_buffer))
         .use(ExitWithHooksStrategy(_exit_gracefully)))
 
+    async def _run_one_turn(agent, prompt_area, driver, handle_command, current_task_ref, console_obj=None):
+        """处理一轮 REPL：渲染 → 读输入 → 命令分发 → 跑 agent → 异常分支。
+
+        返回:
+          "continue"   — 继续读下一行
+          "exit"       — 用户要求退出（/exit）
+          "back_input" — 处理完异常，回到读输入
+        """
+        c = console_obj if console_obj is not None else console
+
+        pre_text, prompt = prompt_area.render(agent)
+        c.print(pre_text)
+
+        user_input = (await driver.get_input(prompt)).strip()
+
+        if not user_input:
+            return "continue"
+
+        if user_input.startswith("/"):
+            if await handle_command(user_input, agent):
+                return "continue"
+            else:
+                return "exit"
+
+        c.rule("[bold]Agent[/bold]", style="dim")
+        try:
+            current_task_ref[0] = asyncio.current_task()
+            response = await agent.run(user_input)
+            current_task_ref[0] = None
+        except asyncio.CancelledError:
+            current_task_ref[0] = None
+            c.rule(style="dim")
+            c.print("[dim]操作已取消[/dim]")
+            return "back_input"
+        except Exception as e:
+            current_task_ref[0] = None
+            c.print(f"[red]错误: {e}[/red]")
+            return "back_input"
+
+        # 只在响应未被流式显示时打印
+        if not (agent.config.streaming and agent.config.stream_content):
+            c.print(Panel(Markdown(response), border_style="dim"))
+        c.rule(style="dim")
+        return "continue"
+
     async def repl():
         loop = asyncio.get_running_loop()
-        current_task: asyncio.Task | None = None
+        current_task_ref = [None]  # mutable ref shared with handle_interrupt and _run_one_turn
         exit_count = 0
         exit_timer: asyncio.Task | None = None
 
         def handle_interrupt():
             nonlocal exit_count, exit_timer
+            cur = current_task_ref[0]
             ctx = InterruptContext(
-                state=InterruptState.AGENT_RUNNING if current_task and not current_task.done() else InterruptState.IDLE,
-                task=current_task,
+                state=InterruptState.AGENT_RUNNING if cur and not cur.done() else InterruptState.IDLE,
+                task=cur,
                 exit_count=exit_count
             )
             interrupt_pipeline.process_sync(ctx)
@@ -422,40 +468,22 @@ def run_repl(agent, dashboard=None, config_source=""):
 
         try:
             while True:
+                prompt_area = (PromptArea()
+                    .use(ContextBar()))
+
+                # 重新注册信号处理器（prompt_toolkit 可能已清除）
+                for sig in (signal.SIGINT, signal.SIGTERM):
+                    try:
+                        loop.remove_signal_handler(sig)
+                    except (NotImplementedError, RuntimeError):
+                        pass
+                    loop.add_signal_handler(sig, handle_interrupt)
+
                 try:
-                    prompt_area = (PromptArea()
-                        .use(ContextBar()))
-                    pre_text, prompt = prompt_area.render(agent)
-                    console.print(pre_text)
-                    user_input = (await driver.get_input(prompt)).strip()
-
-                    # 重新注册信号处理器（prompt_toolkit 可能已清除）
-                    for sig in (signal.SIGINT, signal.SIGTERM):
-                        try:
-                            loop.remove_signal_handler(sig)
-                        except (NotImplementedError, RuntimeError):
-                            pass
-                        loop.add_signal_handler(sig, handle_interrupt)
-
-                    if not user_input:
-                        continue
-
-                    if user_input.startswith("/"):
-                        if await handle_command(user_input, agent):
-                            continue
-                        else:
-                            break
-
-                    console.rule("[bold]Agent[/bold]", style="dim")
-                    current_task = asyncio.current_task()
-                    response = await agent.run(user_input)
-                    current_task = None
-
-                    # 只在响应未被流式显示时打印（需要 streaming=True 且 stream_content=True 才会流式显示）
-                    if not (agent.config.streaming and agent.config.stream_content):
-                        console.print(Panel(Markdown(response), border_style="dim"))
-                    console.rule(style="dim")
-
+                    result = await _run_one_turn(
+                        agent, prompt_area, driver, handle_command,
+                        current_task_ref, console_obj=console,
+                    )
                 except InputInterrupt:
                     # 通过管线处理退出逻辑
                     ctx = InterruptContext(
@@ -464,7 +492,6 @@ def run_repl(agent, dashboard=None, config_source=""):
                     )
                     interrupt_pipeline.process_sync(ctx)
                     if ctx.handled:
-                        # 已处理（exit_count=1 时会调用 on_exit）
                         pass
                     elif ctx.exit_count > exit_count:
                         exit_count = ctx.exit_count
@@ -473,21 +500,16 @@ def run_repl(agent, dashboard=None, config_source=""):
                             exit_timer.cancel()
                         exit_timer = asyncio.create_task(_reset_exit_count())
                     continue
-                except asyncio.CancelledError:
-                    console.rule(style="dim")
-                    console.print("[dim]操作已取消[/dim]")
-                    current_task = None  # 重置，等待下次 Agent 运行时重新设置
-                    continue  # skip run_in_executor, go back to input
-
                 except EOFError:
                     console.print("\n[dim]再见！[/dim]")
                     break
                 except KeyboardInterrupt:
                     console.print("\n[dim]再见！[/dim]")
                     break
-                except Exception as e:
-                    current_task = None
-                    console.print(f"[red]错误: {e}[/red]")
+
+                if result == "exit":
+                    break
+                # "continue" / "back_input" 都回到循环读下一行
         finally:
             for sig in (signal.SIGINT, signal.SIGTERM):
                 try:
