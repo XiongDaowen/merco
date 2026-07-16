@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock
 
-from cli.main import _run_one_turn, PromptArea, ContextBar
+from cli.main import _run_one_turn, PromptArea
 from tests.cli.conftest import make_fake_agent
 
 
