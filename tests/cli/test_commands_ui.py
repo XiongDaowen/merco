@@ -11,7 +11,7 @@ from tests.cli.conftest import make_fake_agent
 @pytest.mark.asyncio
 async def test_help_renders_panel_with_help_text(capture_console):
     """/help 渲染 Panel 含帮助文本；Panel 渲染到 markup foo 对象，文本用 export_text 验证"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     await commands.cmd_help(make_fake_agent(), "")
     text = capture.export_text()
     assert "帮助" in text
@@ -21,7 +21,7 @@ async def test_help_renders_panel_with_help_text(capture_console):
 @pytest.mark.asyncio
 async def test_model_command_shows_provider_and_model(capture_console):
     """/model 显示 provider/model — 直接 markup 字符串，不含 Panel"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     await commands.cmd_model(make_fake_agent(), "")
     text = buf.getvalue()
     assert "当前模型" in text
@@ -32,7 +32,7 @@ async def test_model_command_shows_provider_and_model(capture_console):
 @pytest.mark.asyncio
 async def test_context_command_renders_bar_and_threshold(capture_console):
     """/context 输出进度条和阈值"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     agent.get_context_stats = MagicMock(return_value={
         "ratio": 0.3, "threshold": 0.8, "current": 300, "max": 1000,
@@ -48,7 +48,7 @@ async def test_context_command_renders_bar_and_threshold(capture_console):
 @pytest.mark.asyncio
 async def test_context_command_shows_estimate_label(capture_console):
     """is_estimate=True 时显示'是'"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     agent.get_context_stats = MagicMock(return_value={
         "ratio": 0.0, "threshold": 0.8, "current": 0, "max": 1000,
@@ -64,7 +64,7 @@ async def test_context_command_shows_estimate_label(capture_console):
 @pytest.mark.asyncio
 async def test_tools_no_tools_shows_message(capture_console):
     """/tools 0 工具时显示'无可用工具'"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     agent.tool_registry = None
     await commands.cmd_tools(agent, "")
@@ -75,7 +75,7 @@ async def test_tools_no_tools_shows_message(capture_console):
 @pytest.mark.asyncio
 async def test_tools_lists_builtin_tools(capture_console):
     """/tools 列出内置工具"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     registry = MagicMock()
     t1 = MagicMock()
@@ -100,7 +100,7 @@ async def test_tools_lists_builtin_tools(capture_console):
 @pytest.mark.asyncio
 async def test_tools_lists_mcp_tools_with_prefix(capture_console):
     """/tools 显示 MCP 工具，前缀 mcp:xxx"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     registry = MagicMock()
     t = MagicMock()
@@ -119,7 +119,7 @@ async def test_tools_lists_mcp_tools_with_prefix(capture_console):
 @pytest.mark.asyncio
 async def test_tools_skips_inactive(capture_console):
     """/tools 不显示 check()=False 的工具"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     registry = MagicMock()
     t_active = MagicMock()
@@ -145,7 +145,7 @@ async def test_tools_skips_inactive(capture_console):
 @pytest.mark.asyncio
 async def test_report_renders_session_report_panel(capture_console):
     """/report 渲染 Session Report Panel"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     await commands.cmd_report(make_fake_agent(), "")
     text = capture.export_text()
     assert "📊 Session Report" in text
@@ -155,7 +155,7 @@ async def test_report_renders_session_report_panel(capture_console):
 @pytest.mark.asyncio
 async def test_report_reset_clears_and_shows_dim_message(capture_console):
     """/report reset 显示[dim]统计数据已清零[/dim] — 用 markup 验证 dim 标签"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     await commands.cmd_report(agent, "reset")
     assert "[dim]统计数据已清零[/dim]" in capture.get_markup()
@@ -165,7 +165,7 @@ async def test_report_reset_clears_and_shows_dim_message(capture_console):
 @pytest.mark.asyncio
 async def test_reload_mcp_not_initialized(capture_console):
     """/reload-mcp 在 mcp_manager 缺失时显示提示并 return True"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     del agent.mcp_manager  # MagicMock auto-creates attr; force removal
     result = await commands.cmd_reload_mcp(agent, "")
@@ -176,7 +176,7 @@ async def test_reload_mcp_not_initialized(capture_console):
 @pytest.mark.asyncio
 async def test_reload_mcp_success_shows_server_count(capture_console):
     """/reload-mcp 成功时显示 server 数"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     mcp = MagicMock()
     mcp.reload = AsyncMock()
@@ -195,7 +195,7 @@ async def test_reload_mcp_success_shows_server_count(capture_console):
 @pytest.mark.asyncio
 async def test_mcp_status_not_initialized(capture_console):
     """/mcp-status 在 mcp_manager 缺失时显示提示"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     del agent.mcp_manager
     await commands.cmd_mcp_status(agent, "")
@@ -205,7 +205,7 @@ async def test_mcp_status_not_initialized(capture_console):
 @pytest.mark.asyncio
 async def test_mcp_status_empty(capture_console):
     """/mcp-status 无连接服务器时显示提示"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     agent.mcp_manager.status = MagicMock(return_value={})
     await commands.cmd_mcp_status(agent, "")
@@ -215,7 +215,7 @@ async def test_mcp_status_empty(capture_console):
 @pytest.mark.asyncio
 async def test_mcp_status_lists_with_icon(capture_console):
     """/mcp-status 列出服务器，🟢 / 🔴 按 connected 状态切换"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     agent.mcp_manager.status = MagicMock(return_value={
         "ok": {"connected": True, "tools_count": 5},
@@ -233,7 +233,7 @@ async def test_mcp_status_lists_with_icon(capture_console):
 @pytest.mark.asyncio
 async def test_sessions_empty(capture_console):
     """/sessions 无历史时 [dim]无历史会话[/dim]"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     agent._session_store.list_sessions = MagicMock(return_value=[])
     await commands.cmd_sessions(agent, "")
@@ -243,7 +243,7 @@ async def test_sessions_empty(capture_console):
 @pytest.mark.asyncio
 async def test_sessions_lists_with_index_and_marker(capture_console):
     """/sessions 列出历史，当前会话标记 ← 当前"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     agent._session_store.list_sessions = MagicMock(return_value=[
         {"id": "abc", "title": "历史 1", "message_count": 5, "updated_at": "2026-07-16T10:00:00"},
@@ -260,7 +260,7 @@ async def test_sessions_lists_with_index_and_marker(capture_console):
 @pytest.mark.asyncio
 async def test_sessions_switch_invalid_index(capture_console):
     """/sessions 999 显示'无效的会话序号'红字"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     agent._session_store.list_sessions = MagicMock(return_value=[
         {"id": "abc", "title": "a", "message_count": 0, "updated_at": "2026-07-16T10:00:00"},
@@ -272,7 +272,7 @@ async def test_sessions_switch_invalid_index(capture_console):
 @pytest.mark.asyncio
 async def test_sessions_switch_same_session(capture_console):
     """/sessions 切到当前会话显示[dim]已经是当前会话[/dim]"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     agent = make_fake_agent()
     agent._session_store.list_sessions = MagicMock(return_value=[
         {"id": "test-session-id", "title": "测试会话", "message_count": 3, "updated_at": "2026-07-16T11:00:00"},
@@ -286,7 +286,7 @@ async def test_sessions_switch_same_session(capture_console):
 @pytest.mark.asyncio
 async def test_exit_command_returns_false_and_prints_goodbye(capture_console):
     """/exit 返回 False 以终止 REPL，[dim]再见！[/dim]"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     result = await commands.cmd_exit(make_fake_agent(), "")
     assert "[dim]再见！[/dim]" in capture.get_markup()
     assert result is False
@@ -295,7 +295,7 @@ async def test_exit_command_returns_false_and_prints_goodbye(capture_console):
 @pytest.mark.asyncio
 async def test_fork_success_shows_green(capture_console):
     """/fork 成功显示 green 提示 使用 patch 接管 Session.fork"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     from unittest.mock import patch
     from merco.core.session import Session
 
@@ -313,7 +313,7 @@ async def test_fork_success_shows_green(capture_console):
 @pytest.mark.asyncio
 async def test_fork_failure_shows_red(capture_console):
     """/fork 失败显示 red 提示"""
-    capture, buf, markup = capture_console
+    capture, buf = capture_console
     from unittest.mock import patch
     from merco.core.session import Session
 

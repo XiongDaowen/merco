@@ -28,8 +28,9 @@ def capture_console(monkeypatch):
     """替换 cli.main 和 cli.commands 的全局 console，同时捕获 ANSI 输出和原始 markup。
 
     Returns:
-        (_CaptureConsole, io.StringIO, str):
-            (capture 对象, ANSI 内容缓冲, get_markup() 返回的原始 markup 字符串)
+        (_CaptureConsole, io.StringIO):
+            (capture 对象, ANSI 内容缓冲)
+            — capture 提供 get_markup() 方法，返回 print() 接收到的原始 markup 文本
     """
     from cli import main, commands
 
@@ -42,7 +43,7 @@ def capture_console(monkeypatch):
     )
     monkeypatch.setattr(main, "console", capture)
     monkeypatch.setattr(commands, "console", capture)
-    return capture, buf, capture.get_markup()
+    return capture, buf
 
 
 def make_fake_agent(
