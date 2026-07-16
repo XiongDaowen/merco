@@ -1,6 +1,5 @@
 """CLI 测试共享 fixture — capture_console / fake_agent"""
 import io
-import asyncio
 from unittest.mock import MagicMock, AsyncMock
 
 import pytest
