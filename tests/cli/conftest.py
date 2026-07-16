@@ -6,17 +6,35 @@ import pytest
 from rich.console import Console
 
 
+class _CaptureConsole(Console):
+    """Console 子类：截获 print() 的原始 markup 输入，同时写入另一 buffer。"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._markup_buf = io.StringIO()
+
+    def print(self, *args, **kwargs):
+        for a in args:
+            self._markup_buf.write(str(a))
+        return super().print(*args, **kwargs)
+
+    def get_markup(self) -> str:
+        """返回 print() 接收到的原始 markup 文本。"""
+        return self._markup_buf.getvalue()
+
+
 @pytest.fixture
 def capture_console(monkeypatch):
-    """替换 cli.main 和 cli.commands 的全局 console，捕获所有输出。
+    """替换 cli.main 和 cli.commands 的全局 console，同时捕获 ANSI 输出和原始 markup。
 
     Returns:
-        (Console, io.StringIO): (捕获用 console 对象, 内容缓冲)
+        (_CaptureConsole, io.StringIO, str):
+            (capture 对象, ANSI 内容缓冲, get_markup() 返回的原始 markup 字符串)
     """
     from cli import main, commands
 
     buf = io.StringIO()
-    capture = Console(
+    capture = _CaptureConsole(
         file=buf,
         force_terminal=True,
         width=120,
@@ -24,7 +42,7 @@ def capture_console(monkeypatch):
     )
     monkeypatch.setattr(main, "console", capture)
     monkeypatch.setattr(commands, "console", capture)
-    return capture, buf
+    return capture, buf, capture.get_markup()
 
 
 def make_fake_agent(
