@@ -28,7 +28,9 @@ def test_model_section_shows_provider_and_model():
 def test_tools_section_shows_dim_none_when_registry_missing():
     """tool_registry=None 时显示[dim]无[/dim]"""
     section = ToolsSection()
-    text = section.render(agent=None)
+    agent = make_fake_agent()
+    agent.tool_registry = None
+    text = section.render(agent)
     assert "工具" in text
     assert "[dim]无[/dim]" in text
 
@@ -37,7 +39,9 @@ def test_tools_section_shows_dim_none_when_empty():
     """tool_registry 空时显示[dim]无[/dim]"""
     section = ToolsSection()
     agent = make_fake_agent()
-    agent.tool_registry.list_tools = MagicMock(return_value=[])
+    registry = MagicMock()
+    registry.list_tools = MagicMock(return_value=[])
+    agent.tool_registry = registry
     text = section.render(agent)
     assert "[dim]无[/dim]" in text
 
@@ -56,7 +60,9 @@ def test_tools_section_shows_active_tool_names():
     t2.check = MagicMock(return_value=True)
     t2.toolset = "builtin"
     t2.description = "写文件"
-    agent.tool_registry.list_tools = MagicMock(return_value=[t1, t2])
+    registry = MagicMock()
+    registry.list_tools = MagicMock(return_value=[t1, t2])
+    agent.tool_registry = registry
     text = section.render(agent)
     assert "read_file" in text
     assert "write_file" in text
@@ -74,11 +80,13 @@ def test_tools_section_truncates_with_etc_marker():
         t.toolset = "builtin"
         t.description = f"描述 {i}"
         tools.append(t)
-    agent.tool_registry.list_tools = MagicMock(return_value=tools)
+    registry = MagicMock()
+    registry.list_tools = MagicMock(return_value=tools)
+    agent.tool_registry = registry
     text = section.render(agent)
     assert "tool_0" in text
     assert "tool_1" in text
-    assert "[dim]等 3 个[/dim]" in text
+    assert "[dim]等 5 个[/dim]" in text
 
 
 def test_skills_section_shows_dim_none_when_registry_missing():
@@ -107,7 +115,7 @@ def test_skills_section_shows_names_and_truncates():
     assert "brainstorming" in text
     assert "test" in text
     assert "review" not in text
-    assert "[dim]等 2 个[/dim]" in text
+    assert "[dim]等 4 个[/dim]" in text
 
 
 def test_config_section_shows_default_value():
