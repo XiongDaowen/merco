@@ -2,7 +2,7 @@
 from unittest.mock import MagicMock
 
 from cli.main import (
-    PromptArea, ContextBar, PromptDecorator,
+    PromptArea, ContextBar,
 )
 from tests.cli.conftest import make_fake_agent
 
