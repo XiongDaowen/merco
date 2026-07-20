@@ -80,7 +80,14 @@ def test_get_help_text(fresh_registry):
     assert "退出程序" in text
 
 
-def test_module_singleton():
-    """模块级 cmd_registry 是 CommandRegistry 实例"""
+def test_module_singleton(monkeypatch):
+    """模块级 cmd_registry 是 CommandRegistry 实例，且注册表可通过 monkeypatch 重置为干净状态。
+
+    注：'空' 不是单例的不变性质——其他测试模块（如 test_commands_ui.py）import cli.commands
+    会触发所有 @cmd_registry.register 装饰器，污染全局注册表。本测试用 monkeypatch 临时清空
+    以验证注册表确实可以是空状态（验证类型而非具体数量）。
+    """
+    # 临时清空注册表（不验证 len == 0，因为其他测试可能先 import cli.commands）
+    monkeypatch.setattr(cmd_registry, "_commands", {})
     assert isinstance(cmd_registry, CommandRegistry)
     assert len(cmd_registry) == 0
