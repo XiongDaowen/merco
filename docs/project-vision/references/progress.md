@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-06-29
+> 最后更新: 2026-07-21 (v0.4.0 当前开发版)
 
 ## 目标对标
 
@@ -9,280 +9,72 @@
 
 ## 当前状态
 
-**阶段**: Phase 3 收尾 | **焦点**: 技术债务清理 + Phase 4 准备 | **对标差距**: hermes 10 / openclaw 10 / merco → 10
+**阶段**: Phase 5 推进中 → v0.4.0 发布 | **焦点**: Memory 召回体系 + Session Fork + CLI UI 测试覆盖 + 错误呈现优化
 
-### 本次会话更新 (2026-06-29)
+### 本次会话更新 (2026-07-21)
 
-- **技术债务清理与测试修复**:
-  - 解析并修复 9 个预先存在的测试失败
-  - 验证完整回归测试通过
-  - 移除 agent init 双路径（agent init dual-path）
-  - CLI 迁移至异步 agent factory
-  - 测试 agent fixture 迁移至异步工厂
+**CLI UI 渲染快照测试体系（重大新增）**：
+- **92 个新测试**，9 个测试文件：`test_dashboard.py` (16)、`test_prompt_area.py` (7)、`test_commands_ui.py` (22)、`test_lifecycle.py` (5)、`test_repl_errors.py` (13)、`test_cli_help.py` (3)、`test_main.py` (4)、`test_interrupt.py` (16)、`test_registry.py` (7)。全部 **94 pass**。
+- **capture_console fixture**：基于 Rich `Console(record=True)` + 自定义 `_CaptureConsole.get_markup()` 双缓冲架构，同时捕获 ANSI 输出和原始 Rich markup 字符串。
+- **make_fake_agent 工厂**：MagicMock agent，可控制 `run_return`/`run_side_effect`/`config_overrides`，统一测试 mock 基础设施。
+- **Dashboard 区块覆盖率 100%**：WelcomeSection / ModelSection / ToolsSection / SkillsSection / ConfigSection / SessionSection / HintSection + Dashboard 组合渲染。
+- **PromptArea 装饰器链测试**：空链 / 单 ContextBar / 多装饰器顺序 / 装饰器失败容错。
+- **斜杠命令全量快照**：/help /model /context /tools /report /reload-mcp /mcp-status /sessions /exit /fork 等 22 条命令在多状态下的输出。
 
-- **Scheduler 插件接入 Runtime**:
-  - 添加 scheduler 插件（`merco/plugins/builtin/scheduler/`）
-  - 定时任务可在 Agent 生命周期内执行
-  - SchedulerPlugin 激活时注册调度器到 PluginContext
+**CLI REPL 错误路径测试（核心）**：
+- **`_run_one_turn()` 提取**：从 `run_repl()` 巨型 while 循环抽出独立测试单元，签名 `(agent, prompt_area, driver, handle_command, current_task_ref, console_obj=None) → str`。
+- **13 个异常路径测试**：正常路径 / 流式抑制 Panel / 流式仍 Panel / 空响应 / RuntimeError / ConnectionError / TimeoutError / CancelledError / EOFError / KeyboardInterrupt / 斜杠命令。每条异常测试强制断言：`"Traceback" not in export_text` + `"File \"" not in export_text`。
+- **LLM 调用失败 User Friendly 契约钉住**：`[red]错误: ...[/red]` 友好提示 + 零 traceback 泄漏。
 
-- **Web 插件完成**:
-  - web 插件迁移完成（`merco/plugins/builtin/web/`）
-  - 移除 import-time tool registration
-  - 改为插件激活时注册工具
+**API 错误呈现重构（4 个 commit）**：
+- **去 WARNING 泄漏**：`logger.warning(..., exc_info=True)` → `logger.info(...)`，非 debug 模式 WARNING 阈值抑制 INFO。traceback 保留在 `logger.debug(..., exc_info=True)`。
+- **去 Panel 叠层**：`need_static = transient or (not buf)` 是错误的——每次 retry 多打一份 Panel。改为只在 except 块 `console.print(build_error_panel(...))`，每次 retry 一个完整 Panel。
+- **流式模式 tool call 响应去重**：`_dispatch_tool_calls()` 在流式模式已通过 Live 显示内容后不再重复 `console.print(Panel(...))`。
+- **错误响应渲染修正**：`Markdown(response)` 不渲染 Rich markup (`[bold red]`) → `Text.from_markup(response)`。
 
-- **MCP 插件集成**:
-  - MCP 插件迁移完成（`merco/plugins/builtin/mcp/`）
-  - MCPServerManager 接入插件系统
-  - 工具发现和注册通过插件生命周期管理
+### 已完成的 Phase 3-5 项（上次更新后）
 
-- **Agent 异步工厂化**:
-  - Agent 创建迁移至异步工厂模式
-  - CLI 和测试 fixture 使用统一的 async factory
-  - 移除旧的同步初始化路径
+**Phase 3（MCP + Skill 完善）✅**：
+- **MCP 客户端协议**：`merco/mcp/manager.py` + `tool.py` + `config.py` 完整实现。支持 `/mcp-status` / `/reload-mcp` CLI 命令。
+- **Skill 系统**：`loader.py` + `registry.py` 完整。`builtin/` skills（merco、project-vision）已填充。
 
-### 本次会话更新 (2026-06-28)
+**Phase 4（CLI / Web 改进）✅**：
+- **commands.py 从 🔴 SKELETON → 🟢 REAL**：27 个注册命令，6 个分组（info / session / search / memory / task / system / control）。`/fork` `/tree` `/history` `/search` `/recall` `/remember` `/memories` `/forget` `/plugins` `/todos` `/todo` `/todo-done` `/agents` `/agent` `/revert` 全部实现。
+- **`_run_one_turn()` 提取**：REPL 主循环拆解，异常路径可独立测试。
+- **InputInterrupt 管线**：CancelTaskStrategy / ClearInputStrategy / ExitWithHooksStrategy 三层策略链，支持双击退出 + 保存钩子。
+- **Web 接口**：FastAPI app（`/` root、`/health`、`/chat`）仍 PARTIAL（未对接 Agent）。
 
-- **edit.py sandbox 解耦（架构重构 Phase 2.3）**:
-  - `edit.py` 移除对 sandbox 的直接依赖（`confirm_edit`、`snapshot`），确认逻辑通过 ToolMiddleware 中间件链处理
-  - 验证：grep 确认 edit.py 中无 sandbox/confirm_edit/snapshot 引用
+**Phase 5（Memory + Session Fork）✅**：
+- **Recaller 协议体系**：`BaseRecaller` ABC + `FTS5Recaller` + `MemoryRecaller` + `HybridRecaller` 全部实现。Agent 启动自动通过 `recaller.recall()` 注入上下文。
+- **Session Fork + Tree**：`Session.fork()` + `SessionStore.clone_session()` + `get_children()` 完整实现。`/fork` `/tree` CLI 命令。
+- **Memory Backend**：`MemoryBackend` ABC + `MemoryBackendRegistry`，支持 JSON backend。
+- **Snapshot 文件追踪**：`merco/sandbox/snapshot.py` 10 个方法，支持 `/revert` 撤销文件修改。
+- **Memory → Sessions 打通**：`/recall` 手动搜索 + `/search` FTS5 全文搜索 + auto recall。
 
-- **self_healing 拆分（架构重构 Phase 2.5）**:
-  - `core/self_healing.py` 仅保留 `register_handler` 可扩展 hook
-  - 工具错误迁至 `merco/tools/errors.py`（tool_error/classify_error/empty_response）
-  - LLM 错误迁至 `merco/core/llm/errors.py`（llm_error/_is_retryable_llm_error）
-  - core 不再 import openai
+**Phase 6（可观测性 + 错误处理）部分完成**：
+- **`error_ui.py` (226 行)**：`classify_error()` 按 status_code + 异常类名 + 消息体分层分类（401/403/404/413/429/5xx/Timeout/Connection），`sanitize_message()` API key 脱敏，`build_error_panel()` Rich 红 Panel，`build_retry_line()` 重试行，`retry_spinner()` 异步 spinner。
+- **Recovery Pipeline**：`WaitRecovery` 差异化退避（429/5xx→3s cap 30s；401/403/404→1s 仅一次；413→让 Compress 处理），`ModelFallbackRecovery` 备选模型切换。
+- **LoopPolicy**：`loop_policy.py` (68 行)，决策动作（exit / continue / switch_model）。
+- **压缩**：`CompressProcessor` 滑动窗口 + LLM 摘要。
 
-- **ToolRegistry 中间件链（架构重构 Phase 2.2）**:
-  - 新增 `ToolContext` / `ToolMiddleware` ABC / `ToolMiddlewareChain` 洋葱模型，支持 `before` / `after` / `on_error` 钩子
-  - `GuardMiddleware` + `ErrorHandlingMiddleware` — 内置安全守卫和错误处理中间件
-  - `ToolRegistry` 只负责路由，`execute()` 委托给中间件链，支持 `use(mw)` 链式注册
-  - Agent 启动装配中间件链（Guard + ErrorHandling），行为与旧版完全等价
-  - 测试覆盖：单元测试 + 集成测试（行为等价旧版）
+**其他架构改进**：
+- **Plugin 系统**：`PluginManager` + `PluginBase`，`builtin/` 目录含 ObservabilityPlugin / SkillPlugin / MCPPlugin / SubAgentPlugin / WebPlugin / SchedulerPlugin。
+- **config.py 重大重构**：`ModelConfig.resolve()` 自动补齐 base_url/api_key，未注册 provider 只需显式写 base_url。
+- **agent.py 膨胀到 1186 行**：集成 Stream/NonStream Provider 双模式、RecoveryPipeline、LoopPolicy、Hooks emit、ToolGuard、Observer、Session 持久化。是下一步重构目标。
 
-### 本次会话更新 (2026-06-26)
-
-- **Context Pipeline 系统（新功能）**: 上下文处理（压缩、缓存优化）升级为可扩展处理器链，替代硬编码的 ContextCompressor。构建 merco 的上下文处理管线基础设施。
-  - **ContextProcessor ABC + ContextPipeline**: `merco/context/pipeline.py` — ContextProcessor 抽象基类（`process(messages, **kwargs)` 签名），ContextPipeline 按注册顺序链式执行处理器，`use()` 链式注册，`run()` 顺序执行
-  - **CompressProcessor（迁移自 ContextCompressor）**: `merco/context/processors/compress.py` — 超过阈值触发压缩，支持 sliding（保留最后 2 轮 + 摘要旧消息）和 truncate（截断 fallback）两种策略，`_extend_to_chain` 补全孤立 tool 消息的前导 assistant，fallback 摘要含最近讨论预览
-  - **CacheOptimizeProcessor**: `merco/context/processors/cache_optimize.py` — 重排序让稳定内容（system 消息、摘要、记忆）排在前面，提高 LLM 缓存命中率
-  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `context_pipeline` 扩展点（12 个扩展点总计），插件可访问上下文处理管线
-  - **Agent 集成**: `merco/core/agent.py` — `__init__` 构造 ContextPipeline（CacheOptimizeProcessor + CompressProcessor），注入 PluginContext，`_compress_context` 替换为 pipeline.run() 调用
-  - **端到端集成测试**: `tests/integration/test_context_pipeline.py` — 2 个集成测试覆盖：压缩端到端、缓存优化重排序
-  - **单元测试**: `tests/context/test_pipeline.py` (4) + `tests/context/test_processors.py` (7) = 11 个单测，全部通过
-
-- **Todo + SubAgent 系统（新功能）**: Todo 驱动子代理执行，结果自动注入父 context。构建 merco 的任务管理 + 子代理派发基础设施。
-  - **TodoItem 数据模型**: `merco/todo/models.py` — TodoItem dataclass，字段：id/title/description/status(pending/in_progress/completed/failed)/priority(0-2)/parent_id/assigned_to/created_at/updated_at/result
-  - **TodoManager (SQLite CRUD)**: `merco/todo/manager.py` — SQLite 持久化，完整 CRUD（create/get/update/list/delete），支持 status/parent_id 过滤，按 priority DESC + created_at ASC 排序，自动建库建表
-  - **SubAgentManager（子代理派发）**: `merco/agents/subagent.py` — `dispatch(todo_id, prompt, agent_name)` 创建子 Agent（继承父 config + tool_registry，隔离 session），执行任务，更新 Todo 状态（in_progress → completed/failed），结果注入父 context，emit `subagent.completed` hook
-  - **TaskTool 激活**: `merco/tools/task_tools.py` — 从 skeleton 升级为完整实现。`task` 工具接受 title/description/priority/agent 参数，创建 Todo 后派发子代理执行，返回 `{todo_id, subagent_id, status}`。自注册到 tool_registry
-  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `todo_manager` 和 `sub_agent_manager` 两个扩展点（11 个扩展点总计），插件可访问任务管理和子代理派发能力
-  - **Agent 启动装配**: `merco/core/agent.py` — `__init__` 构造 `TodoManager`（SQLite 路径 `{memory_path}/../todos.db`）+ `SubAgentManager(self)`，注入 PluginContext
-  - **端到端集成测试**: `tests/integration/test_todo_subagent.py` — 4 个集成测试覆盖：派发+结果注入、失败状态标记、多次独立派发、hooks.emit 验证
-  - **单元测试**: `tests/todo/test_models.py` (2) + `tests/todo/test_manager.py` (6) + `tests/agents/test_subagent.py` (2) = 10 个单测，全部通过
-
-- **AgentProfile 插件化（新功能）**: 子代理按专业角色（researcher/reviewer/debugger）创建，插件可注册自定义 AgentProfile。构建 merco 的子代理角色系统。
-  - **AgentProfile dataclass + Registry**: `merco/agents/profile.py` — AgentProfile dataclass（name/description/prompt/tools/model/limits），AgentProfileRegistry（register/get/list），ProfilePromptChunk 注入角色 prompt
-  - **4 个 builtin profiles**: default（继承全部能力）、researcher（搜索研究，工具白名单，max 30 次调用）、reviewer（代码审查，max 25 次）、debugger（系统调试，max 40 次）
-  - **SubAgentManager profile 集成**: `merco/agents/subagent.py` — `_create_sub_agent(agent_name)` 根据 profile 配置子代理（model override / tools allowlist / ProfilePromptChunk / limits），未找到回退 default
-  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `agent_profiles` 扩展点（13 个扩展点总计），插件可注册自定义 AgentProfile
-  - **Agent 装配**: `merco/core/agent.py` — 创建 AgentProfileRegistry + 注册 4 builtins + 注入 PluginContext + 注入 SubAgentManager
-  - **CLI /agents /agent**: `cli/commands.py` — `/agents` 列出所有 AgentProfile（名字+工具数+描述），`/agent <name>` 查看详情（prompt/model/limits），group="task"
-  - **单元测试**: `tests/agents/test_profile.py` (5) + `tests/agents/test_subagent_profile.py` (3) = 8 个单测
-  - **端到端集成测试**: `tests/integration/test_agent_profile.py` — 2 个集成测试覆盖：TaskTool agent=researcher 派发、registry builtins 可访问
-
-### 本次会话更新 (2026-06-28)
-
-- **LoopPolicy（架构重构 Phase 2.1）**:
-  - 新增 `LoopState` / `LoopDecision` / `LoopPolicy` ABC / `DefaultLoopPolicy` / `LoopPolicyRegistry`
-  - Agent 启动装配 `loop_policies` 并注入 PluginContext
-  - `_agent_loop` 退出条件委托给 active policy，默认策略复刻原行为
-  - 测试覆盖默认退出、tool_call 继续、自定义策略强制退出
-
-- **Phase 1 安全加固（架构重构完成）**:
-  - PluginContext 移除 `security_pipeline` 直接暴露，防止插件绕过沙箱
-  - `add_processor()` 改为白名单模式，仅允许 `_PIPELINE_WHITELIST` 内的管线
-  - Agent 插件激活时序修复：PluginContext 在插件激活前完整注入所有扩展点（context_pipeline/todo_manager/sub_agent_manager/memory_backends/agent_profiles）
-  - 删除重复/废弃模块：`memory/compressor.py`（已被 `context/processors/compress.py` 替代）、`sandbox/permissions.py`（功能与 guard.py 重叠）、`sandbox/isolation.py`（未使用）
-  - 从 `sandbox/__init__.py` 移除 `PermissionManager` export
-
-### 本次会话更新 (2026-06-27)
-
-- **MemoryBackend 插件化（新功能）**: MemoryStore 从单一 JSON 后端升级为可拔插的 MemoryBackend 架构。构建 merco 的记忆存储后端抽象层。
-  - **MemoryBackend ABC + Registry**: `merco/memory/backend.py` — MemoryBackend 抽象基类（save/load/delete/list_keys/search 接口），MemoryBackendRegistry 注册表（register/get/list）
-  - **JSONBackend（迁移自 MemoryStore）**: `merco/memory/backends/json_backend.py` — JSON 文件后端，每记忆一个 .json 文件，逻辑从 MemoryStore 迁移
-  - **MemoryStore facade**: `merco/memory/store.py` — 改为 facade，委托给 MemoryBackend。`__init__` 支持 `backend=` 参数注入后端，默认 JSONBackend
-  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `memory_backends` 扩展点（14 个扩展点总计），插件可注册自定义 MemoryBackend
-  - **Config 字段**: `memory.backend` 配置项（默认 "json"），Agent 按名称从 Registry 选取后端
-  - **Agent 装配**: `merco/core/agent.py` — 构造 MemoryBackendRegistry + 注册 JSONBackend，按 config 选取后端，注入 MemoryStore/MemoryRecaller/MemorySavePipeline，注入 PluginContext
-  - **单元测试**: `tests/memory/test_backend.py` (8) — MemoryBackend ABC + DummyBackend + Registry + JSONBackend CRUD
-  - **集成测试**: `tests/memory/test_backend_integration.py` (3) — 向后兼容：默认 JSONBackend、显式 backend、facade CRUD 全链路
-
-- **PermissionPolicy 插件化（新功能）**: ToolGuard 安全策略从硬编码规则链改为可拔插的 PermissionPolicy 架构。构建 merco 的安全策略管线。
-  - **PermissionPolicy ABC + PolicyPipeline**: `merco/sandbox/guard.py` — PermissionPolicy 抽象基类（`check(tool_name, arguments)` 返回 `GuardResult | None` 签名），PolicyPipeline 按注册顺序链式执行策略（`use()` 链式注册，`check()` 首个非 None 结果生效，默认放行）
-  - **BuiltinDefaultPolicy**: `merco/sandbox/guard.py` — 包装 30 条 DEFAULT_RULES + SecurityChecker + mode logic（auto 直接放行，ask/deny 执行规则链），支持 user_rules 覆盖
-  - **ToolGuard facade**: `merco/sandbox/guard.py` — ToolGuard 改为 facade，委托给 PolicyPipeline。`rule()` 向后兼容，自动创建默认 pipeline（无 adapter 向后兼容）
-  - **_SingleRulePolicy**: `merco/sandbox/guard.py` — 单条规则策略包装，`rule()` 方法内部使用
-  - **PluginContext 扩展**: `merco/plugins/base.py` — PluginContext 新增 `security_pipeline` 扩展点（15 个扩展点总计），插件可注册自定义 PermissionPolicy
-  - **Agent 装配**: `merco/core/agent.py` — 构造 PolicyPipeline + BuiltinDefaultPolicy，注入 ToolGuard，注入 PluginContext
-  - **单元测试**: `tests/sandbox/test_policy.py` (8) — PermissionPolicy ABC + PolicyPipeline 责任链 + BuiltinDefaultPolicy（safe command / rm_rf / auto_mode / user_rules override）
-  - **集成测试**: `tests/sandbox/test_policy_integration.py` (2) — 插件注册自定义策略 + auto mode 跳过 default 策略但仍执行 custom 策略
-
-### 本次会话更新 (2026-06-20)
-
-- **插件系统（新功能）**: merco 架构升级为插件一等公民，构建可扩展的插件体系。
-  - **Plugin 基类 + PluginContext**: `merco/plugins/base.py` — Plugin ABC（`activate`/`deactivate` 生命周期），PluginContext 暴露 9 个扩展点（hooks、tool_registry、prompt_builder、recovery_pipeline、result_pipeline、memory_save_pipeline、recaller、config、observer），便捷方法 `on()`/`register_tool()`/`add_prompt_chunk()`/`add_processor()`/`add_recaller()`
-  - **PluginManager 生命周期管理**: `merco/plugins/manager.py` — register/activate/deactivate/activate_all/deactivate_all，激活失败隔离（单个插件异常不影响其他），`plugin.activated`/`plugin.error`/`plugin.deactivated` 事件 emit，按 config `enabled` 字段选择性激活
-  - **Superpower 示例插件**: `merco/plugins/builtin/superpower/plugin.py` — 注册 SuperpowerHintChunk prompt 注入 + 订阅 `agent.start`/`tool.error` 事件，展示插件如何扩展 Agent 能力
-  - **Config 字段 + Observer 集成**: `MercoConfig.plugins` dict 字段（序列化/反序列化），Observer 订阅 `plugin.activated`/`plugin.error` 事件追踪插件活动计数
-  - **Agent 启动装配**: `merco/core/agent.py` — `__init__` 构造 PluginContext + PluginManager，注册 SuperpowerPlugin 内置插件，`activate_all()` 激活所有 enabled 插件
-  - **CLI /plugins 命令**: `cli/commands.py` — 列出所有已安装插件及状态（已激活/未激活/已禁用），group="system"
-  - **测试覆盖**: 12 个新测试（4 基类单测 + 5 PluginManager 单测 + 3 端到端集成测试），全部通过
-
-### 本次会话更新 (2026-06-16)
-
-- **集成测试补全（新功能）**: +8 个集成测试覆盖 6 个场景：
-  - Context 压缩 + Session fork on compress
-  - Memory recall 注入 system prompt 端到端 + HybridRecaller 真实数据
-  - Memory save 全链路 + `memory.saved` 事件
-  - RecoveryPipeline 重试（500 错误 → 第二次成功）
-  - Hook 事件计数 during loop
-  - MCP tool calling 端到端
-  - 全部用 MockLLMClient + test_agent fixture，零网络依赖
-
-### 本次会话更新 (2026-06-15)
-
-- **Memory → Sessions 打通（新功能）**: 解决"存"和"什么时候存"两个空缺。召回链路早已通（HybridRecaller + FTS5 + MemoryRecaller），本次补齐保存侧。
-  - **保存链（MemorySavePipeline）**: `merco/memory/save_pipeline.py` — 统一保存链，处理器模式 `SourceEnricher → DedupProcessor → Store`。`SOURCE_PRIORITY` (user=3 > extracted=2 > system=1) 保证显式 /remember 永远不被自动抽取覆盖。`SaveItem` dataclass + `MemorySource` Literal。
-  - **触发策略（MemorySaveStrategy）**: `merco/memory/strategy.py` — 监听 Hook 事件，构造 SaveItem 喂 Pipeline。
-    - `ExplicitRememberStrategy` 监听 `command.remember` — 同步，CLI 触发即存
-    - `SessionEndExtractStrategy` 监听 `session.destroy` — opt-in，LLM 抽取 1-3 条 insight，fail-soft（LLM 失败/JSON 非法不抛）
-  - **Agent 装配**: `merco/core/agent.py` 启动时构造 `memory_save_pipeline` + strategies，按 config opt-in 注入 extract 策略
-  - **Observer 接入**: 订阅 `memory.saved` 事件 → `_live.increment("memories_saved")`，`/report` 显示
-  - **CLI 命令（group="memory"）**:
-    - `/remember <text>` — 显式存记忆（支持 `key=xxx` 显式 key 和 `key=value` 简写）
-    - `/memories [tag]` — 列出所有记忆（可选 tag 过滤）
-    - `/forget <key>` — 删除记忆（不存在静默 no-op）
-  - **Config 字段**: `memory.auto_extract_on_session_end` (默认 False) + `memory.extract_max_per_session` (3) + `memory.extract_min_messages` (5)
-  - **测试覆盖**: 16 个新单测 + 3 个端到端集成测试（Hook → Strategy → Pipeline → Store → Observer 全链路 + dedup 优先级验证）
-  - **设计模式**: 策略模式（Strategy ABC）+ 管道模式（Pipeline + Processor 链）+ 事件订阅（HookRegistry 已成熟）
-  - **写入重试机制**: `save_message` 对 `sqlite3.OperationalError` 重试 3 次（0.1s/0.2s/0.3s 递增退避），全部失败抛 `SessionWriteError` + 日志告警
-  - **备份恢复机制**: `backup()` / `restore_from_backup()` / `delete_backup()`，WAL checkpoint 一致性保证，压缩前自动备份+成功删备份
-  - **启动完整性检查**: `check_integrity()` (PRAGMA integrity_check) + `startup_check()`，损坏自动从备份恢复
-  - **事务保证**: `INSERT messages` + `UPDATE sessions.message_count` 同一事务
-- **Agent 压缩前备份**: `_compress_context` 入口 `backup()`，try/except/else 包裹压缩体 — 失败保留备份，成功删备份
-- **测试覆盖**: `tests/memory/test_session_store.py` +5 个测试（retry 真实触发 / backup 创文件 / restore 恢复数据 / integrity 正常 / max retries 抛异常），全部通过
-
-### 本次会话更新 (2026-06-13)
-
-- **ToolGuard 架构重构（职责分离）**: 解决双重确认和 stdin 竞争问题。
-  - ToolGuard 只做决策，返回 `GuardResult(action=ALLOW/DENY/ASK)`
-  - 移除 `_confirm`、`_render_*` 等交互方法（职责移到 Agent 层）
-  - Registry 抛出 `GuardConfirmationRequired` 异常
-  - Agent 层处理确认交互，展示 Panel + 获取用户输入
-- **Sandbox → ToolRegistry 打通**: 在 `ToolRegistry.execute()` 统一调用 ToolGuard。
-- **think tag 泄漏根因修复**: `_strip_think_tags` 增加单独标签清理，`THINK_TAG_PAIRS` 统一配置。
-
-### 本次会话更新 (2026-06-11)
-
-- **流式 think tag 泄漏修复**: 流式路径 `_parse_chunk` 和 `extract_from_delta` 共 3 处缺 `_strip_think_tags` 清理（非流式有），导致思考文本泄漏到 content → 存入 session → 重启后污染上下文 → 渐进退化至空回复。修复：三处加 `_strip_think_tags()`，流式/非流式 content 清理一致。
-- **压缩 checkpoint 过时检测**: checkpoint 创建后永不过期，session 从 283→630 条但每次重启只恢复旧 summary+4 条 tail。修复：`_restore_context` 检测 `len(all_msgs) > original_count + 20` → 删除旧 checkpoint → 全量恢复 → 重新压缩。`tail_count` 从 2 提到 5（保留 10 条消息）。
-- **流式 UI 修复**: 空白 content panel（`content_buf.strip()` 过滤）、思考截断（`live.stop()` 前最终刷新 thinking panel）、上下文用量显示 `~8.5K` 而非 `—`。
-- **RecoveryPipeline 修复**: `RecoveryContext` 缺 `compress_count` 字段导致 `ContextCompressRecovery` 永不生效 + `_is_retryable_llm_error` 新增 413 + context-too-large 关键字 + `WaitRecovery` 跳过 413（等待无法缩小上下文）。测试 11 个。
-- **内置 Skill 自动安装**: `merco/skills/builtin/merco/SKILL.md` 随 wheel 分发，`install_builtin_skills()` 在 `merco setup` 和首次启动时复制到 `~/.config/merco/skills/`。
-- **Superpowers 技能集成**: 安装 14 个 superpowers 技能（TDD、debugging、subagent、code review 等）。
-
-### 本次会话更新 (2026-05-29)
-
-- **Memory 召回（新功能）**: `Recaller` 协议 (`BaseRecaller` ABC) → `FTS5Recaller`（调 SessionSearch）+ `MemoryRecaller`（调 MemoryStore）→ `HybridRecaller` 聚合/排序/去重/截断/缓存。`Agent._build_system_prompt()` 末尾自动注入召回（3条×300字≈600 tokens）。`/recall` CLI 命令手动搜索。配置项：`memory.recall_enabled/limit/max_chars/threshold`。测试 23+7+16=46 个。
-- **memory config 重构**: `memory_enabled/memory_path` 移入 `memory` 嵌套对象，与 recall 配置统一。`_from_dict` 加 isinstance 守卫防非 dict 值 crash。
-- **会话 Fork/分支（新功能）**: `SessionStore.clone_session()` 原子深克隆 + `get_children()` 子会话查询。`Session.fork()` 工厂方法。`Agent._compress_context` 压缩前自动 fork 归档。`/fork` CLI 命令手动分支 + `/tree` 分支树查看。配置：`session.fork_enabled` + `session.fork_auto_on_compress`。测试 15 个。
-
-### 本次会话更新 (2026-06-07)
-
-- **流式 Content 输出（新功能）**: `stream_content` 配置项控制是否流式输出 content。流式时使用纯文本（`[dim]...[/dim]`），完成后切换为 Markdown Panel。解决了长内容输出时 Rich Markdown 渲染卡顿问题。
-- **渲染节流优化**: `stream_render_interval` 从 50ms 改为 300ms（4fps），content 和 reasoning 统一节流。消除终端闪烁，长文本流式更流畅。
-- **Content Panel 懒初始化**: content_panel 在首个 content chunk 到达时才创建，避免空面板闪烁。
-- **Live+Group 单实例架构**: 统一使用一个 Live 实例管理 thinking_panel + content_panel，避免双 Live 冲突。
-- **空回复处理**: `stream_content=False` 时正确打印最终 content，不重复、不丢失。
-- **集成测试**: 新增 10+ 个流式输出边界测试（空回复、工具调用、transient 模式等）。
-
-### 本次会话更新 (2026-06-05)
-
-- **SKILL 案例 2 根因 1 修复（进度条"反降"）**:
-  - 启动时进度条显示估算值（17K），第一次 API 响应后切换成实测（6.7K），用户看到"反降"
-  - 修法：第一次 API 响应前显示占位 `—/62.5K` 而非估算值
-  - 实现：复用 `get_context_stats()` 已有的 `is_estimate` 字段；`_fmt` 加默认参数保持向后兼容
-  - 提交：`57ccb83`（第一版修错：只判 n==0）+ `c137185`（第二版修对：is_estimate 一律占位）
-
-- **SKILL 案例 2 根因 D 修复（_restore_context 保留空 tool_call_id）**:
-  - provider（如 scnet.cn）流式首 chunk 不发 `tool_call.id`，Ctrl+C 在 id 到达前中断 → tc_buf[id]=""
-  - InterruptCleanupPipeline 注入"取消 (Ctrl+C)" tool 消息时把 `""` 写进 session
-  - 重启后 `_restore_context` 用 `if msg.get("tool_call_id"):` 过滤掉 `""` → 消息链断 → 下轮 API 报 400
-  - 修法：两行 `if "tool_call_id" in msg:` 替换 truthy 过滤 —— key 存在就赋值，不管真假
-  - 提交：`1ebd698`
-
-- **遗留未修**：根因 A (`context.add()` 不清零 last_actual_tokens) + 根因 C (`_restore_context` 不重建 _overhead_tokens) —— A/B 实际影响已被根因 1 修复屏蔽，C 窗口仅限"启动到第一次 run"几秒，run 入口已有 set_overhead 补救。严格修需把 `_restore_context` async 化，影响 6 处调用点，搁置
-
-### 本次会话更新 (2026-06-04)
-
-- **LLMClient 延迟初始化优化**: `asyncio.sleep(0)` 从 `_request()` 裸补丁提取为独立 `_ensure_client_ready()` 方法 + `_client_ready` flag，首次请求前执行一次，后续零开销。httpx 连接池竞态修复不再污染请求主线。
-- **流式 reasoning 渲染限流 + 重构**: 新增 `stream_render_interval` 配置项（默认 0.05s），控制 Panel 最小渲染间隔，解决长推理卡顿。提取 `_build_reasoning_panel()` 模块级函数，消除 `NonStreamingProvider` / `StreamingProvider` / `Agent._render_reasoning` 三处 Panel 构建重复。
-
-### 本次会话更新 (2026-06-03)
-
-- **中断处理重构**: Ctrl+C 三态（取消工具→清输入→退出）。InterruptCleanupPipeline 策略/处理器模式。StreamingProvider cancel checkpoint 保存 partial reasoning/content/tool_calls。Report 累计公式修复为 `acc + (live - last_merged)`。
-- **OpenAI 兼容加固**: `_normalize_tool_calls` 统一防护 id/name/arguments/function 为 None（scnet 等不标准 API 首 chunk function 字段缺失不崩）。`extra_params`/`headers` 可配置透传。`stream_options={"include_usage": True}` 自动注入。空 choices 提早返回。
-- **MCP 客户端（新功能）**: MCPServerManager 164 行完整实现，支持 stdio/HTTP 传输、工具发现、自动注册、ToolGuard 沙箱集成、Hook 适配。
-- **观察性升级**: Observer 深度集成到中断管线（SavePartialState snapshot/restore）、Observer 实例化并用于中断快照/恢复/Report。
-- **日志打桩**: context.add/reasoning 泄漏检测 WARNING、工具调用全链路 DEBUG、会话恢复路径推理追踪。5 个检查点。
-- **设计文档清理**: 移除 `docs/superpowers/` 下 23 个已完成的规划/设计文档。
-
-### 本次会话更新 (2026-05-28)
-
-- **edit diff split view 重写**: `SequenceMatcher` 对齐 → 上下文裁剪(±3行) → 仅变色变更行 → 行号 + Table 渲染。替代旧的全量并排+全量染色。`sandbox_mode: "show"` 展示 diff 自动应用不询问。
-- **edit_file spinner 修复**: 交互式工具跳过 Live spinner（会覆盖 confirm_edit 提示），其他工具保留。
-- **MultiEdit 删除**: 无引用、事务语义对 LLM 无意义、150行代码。
-- **read_file 流式化**: `f.readlines()` → 逐行迭代，读到 limit 即停。默认 500 行，支持 head/tail，返回 has_more/mtime/hint。砍掉 char 模式，截断阈值 8KB→16KB。
-- **write_file 语义明确**: 描述标注"仅用于新建文件"，edit_file 标注"修改已有文件首选"。
-- **ProviderInfo 架构升级**: `PROVIDER_REGISTRY` dict→dataclass，含 name/models/key_help/description。新增平台只需一条记录，setup 向导自动适配。
-- **merco setup 交互向导（新模块）**: 5 步流程（选平台→填key→选模型→确认base_url→保存）。`merco setup` CLI 命令。启动无 API key 时友好提示并可直接进入向导。
-- **think tag 泄漏修复**: `_strip_think_tags` 兜底清理，防 DirectFieldStrategy 命中后 ThinkTagStrategy 没跑导致 content 残留 `<thinking>` 标签。
-- **流式思考简化**: 删除 `_split_sentences`，每个 API chunk 直接刷 Live panel，不依赖标点切分。
-- **PromptArea 扩展**: ContextBar 显示模型名+sandbox模式，`extra()` 链式追加状态信息。
-
-- **ToolGuard 敏感命令守卫（新模块）**: 30 条默认 ask 规则，细粒度 `pattern + action` 匹配。用户可在 `merco.json` 追加规则或改为 deny。Bash 工具执行前拦截，确认后放行。agent 零负担。
-- **Session SQLite 持久化**: `sessions` + `messages` 两张表，WAL 模式。启动自动恢复 + 灌入上下文，每轮增量存盘，`/sessions` 列表+切换，`/new` 创建新会话，Ctrl+C 退出自动 save。tool call/result 完整链路持久化。
-
-- **Observability hooks 驱动**: `Observer` 门面 + 4 个 hooks 事件（`llm.chat`/`tool.after_execute`/`tool.error`/`conversation.turn`）。Agent emit 事件，Observer 订阅计数。`/report` 命令显示本次+累计统计。两套计数器（live + acc_map）分别追踪当前运行和跨运行累计。退出/切会话/`/new` 时合并 live→acc 持久化到 SQLite，重启恢复。缓存命中率、token 入/出、工具分布完整采集。
-- **Token 兼容 fallback**: 流式模式下 MiniMax 等 provider 不返回 usage → `total_tokens` 估算入 token，`est_tk(content+reasoning)` 估算出 token。非流式或返回 usage 的 provider 直接采信真实值。永不为 0。
-- **Skill 全局目录修复**: `SkillLoader.load_from_directory` 加 `.expanduser()`，`~/.config/merco/skills/` 不再因 tilde 未展开而加载失败。
-- **Thinking panel UI bug**: `Live(transient=True)` 清终端残留，普通 `console.print` 留最终面板，键盘输入不再干扰渲染。
-- **openai import 延迟加载**: `LLMClient.__init__` 内 import openai，测试环境无 openai 也能 import 其他模块。
-- **集成测试框架**: `conftest.py` MockLLMClient + test_agent fixture，10 个集成测试覆盖对话/工具/会话/guard/上下文恢复，2 秒全过。
-
-### 上次会话更新 (2026-05-26)
-
-- **启动首页 Dashboard**: 可组合架构（`DashboardSection` ABC + `WelcomeSection`/`ModelSection`/`ToolsSection`/`SkillsSection`/`ConfigSection`/`HintSection`），新增条目只需继承 + `dashboard.use()`。工具/技能列出名字而非计数。
-- **输入区 PromptDecorator**: `PromptArea` + `ContextBar`（16格半高薄款）、删工具计数、`▸` 提示符。新增装饰器只需继承 + `prompt_area.use()`。
-- **LLMClient 去重 + 统一策略**: `_build_params()` + `_request()` 提取，`chat()` 40行→4行，`chat_stream()` 40行→5行。retry 从 LLM 层移到 Agent RecoveryPipeline（唯一重试点），删 `retry_delays` 参数。llm.py: 330行→200行。
-- **Token 估算统一**: 删 `compressor.py` 重复的 `count_tokens()`/`msg_tokens()`；合并到 `core/context.py`。
-- **Token 账本修复**: `msg_tokens()` 补 tool_calls JSON 计数；`total_tokens` 优先 API 实测 `last_actual_tokens`。
-- **`_is_retryable_llm_error` 悬空引用修复**: 删不存在 `_is_transient_429`；改状态码大类 (429+5xx) + 消息关键字兜底。
-- **`_execute_tool_calls` 防护**: `json.dumps()` 包 try/except 防非可序列化对象穿透到 LLM 恢复管线。
-- **`TimeContextChunk`**: PromptBuilder 新 chunk，注入当前时间到 system prompt。
-- **清理死代码**: `context.py` 删死壳 `ContextCompressor` + `__init__` 重复赋值；`self_healing.py` 删 `llm_error()` 噪音 WARNING。
-- **通读审计**: 完成全部核心代码结构性分析，梳理 8 个优化点。
+---
 
 ## 里程碑
 
 - [x] Phase 0: 项目初始化与 vision skill 创建
 - [x] Phase 1: 核心 Agent-Loop 与基础工具
-- [x] Phase 2: Skill 系统与 MCP 集成
-- [x] Phase 3: 记忆系统与上下文管理
-- [ ] Phase 4: TUI 与 Web 界面
-- [ ] Phase 5: 多代理协作与定时任务
-- [ ] Phase 6: 可观测性与沙箱 (容器化)
-- [ ] Phase 7: 文档、测试与发布
+- [x] Phase 2a: 关键集成链路打通（Hooks/Sandbox/Observability）— v0.2.0
+- [x] Phase 2b: Session 持久化 + Provider 架构 + setup 向导
+- [x] Phase 3: Skill 系统完善 + MCP 集成 + API 错误可见性 — v0.3.0
+- [x] Phase 4: 斜杠命令 + REPL 重构 + CLI UI 测试 + 错误呈现优化 — v0.4.0
+- [x] Phase 5: Memory 召回体系 + Session Fork/Tree + Recaller 协议 + Snapshot 文件追踪
+- [ ] Phase 6: 可观测性深化（tracing/metrics 可视化）+ 沙箱容器化 + LLM 摘要上下文压缩完善
+- [ ] Phase 7: TUI + Web 对接 Agent + 多代理协作 + 文档/发布
 
 ---
 
@@ -292,106 +84,119 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `agent.py` | 🟢 POLISHED | Full agent loop。LLM retry 归零（交 RecoveryPipeline）。_wrap_up 收尾。Interrupt pipeline 策略/处理器模式（中断恢复 + partial state 保存到 context/session）。Observer integration（snapshot/restore/report）。**但**: hooks 未接入、sandbox 未调用。`_build_reasoning_panel` 统一 Panel 构建 + `stream_render_interval` 限流。 |
-| `config.py` | 🟢 POLISHED | `ProviderInfo` dataclass 含 name/models/key_help。5 个预置平台，一条记录驱动 setup 向导。 |
-| `setup.py` | 🟢 NEW | 交互式 API 配置向导，5步流程。`merco setup` 命令。 |
-| `observer.py` | 🟢 NEW | hooks 驱动可观察性门面，`/report` 命令，live+acc 双计数器。 |
-| `llm.py` | 🟢 POLISHED | 纯传输层 + `_strip_think_tags` + `_extract_usage` 多 provider 缓存采集 + `_normalize_tool_calls` None 防护（id/name/arguments/function 任一 None 不崩）+ `extra_params`/`headers` 透传 + `stream_options` + `_ensure_client_ready` 延迟初始化。 |
-| `session.py` | 🟢 POLISHED | Session 数据类 + save/load/resume_or_create，增量写 SQLite，tool call 完整链路持久化。 |
-| `message.py` | 🟢 REAL | `Message` dataclass + `to_dict()` + `MessageProcessor`。|
-| `context.py` | 🟢 REAL | `ContextManager` + `estimate_tokens()`/`msg_tokens()`（含 tool_calls 计数）+ `total_tokens` 优先 API 实测。死壳已删。|
-
-### merco/tools/ — Tool System
-
-| File | Status | Details |
-|------|--------|---------|
-| `base.py` | 🟢 REAL | `BaseTool` ABC，definition property OpenAPI schema。|
-| `registry.py` | 🟢 REAL | `ToolRegistry`：register/unregister/execute（try/except 转结构化错误）。 |
-| `file_tools.py` | 🟢 POLISHED | 流式行读 + head/tail + has_more + 500行默认。`write_file` 语义明确。**未接入 Sandbox。** |
-| `edit.py` | 🟢 POLISHED | SEARCH/REPLACE + diff 预览 + 确认。MultiEdit 已删。 |
-| `bash_tools.py` | 🟢 REAL | `BashTool` asyncio subprocess。**未调 SecurityChecker。** |
-| `web_tools.py` | 🟡 PARTIAL | `WebFetch` 可用。`WebSearch` 骨架。|
-| `task_tools.py` | 🟢 NEW | TaskTool 激活：创建 Todo + 派发子代理执行。自注册 tool_registry。运行时注入 `_todo_manager`/`_sub_agent_manager`。 |
-| `mcp_tools.py` | 🟢 REAL | MCPServerManager（stdio/HTTP 传输，工具发现，自动注册）+ ToolGuard 沙箱集成 + Hook 适配。 |
-
-### merco/skills/ — Skills System
-
-| File | Status | Details |
-|------|--------|---------|
-| `loader.py` | 🟢 REAL | 递归扫描 SKILL.md，YAML frontmatter。|
-| `registry.py` | 🟢 REAL | register/get/list/get_relevant/load_from_paths。|
-| `builtin/` | 🟢 REAL | 已安装 14 个 superpowers 技能（TDD、debugging、subagent、code review 等）。|
-
-### merco/memory/ — Memory System
-
-| File | Status | Details |
-|------|--------|---------|
-| `store.py` | 🟢 NEW | MemoryStore facade — 委托给 MemoryBackend，支持 `backend=` 参数注入。 |
-| `recall.py` | 🟢 POLISHED | `BaseRecaller` ABC + `FTS5Recaller` + `MemoryRecaller` + `HybridRecaller`（聚合/去重/截断/缓存）+ 旧版 `MemoryRecall` 兼容。已接入 Agent。 |
-| `compressor.py` | 🟢 REAL | Token 滑动窗口 + 链完整 + LLM 摘要。Token 函数统一从 `core/context` 导入。 |
-| `search.py` | 🟢 REAL | SQLite FTS5。|
-| `session_store.py` | 🟢 REAL | SQLite 会话持久化，sessions + messages 表，WAL 模式。 |
-| `save_pipeline.py` | 🟢 NEW | MemorySavePipeline + SaveItem + SourceEnricher + DedupProcessor。`SOURCE_PRIORITY` 保护 user > extracted > system。 |
-| `strategy.py` | 🟢 NEW | MemorySaveStrategy ABC + ExplicitRememberStrategy + SessionEndExtractStrategy (LLM 抽取 fail-soft)。|
-| `backend.py` | 🟢 NEW | MemoryBackend ABC（save/load/delete/list_keys/search）+ MemoryBackendRegistry（register/get/list）。|
-| `backends/__init__.py` | 🟢 NEW | 后端包，导出 JSONBackend。|
-| `backends/json_backend.py` | 🟢 NEW | JSONBackend — 每记忆一个 .json 文件，create/read/update/delete/search，逻辑从 MemoryStore 迁移。|
-
-### Other Modules
-
-| Module | Status |
-|--------|--------|
-| `hooks/` | 🟢 POLISHED — HookRegistry 已成熟，15+ 事件类型，Agent/Plugin/Observer 全链路接入 |
-| `sandbox/` | 🟢 POLISHED — PermissionPolicy ABC + PolicyPipeline + BuiltinDefaultPolicy + ToolGuard facade。10 个测试覆盖 |
-| `scheduler/` | 🟢 REAL — SchedulerPlugin 已接入 Agent 生命周期，CLI 启动时加载定时任务 |
-| `observability/` | 🟢 POLISHED — Observer 已接入 Agent（中断/Report/内存保存），所有事件已 emit |
-| `mcp/` | 🟢 REAL — MCPServerManager stdio+HTTP 传输，工具发现+注册，沙箱集成，插件化完成 |
-| `web/` | 🟢 NEW — WebPlugin 迁移完成，移除 import-time tool registration |
-| `gateway/` | 🔴 SKELETON |
-
-### merco/context/ — Context Pipeline
-
-| File | Status | Details |
-|------|--------|---------|
-| `pipeline.py` | 🟢 NEW | ContextProcessor ABC + ContextPipeline 链式执行。`use()` 注册，`run()` 顺序执行。|
-| `processors/__init__.py` | 🟢 NEW | 处理器包。|
-| `processors/compress.py` | 🟢 NEW | CompressProcessor：阈值触发压缩，sliding/truncate 双策略，孤立 tool 补全，fallback 摘要。迁移自 ContextCompressor。|
-| `processors/cache_optimize.py` | 🟢 NEW | CacheOptimizeProcessor：重排序稳定内容在前，提高 LLM 缓存命中率。|
+| `agent.py` | 🟢 REAL | Full agent loop。Hooks 4 事件 emit、Observer 订阅、ToolGuard 拦截、SessionStore 持久化、`_wrap_up` 收尾、PromptBuilder+3 chunks、Pipeline (Result/Recovery/EmptyResponse) 完整集成、StreamingProvider/NonStreamingProvider 双模式、LoopPolicy 决策。1186 行。 |
+| `config.py` | 🟢 REAL | `MercoConfig` + `ModelConfig` + `ProviderInfo` dataclass。5 个预置平台。`ProviderInfo.__getitem__` 向后兼容。`resolve()` 自动补 base_url/api_key。226 行。 |
+| `setup.py` | 🟢 REAL | 交互式 API 配置向导，5 步流程。`merco setup` CLI 命令。192 行。 |
+| `llm/` | 🟢 REAL | 模块化 LLM 层：`_client.py` (OpenAI 兼容客户端)、`errors.py` (向后兼容包装)、`error_ui.py` (226 行分类+渲染+重试反馈)。 |
+| `session.py` | 🟢 REAL | Session 数据类 + save/load/resume_or_create + **`fork()` 已实现**。 |
+| `context.py` | 🟢 REAL | `ContextManager` + `estimate_tokens`/`msg_tokens` + `total_tokens` 优先 API 实测。`CompressProcessor` 已实现（滑动窗口 + LLM 摘要）。 |
+| `pipeline.py` | 🟢 REAL | `ResultPipeline` + `RecoveryPipeline` + `EmptyResponsePipeline`，链式 use()/process()。含 TruncationProcessor / SkillViewProcessor / WaitRecovery / ContextCompressRecovery / CallbackEmptyResponse。573 行。 |
+| `loop_policy.py` | 🟢 REAL | LoopPolicy 决策（exit / continue / switch_model），68 行。 |
+| `recovery/` | 🟢 REAL | `wait.py` (差异化退避) + `model_fallback.py` (备选模型切换)。 |
 
 ### merco/plugins/ — Plugin System
 
 | File | Status | Details |
 |------|--------|---------|
-| `base.py` | 🟢 NEW | Plugin ABC（activate/deactivate）+ PluginContext（15 扩展点 + 5 便捷方法）。新增 security_pipeline 扩展点。|
-| `manager.py` | 🟢 NEW | PluginManager 生命周期管理：register/activate/deactivate/activate_all，失败隔离，事件 emit。|
-| `builtin/superpower/plugin.py` | 🟢 NEW | SuperpowerPlugin 示例：prompt chunk 注入 + 事件订阅。|
-| `builtin/mcp/plugin.py` | 🟢 NEW | MCPPlugin：MCPServerManager 接入插件生命周期管理，工具发现和注册通过 activate。|
-| `builtin/scheduler/plugin.py` | 🟢 NEW | SchedulerPlugin：定时任务在 Agent 生命周期内执行，注册调度器到 PluginContext。|
-| `builtin/web/plugin.py` | 🟢 NEW | WebPlugin：移除 import-time tool registration，改为插件激活时注册工具。|
-| `builtin/skills/plugin.py` | 🟢 NEW | SkillsPlugin：技能加载和管理，get_relevant 接入。|
-| `builtin/subagent/plugin.py` | 🟢 NEW | SubAgentPlugin：子代理能力扩展。|
+| `manager.py` | 🟢 REAL | PluginManager：load/unload/activate/deactivate。 |
+| `base.py` | 🟢 REAL | PluginBase ABC。 |
+| `builtin/` | 🟢 REAL | ObservabilityPlugin / SkillPlugin / MCPPlugin / SubAgentPlugin / WebPlugin / SchedulerPlugin。 |
 
-### merco/todo/ — Todo System
+### merco/mcp/ — MCP Integration
 
 | File | Status | Details |
 |------|--------|---------|
-| `models.py` | 🟢 NEW | TodoItem dataclass（id/title/description/status/priority/parent_id/assigned_to/created_at/updated_at/result）。|
-| `manager.py` | 🟢 NEW | TodoManager SQLite CRUD：create/get/update/list(支持 status/parent_id 过滤)/delete，自动建库建表。|
+| `manager.py` | 🟢 REAL | MCPManager：load_config/reload/status/list_tools。 |
+| `tool.py` | 🟢 REAL | MCP 工具包装 + 注册。 |
+| `config.py` | 🟢 REAL | MCP 服务器配置。 |
+| **集成** | ✅ WIRED | `/mcp-status` + `/reload-mcp` CLI 命令、agent.py 启动时 auto-load。 |
 
-### merco/agents/ — SubAgent System
+### merco/tools/ — Tool System
 
 | File | Status | Details |
 |------|--------|---------|
-| `subagent.py` | 🟢 NEW | SubAgentManager：dispatch 派发子代理，根据 AgentProfile 配置 prompt/tools/model/limits（model override / tools allowlist / ProfilePromptChunk），隔离 session，自动更新 Todo 状态 + 结果注入父 context + emit `subagent.completed` hook。|
-| `profile.py` | 🟢 NEW | AgentProfile dataclass（name/description/prompt/tools/model/limits）+ AgentProfileRegistry（register/get/list）+ ProfilePromptChunk + 4 builtins（default/researcher/reviewer/debugger）。|
+| `base.py` | 🟢 REAL | `BaseTool` ABC，`definition` property OpenAPI schema。 |
+| `registry.py` | 🟢 REAL | `ToolRegistry`：register/unregister/execute（try/except 转结构化错误）。 |
+| `file_tools.py` | 🟢 REAL | 流式行读 + head/tail + has_more。`write_file` 语义明确。 |
+| `edit.py` | 🟢 REAL | SEARCH/REPLACE + diff 预览 + 确认。125 行。 |
+| `bash_tools.py` | 🟢 REAL | `BashTool` asyncio subprocess。 |
+| `skill_tools.py` | 🟢 REAL | `SkillViewTool` 动态描述。73 行。 |
+| `web_tools.py` | 🟡 PARTIAL | `WebFetch` 可用。`WebSearch` 骨架。 |
+| `task_tools.py` | 🟡 PARTIAL | 基础实现。Phase 7 多代理协作。 |
+| `mcp_tools.py` | 🟢 REAL | MCP 工具发现 + 注册 ✅。 |
+
+### merco/skills/ — Skills System
+
+| File | Status | Details |
+|------|--------|---------|
+| `loader.py` | 🟢 REAL | 递归扫描 SKILL.md，YAML frontmatter。 |
+| `registry.py` | 🟢 REAL | register/get/list/get_relevant/load_from_paths。 |
+| `builtin/` | 🟢 REAL | merco + project-vision 内置 skill。 |
+
+### merco/memory/ — Memory System
+
+| File | Status | Details |
+|------|--------|---------|
+| `store.py` | 🟢 REAL | `MemoryStore`：JSON 文件 CRUD + tag + 文本匹配搜索。 |
+| `recall.py` | 🟢 REAL | **Recaller 协议完整**：`BaseRecaller` ABC + `FTS5Recaller` + `MemoryRecaller` + `HybridRecaller`。Agent 自动 recall。 |
+| `strategy.py` | 🟢 REAL | 召回策略。 |
+| `backend.py` | 🟢 REAL | `MemoryBackend` ABC + `MemoryBackendRegistry`。 |
+| `search.py` | 🟢 REAL | `MemorySearch`：SQLite FTS5 全文索引。 |
+| `session_store.py` | 🟢 REAL | SQLite WAL 持久化。**`clone_session()`/`get_children()` 已实现** (Session Fork)。 |
+| `session_search.py` | 🟢 REAL | 跨会话搜索。 |
+| `save_pipeline.py` | 🟢 REAL | 记忆保存管线。 |
+
+### merco/sandbox/ — Sandbox/Security
+
+| File | Status | Details |
+|------|--------|---------|
+| `guard.py` | 🟢 REAL | `ToolGuard`：30 条默认 ask 规则链。166 行。 |
+| `confirm.py` | 🟢 REAL | edit_file 确认交互。 |
+| `isolation.py` | 🟢 REAL | `SandboxIsolation`：临时目录创建/白名单/只读/穿越检测/清理。 |
+| `permissions.py` | 🟢 REAL | `PermissionManager`：allow/ask/deny 模式。 |
+| `security.py` | 🟢 REAL | `SecurityChecker`：正则危险命令检测。 |
+| `snapshot.py` | 🟢 REAL | 文件快照追踪（10 个方法），支持 `/revert`。 |
+
+### merco/observability/ — Observability
+
+| File | Status | Details |
+|------|--------|---------|
+| `observer.py` | 🟢 REAL | Observer 门面：hooks 订阅 + 双计数器 (live+acc_map)。139 行。 |
+| `metrics.py` | 🟢 REAL | `MetricsCollector`：counter/timing/event/average/summary。 |
+| `audit.py` | 🟢 REAL | `AuditLogger`：JSON-lines 追加 + 限额读取。 |
+| `tracing.py` | 🟢 REAL | `TraceSpan` + `Tracer`。 |
+| `logger.py` | 🟢 REAL | `setup_logger()`。 |
 
 ### cli/ — CLI Interface
 
 | File | Status | Details |
 |------|--------|---------|
-| `main.py` | 🟢 POLISHED | Dashboard + PromptDecorator 可组合架构。REPL 完整。异步 agent factory 统一初始化。|
-| `commands.py` | 🟢 POLISHED | `/agents`/`/agent` 列出 AgentProfile，`/plugins` 查看插件状态。异步工厂模式。|
-| `tui.py` | 🔴 SKELETON | `"coming soon"`。|
+| `main.py` | 🟢 REAL | Typer CLI：`run` (REPL，`_run_one_turn()` 提取)、`init`、`skills`、`setup`。Dashboard 可组合架构 + PromptArea 装饰器链。异常路径 User Friendly（`[red]错误: ...[/red]` + 零 traceback）。597 行。 |
+| `commands.py` | 🟢 REAL | **27 个注册命令**（从 🔴 SKELETON 升级）。6 个分组：info（help/model/context/tools/report/reload-mcp/mcp-status）、session（new/sessions/fork/tree/history/revert）、search（search/recall）、memory（remember/memories/forget）、task（todos/todo/todo-done/agents/agent）、system（plugins）+ control（exit/quit/q）。518 行。 |
+| `registry.py` | 🟢 REAL | CommandRegistry + CommandDef，register/get/match/get_all/get_help_text。 |
+| `input_driver.py` | 🟢 REAL | PromptToolkitInput + InputInterrupt。 |
+| `interrupt.py` | 🟢 REAL | InterruptPipeline：CancelTaskStrategy / ClearInputStrategy / ExitWithHooksStrategy 三层策略。 |
+| `tui.py` | 🔴 SKELETON | `"TUI mode - coming soon"`。Phase 7。 |
+
+### web/ — Web Interface
+
+| File | Status | Details |
+|------|--------|---------|
+| `app.py` | 🟡 PARTIAL | FastAPI app：`/` (version)、`/health` (ok)、`/chat` (`"coming soon"`)。未对接 Agent。 |
+
+### tests/cli/ — CLI 测试（新增）
+
+| File | Status | Details |
+|------|--------|---------|
+| `conftest.py` | 🟢 REAL | `capture_console` fixture + `make_fake_agent` 工厂 + `_CaptureConsole` 双缓冲 Console 子类。 |
+| `test_dashboard.py` | 🟢 REAL | 16 个测试：6 个 DashboardSection 区块 + Dashboard 组合渲染 + 容错。 |
+| `test_prompt_area.py` | 🟢 REAL | 7 个测试：PromptArea 装饰器链 + ContextBar + 去重。 |
+| `test_commands_ui.py` | 🟢 REAL | 22 个测试：全部 6 个分组斜杠命令输出快照。 |
+| `test_lifecycle.py` | 🟢 REAL | 5 个测试：启动 banner / 调试模式 / 配置错误 / init。 |
+| `test_repl_errors.py` | 🟢 REAL | 13 个测试：`_run_one_turn()` 异常路径全覆盖（核心）。 |
+| `test_main.py` | 🟢 REAL | `_fmt` 格式化 + 兼容性测试。 |
+| `test_interrupt.py` | 🟢 REAL | 16 个测试：InterruptPipeline 策略链 + sync/async 双路径。 |
+| `test_registry.py` | 🟢 REAL | 7 个测试：CommandRegistry + 单例隔离。 |
 
 ---
 
@@ -399,80 +204,48 @@
 
 | Integration | Verdict | Details |
 |-------------|---------|---------|
-| Skills → Agent | ⚠️ PARTIAL | `SkillRegistry` + `SkillViewTool` + `SkillViewProcessor` + `SkillsHintChunk` 全链路完整。`get_relevant()` 未接线。 |
-| Retry → RecoveryPipeline | ✅ WIRED | LLM 不重试，错误上抛 → RecoveryPipeline。 |
-| Hooks → Agent | ✅ WIRED | agent.start/stop, session.create/destroy, message.receive, tool.before_execute, context.compact 已 emit |
-| Sandbox → Tools | ✅ WIRED | `Registry.execute()` 调 `ToolGuard.check()`，SecurityChecker 正则兜底 + 规则链 ask/deny/allow。 |
-| Observability → Agent | ✅ WIRED | Observer 订阅所有事件：llm.chat, tool.after_execute, tool.error, conversation.turn, agent.interrupted, agent.start/stop, context.compact, memory.saved, plugin.activated |
-| MCP → Agent | ✅ WIRED | MCPServerManager 接管 MCP config 加载 + 工具注册 + 沙箱守卫。 |
-| Memory Recall → Agent | ✅ WIRED | `_build_system_prompt` 自动注入 FTS5 召回结果。 |
-| Memory Save → Agent | ✅ WIRED | Agent 启动装配 MemorySavePipeline + Strategies，/remember 触发保存，session.destroy 触发 LLM 抽取。 |
-| MemoryBackend → Agent | ✅ WIRED | Agent 构造 MemoryBackendRegistry + JSONBackend，按 config `memory.backend` 选取，注入 MemoryStore/MemoryRecaller/MemorySavePipeline + PluginContext。 |
-| PermissionPolicy → Agent | ✅ WIRED | Agent 构造 PolicyPipeline + BuiltinDefaultPolicy，注入 ToolGuard facade，注入 PluginContext。插件可注册自定义 PermissionPolicy。 |
-| Plugin → Agent | ✅ WIRED | Agent.__init__ 装配 PluginManager + 8 个内置插件，activate_all 激活 enabled 插件，/plugins 命令查看状态。 |
-| Todo + SubAgent → Agent | ✅ WIRED | Agent.__init__ 装配 TodoManager + SubAgentManager，注入 PluginContext。TaskTool 创建 Todo + 派发子代理。subagent.completed hook 可订阅。|
-| AgentProfile → Agent | ✅ WIRED | Agent.__init__ 创建 AgentProfileRegistry + 注册 BUILTIN_PROFILES + 注入 PluginContext + 注入 SubAgentManager。SubAgentManager._create_sub_agent() 按 profile 配置子代理（tools allowlist / model override / ProfilePromptChunk / limits）。|
-| Context Pipeline → Agent | ✅ WIRED | Agent.__init__ 装配 ContextPipeline（CacheOptimize + Compress），注入 PluginContext。_compress_context 替换为 pipeline.run()。|
-| Scheduler → Agent | ✅ WIRED | SchedulerPlugin 激活时注册调度器到 PluginContext，CLI 启动时加载定时任务。|
-| Web → Agent | ✅ WIRED | WebPlugin 激活时注册 web 工具，移除 import-time tool registration。|
-| MCP Plugin → Agent | ✅ WIRED | MCPPlugin 激活时初始化 MCPServerManager，工具发现和注册通过插件生命周期管理。|
+| **Hooks → Agent** | ✅ WIRED | `agent.py` 实例化 `HookRegistry`+`Observer`，4 事件 emit。Observer 订阅计数。 |
+| **Sandbox → Tools** | ✅ WIRED | `agent.py` 实例化 `ToolGuard`，`_execute_tool_calls` 前 `await self.guard.check()`。 |
+| **Observability → Agent** | ✅ WIRED | Observer 双计数器。`/report` 命令显示统计。重启从 SQLite 恢复 acc。 |
+| **SessionStore → Agent** | ✅ WIRED | `Session.resume_or_create` 自动恢复，每轮 `session.save()`。 |
+| **MCP → Agent** | ✅ WIRED | `/mcp-status` + `/reload-mcp` CLI、agent.py 启动自动 load_config。 |
+| **Memory → Sessions** | ✅ WIRED | Agent 自动 recall + `/recall` 手动搜索 + `/search` FTS5。 |
+| **Recaller → Agent** | ✅ WIRED | `BaseRecaller` → `FTS5Recaller` → `MemoryRecaller` → `HybridRecaller` 四级协议。Agent 启动自动注入。 |
+| **Session Fork → Agent** | ✅ WIRED | `Session.fork()` + `/fork` + `/tree` CLI 命令 + `snapshot.set_current_session()`。 |
+| **Snapshot → Agent** | ✅ WIRED | 文件快照追踪，`/revert` 撤销修改。 |
+| **Plugins → Agent** | ✅ WIRED | PluginManager + 6 个 builtin 插件。`/plugins` CLI。 |
+| **Scheduler → Runtime** | ❌ NOT WIRED | CLI/Web 未启动 CronScheduler。代码完整但从未激活。Phase 6。 |
+| **TUI** | ❌ NOT WIRED | `tui.py` 仍为占位。Phase 7。 |
+| **Web → Agent** | ❌ NOT WIRED | `/chat` 返回 `"coming soon"`。Phase 7。 |
+| **SubAgent** | ❌ NOT WIRED | `task_tools.py` 基础实现，多代理协作未完全打通。Phase 7。 |
+| **Gateway** | ❌ NOT WIRED | Telegram/Discord gateway 仅骨架。Phase 7。 |
 
 ---
 
 ## 汇总
 
-| Status | Count |
-|--------|-------|
-| 🟢 POLISHED | 13 |
-| 🟢 NEW | 27 |
-| 🟢 REAL | 6 |
-| 🟡 PARTIAL | 3 |
-| 🔴 SKELETON | 1 |
-| ✅ WIRED | 12 |
-
-## 三家对标 (2026-06-29)
-
-| 特性 | hermes | opencode | openclaw | merco |
-|------|--------|----------|----------|-------|
-| Session CRUD | ✓ | ✓ | ✓ | ✓ |
-| FTS5 全文搜索 | ✓✓ 双tokenizer | ✗ | ✓ | ✓ |
-| Fork/Branch | ✓ | ✓ | ✓ | ✓ |
-| Revert/Undo | ✗ | ✓ | ✗ | ✗ |
-| 压缩保留尾轮 | ✓ | ✓ | ✓ | ✓ |
-| 压缩 checkpoint | ✗ | ✗ | ✓ | ✓ |
-| 消息原文件持久化 | ✓ | ✓ | ✓ | ✓ |
-| Memory 召回 | ✓ | ✗ | ✓ | ✓ |
-| 成本追踪 | ✓ | ✓ | ✓ | ✗ |
-| 会话清理/归档 | ✓ | ✓ | ✓ | ✗ |
-| 跨会话搜索 | ✓ | ✗ | ✓ | ✓ |
-| 观察性报告 | ✗ | ✗ | ✗ | ✓ 独有 |
-| 插件系统 | ✗ | ✗ | ✓ | ✓ 独有 |
-| Todo + 子代理 | ✗ | ✗ | ✗ | ✓ 独有 |
-| Context Pipeline | ✗ | ✗ | ✗ | ✓ 独有 |
-| AgentProfile 插件化 | ✗ | ✗ | ✗ | ✓ 独有 |
-| 定时任务调度 | ✗ | ✗ | ✓ | ✓ |
-| 异步 Agent Factory | ✗ | ✗ | ✗ | ✓ 独有 |
-
-**总分**: hermes 10 / opencode 7 / openclaw 10 / **merco 12**
-
-## 已知问题 / 技术债
-
-| # | 位置 | 问题 | 修复方案 | 优先级 |
-|---|------|------|----------|--------|
-| 1 | `core/agent.py` StreamingProvider checkpoint | `__anext__()` I/O 等待时 CancelledError 不执行 checkpoint，partial content 丢失 | 改用 `except CancelledError` 统一拦截 | 低 |
-| 2 | `core/agent.py` StreamingProvider reasoning 渲染 | ~大段推理文本每次 chunk 重建 Panel，卡顿后跳出一堆~ | ✅ 已修复：`stream_render_interval` 限流 + `_build_reasoning_panel` 统一构建 | — |
-| 3 | `core/llm.py` / `agent.py` reasoning 泄漏怀疑 | 用户观察到历史 reasoning 出现在 thinking 面板，代码审查未发现客户端泄漏路径 | 已在 5 处加日志打桩，`--debug` 观察 | — |
+| Status | Count | 说明 |
+|--------|-------|------|
+| 🟢 REAL (可用) | 34 | 生产级或基本可用的独立模块（+10 从上次） |
+| 🟡 PARTIAL (部分) | 3 | web/app.py / web_tools / task_tools |
+| 🔴 SKELETON (骨架) | 2 | tui.py / 2 个 gateway |
+| ❌ NOT WIRED (未集成) | 4 | Scheduler → Runtime / TUI / Web → Agent / SubAgent |
+| **CLI 测试** | **94** | 9 个测试文件，覆盖 Dashboard / PromptArea / commands / lifecycle / REPL errors |
 
 ## 下一步（按优先级）
 
-1. **TUI 实现** — Textual 重写 REPL，多会话切换/分支树/记忆管理
-2. **Gateway 集成** — Telegram 端到端（Bot API + webhook/polling）
-3. **Skills get_relevant 接入** — SkillRegistry.get_relevant() 接入 Agent prompt 构建
-4. **Memory SecretFilterProcessor** — 检测 API key/密码/身份证号写入（YAGNI 预留）
-5. **Scheduler → Runtime** ✅ 已完成 — SchedulerPlugin 接入 Agent 生命周期，CLI 启动时加载定时任务
-6. **集成测试补全** ✅ 已完成 — mock LLM 的 Agent-Loop 全覆盖（压缩/恢复/工具调用/记忆召回）
-7. **插件系统** ✅ 已完成 — Plugin 基类 + PluginManager + Superpower 示例 + 12 测试
-8. **Todo + SubAgent 系统** ✅ 已完成 — TodoManager + SubAgentManager + TaskTool + PluginContext 扩展 + Agent 装配 + 14 测试
-9. **MemoryBackend 插件化** ✅ 已完成 — MemoryBackend ABC + JSONBackend + MemoryStore facade + Registry + PluginContext 14 扩展点 + Config + Agent 装配 + 11 测试
-10. **AgentProfile 插件化** ✅ 已完成 — AgentProfile ABC + Registry + 4 builtins + SubAgentManager 集成 + PluginContext 扩展
-11. **Context Pipeline** ✅ 已完成 — ContextProcessor ABC + ContextPipeline + CompressProcessor + CacheOptimizeProcessor
+### Phase 6（可观测性深化 + 沙箱容器化）
+1. **Scheduler 接入 CLI** — `run_repl` 启动 CronScheduler
+2. **LLM 摘要上下文压缩** — `CompressProcessor._summarize` 对接真实 LLM
+3. **Docker 沙箱** — 替换临时目录
+
+### Phase 7（界面 + 多代理 + 发布）
+4. **TUI 实现** — Textual 替换 `"coming soon"`
+5. **Web 对接 Agent** — `app.py` 接入 Agent + 会话管理
+6. **SubAgent 多代理协作** — `task_tools.py` 完整实现
+7. **Gateway 实现** — Telegram/Discord
+
+### 持续
+- **agent.py 拆分** — 1186 行太重，StreamingProvider / NonStreamingProvider 可独立文件
+- **补充端到端测试** — 真实 LLM 的集成测试
+- **PyPI 发布** — 发布 v0.4.0 并写 changelog

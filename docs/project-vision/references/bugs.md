@@ -49,37 +49,27 @@
 | 2026-05-31 | think tag 残留 content | DirectFieldStrategy 命中后 ThinkTagStrategy 没跑 | `_strip_think_tags` 兜底清理 |
 | 2026-05-31 | read_file 大文件阻塞 | `f.readlines()` 一次读完 100MB 文件 | 流式逐行迭代，读到 limit 即停 |
 | 2026-05-31 | diff 全量并排+全量染色噪音 | 1 行改动显示 1000 行 diff | SequenceMatcher 对齐 + 上下文裁剪 ±3 行 + 仅变色变更行 |
-| 2026-06-11 | 思考内容渐进泄漏到 content，重启多次后模型空回复 | 流式路径 `_parse_chunk` 缺 `_strip_think_tags`（非流式有），`extract_from_delta` 的 fallback 在策略返回 reasoning 但无 content 时，盲取 `delta.content` 导致思考文本被当作 content 存入 session。重启后污染上下文反馈给模型，渐进退化至完全空回复 | 三处加 `_strip_think_tags`：`extract_from_delta` fallback（2 处）+ `_parse_chunk` content 提取（1 处） |
-| 2026-06-11 | 流式思考内容截断 | `Live.stop()` 前只刷新 content panel 不刷新 thinking panel，最后一帧思考文本未渲染 | `live.stop()` 前用最终 `reasoning_buf` 刷新 thinking panel |
-| 2026-06-11 | 流式空 content panel 闪烁 | 模型 `</think>` 后产出的 `\n\n\n\n` 触发 content panel 懒创建但无可渲染文本 | `content_buf` 判断改为 `content_buf.strip()` |
-| 2026-06-11 | 上下文用量始终显示 `—` | 流式 API 默认不返回 usage；`is_estimate=True` 时 `_fmt` 直接返回 `"—"` 丢弃了估算值 | 1) `include_usage: true` 默认传入；2) 估算时显示 `~8.5K` |
-| 2026-06-11 | 压缩 checkpoint 过时导致重启丢失大量上下文 | checkpoint 创建后永不过期，session 从 283 条增长到 630 条，但每次重启只恢复旧的 summary + 4 条 tail，中间 340+ 条全丢 | 1) `_restore_context` 检测过时（新增 >20 条）→ 删除旧 checkpoint → 全量恢复 → 重新压缩；2) tail_count 从 2 提到 5 |
-| 2026-06-11 | `ContextCompressRecovery` 压缩恢复永不生效 | `RecoveryContext` 有 `max_compress` 但缺少 `compress_count` 字段，访问抛出 AttributeError 被 `except Exception` 吞掉 | `RecoveryContext` 加 `compress_count: int = 0`，`RecoveryPipeline.attempt` 递增 |
-| 2026-06-28 | 9 个预存测试失败 | 测试与实现语义不匹配（A 类）、ToolGuard mock 路径不正确（B+C 类）、压缩阈值断言过严（D 类） | 1) `_fmt(is_estimate=True)` 返回 `"—"；2) 导出 `_strip_think_tags`/`_clean_content`；3) Guard 测试直接注入 GuardMiddleware；4) 压缩断言 `<8` 改为 `<=8` |
-| 2026-06-28 | 孤儿 tool_calls 导致 LLM 400 | 工具执行异常时 assistant 消息含 tool_calls 但 tool result 未保存，下次启动恢复后 LLM 报 `tool id not found` | `InterruptCleanupPipeline` 中 `InjectCancelMessages` 为孤儿 tool_calls 注入取消消息 |
+| 2026-07-17 | StreamingProvider 错误 WARNING + traceback 泄漏到非 debug 终端 | `logger.warning(..., exc_info=True)` + `basicConfig(level=WARNING)` → 整段 Python stacktrace 出现在 TUI | `logger.info(...)` + `logger.debug(..., exc_info=True)`（仅 debug 模式可见） |
+| 2026-07-17 | API 错误 Panel 每次 retry 叠 2 层 | `need_static = transient or (not buf)` → 每次 retry Live 留一个 + static print 一个 = 2 Panel | 改为 except 块 `console.print(build_error_panel(...))` 直接输出完整 Panel |
+| 2026-07-17 | API 错误 retry 4 次 → 4 个 Panel 叠层 + WARNING 4 行 | 每次 retry 重新进入 Provider 都会 warn + print Panel | 去 WARNING + Panel 自然堆叠（retry 中各一个） |
+| 2026-07-17 | 流式 tool call 响应成对出现 | `_dispatch_tool_calls()` 在流式模式 Live 已显示后仍 `console.print(Panel(Markdown(content)))` | 加 `if not (streaming and stream_content)` 判断，与 `_run_one_turn` 逻辑一致 |
+| 2026-07-17 | 错误响应 Rich markup 不渲染 | `Panel(Markdown(response))` 不支持 `[bold red]` 等 Rich 标签 | `Panel(Text.from_markup(response))` |
+| 2026-07-17 | `test_module_singleton` 跨模块污染导致 CI 失败 | `test_commands_ui.py` import `cli.commands` 触发 27 个 `@cmd_registry.register`，全局 `cmd_registry` 非空 | monkeypatch 临时清空 `cmd_registry._commands` |
 
 ## 待修复
 
 | 日期 | 问题 | 描述 | 优先级 |
 |------|------|------|--------|
-| 2026-05-31 | scheduler 未启动 | CLI/Web 未实例化 CronScheduler | 中 |
-| 2026-05-31 | Memory → Sessions 未集成 | SessionStore 不存 MemoryStore，recall 不接 system prompt | 中（Phase 5） |
-| 2026-05-31 | Hooks handler 仍为 pass | lifecycle/chat/tool 三个 hooks 文件的 handler 未实现 | 低（Phase 6） |
-| 2026-05-31 | compressor LLM 摘要未实 | `_summarize` 返回占位文本而非真实 LLM 摘要 | 低（Phase 6） |
-| 2026-05-31 | context.compress() 未实 | ContextManager.compress() NotImplementedError | 低（Phase 6） |
-| 2026-05-31 | WebSearch 骨架 | web_tools.WebSearch 返回 "not yet configured" | 中（Phase 3） |
-| 2026-05-31 | mcp_tools 骨架 | MCPTool/MCPManager 全部 NotImplementedError | 中（Phase 3） |
-| 2026-05-31 | task_tools 骨架 | TaskTool 无子代理派发 | 中（Phase 5） |
-| 2026-05-31 | gateway/telegram discord 骨架 | 所有方法 pass | 低（Phase 5） |
-| 2026-05-31 | tui.py "coming soon" | 仅有占位 print | 中（Phase 4） |
-| 2026-05-31 | web/app.py "/chat" 返回 coming soon | 未对接 Agent | 中（Phase 4） |
-| 2026-05-31 | builtin/skills 空目录 | 无内置 skill 文档 | 低（Phase 3） |
-| 2026-05-31 | commands.py 3 行注释 | `/recall` `/fork` `/tree` 命令未实现 | 中（Phase 5） |
-| 2026-05-21 | CLI 等待响应时无法输入 | REPL 同步阻塞在 `agent.run()` | 中 |
-| 2026-05-22 | cooldown 硬编码在 agent.py | 应走配置层 | 中 |
-| 2026-05-22 | 工具调用日志过多刷屏 | 15+ 调用占满终端 | 低 |
-| 2026-05-22 | Ctrl+C 提示打断输入流 | 警告在当前行上方遮住 input() | 低 |
-| 2026-06-07 | **Session 保存中途被打断** | Ctrl+C 快速按可能在 `session.save()` 执行中途被杀，导致数据不一致。修法：原子写入（先写 .tmp 再 rename）+ 启动时清理残留 .tmp | 中 |
+| 2026-07-21 | scheduler 未启动 | CLI/Web 未实例化 CronScheduler | 中 |
+| 2026-07-21 | Hooks handler 仍为 pass | lifecycle/chat/tool 三个 hooks 文件的 handler 未实现 | 低（Phase 6） |
+| 2026-07-21 | compressor LLM 摘要未实 | `_summarize` 返回占位文本而非真实 LLM 摘要 | 低（Phase 6） |
+| 2026-07-21 | WebSearch 骨架 | web_tools.WebSearch 返回 "not yet configured" | 中 |
+| 2026-07-21 | gateway/telegram discord 骨架 | 所有方法 pass | 低（Phase 7） |
+| 2026-07-21 | tui.py "coming soon" | 仅有占位 print | 中（Phase 7） |
+| 2026-07-21 | web/app.py "/chat" 返回 coming soon | 未对接 Agent | 中（Phase 7） |
+| 2026-07-21 | task_tools 子代理派发未完整 | TaskTool 基础实现但多代理协作未完全打通 | 中（Phase 7） |
+| 2026-07-21 | agent.py 1186 行过重 | StreamingProvider/NonStreamingProvider/_dispatch_tool_calls 可独立文件 | 低 |
+| 2026-07-21 | CLI 等待响应时无法输入 | REPL 异步但在 agent.run() 期间不可中断输入新命令 | 低 |
 
 
 ---
