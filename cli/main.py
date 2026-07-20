@@ -362,11 +362,13 @@ async def _run_one_turn(agent, prompt_area, driver, handle_command, current_task
         return "back_input"
 
     # 只在响应未被流式显示时打印
-    # 错误响应（❌ 开头）始终显示——流式模式已在 Live 中显示一行简短提示，
-    # 此处用完整 ⚠ API 错误 Panel 给出最终错误详情。
+    # 错误响应（❌ 开头）：若 Provider 已显示过 Panel（_error_displayed_in_stream=True），
+    # 则跳过；否则用 Rich 红 Panel 渲染 llm_error(e) 返回的 markup 字符串。
     if response.startswith("❌"):
-        c.print(Panel(Markdown(response), border_style="red",
-                       title="⚠ API 错误", title_align="left", padding=(0, 1)))
+        if not getattr(agent, '_error_displayed_in_stream', False):
+            from rich.text import Text
+            c.print(Panel(Text.from_markup(response), border_style="red",
+                           title="⚠ API 错误", title_align="left", padding=(0, 1)))
     elif not (agent.config.streaming and agent.config.stream_content):
         c.print(Panel(Markdown(response), border_style="dim"))
     c.rule(style="dim")

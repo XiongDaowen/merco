@@ -262,20 +262,16 @@ class StreamingProvider(ResponseProvider):
         except Exception as e:
             stream_error = e
             # logger.info：非 debug 模式（WARNING 阈值）不会输出到 stderr。
-            # 完整 stacktrace 走 logger.debug(exc_info=True)，仅 debug 模式可见。
             logger.info("StreamingProvider API 错误: %s", e)
             logger.debug("StreamingProvider API 错误 traceback", exc_info=True)
-            # 不在 Live 中渲染完整 ⚠ Panel——retry 时每个 Live 会叠在上一个下面。
-            # 仅替换 thinking 面板为一行简短提示；最终错误由 _agent_loop 的
-            # llm_error(e) 返回字符串，_run_one_turn 渲染为 Panel。
-            from merco.core.llm.error_ui import classify_error
-            info = classify_error(e)
-            nonlocal_thinking_panel[0] = Panel(
-                f"[red]⚠ {info.label} — {info.hint}[/red]",
-                border_style="red", padding=(0, 1))
-            nonlocal_content_panel[0] = content_panel
-            live.update(_rebuild_group())
-            await asyncio.sleep(0.15)
+            # 停止 Live，直接用 console.print 输出完整 ⚠ API 错误 Panel。
+            # 每次 retry 各输出一个，自然堆叠。
+            if live:
+                live.stop()
+            from merco.core.llm.error_ui import classify_error, build_error_panel
+            console.print(build_error_panel(classify_error(e)))
+            agent._error_displayed_in_stream = True
+            raise e
         finally:
             if 'refresh_task' in locals():
                 refresh_task.cancel()
@@ -283,18 +279,11 @@ class StreamingProvider(ResponseProvider):
                     await refresh_task
                 except asyncio.CancelledError:
                     pass
-            transient = agent.config.stream_thinking_transient
-            if live:
+            # live may have been stopped by except block; only stop if still active
+            if live and live._started:
                 live.stop()
-            if transient and reasoning_buf:
-                console.print(_build_reasoning_panel(reasoning_buf))
-            if transient and content_buf and agent.config.stream_content:
-                console.print(Panel(Markdown(content_buf), border_style="dim",
-                                    title_align="left", padding=(0, 1)))
-            # Error path: no static print — Live 中已显示一行动态提示。
-            # 完整 Panel 由 _agent_loop 返回 llm_error(e) 字符串后在 _run_one_turn 渲染。
+            # re-raise — no additional output (error Panel already printed in except)
             if stream_error is not None:
-                agent._error_displayed_in_stream = True
                 raise stream_error
 
         assembled["reasoning"] = reasoning_buf
