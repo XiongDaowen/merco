@@ -830,7 +830,9 @@ class Agent:
         """工具调度：渲染内容 → 写上下文 → 执行工具"""
         assistant_content = (response.get("content", "") or "").strip()
         if assistant_content:
-            console.print(Panel(Markdown(assistant_content), border_style="dim"))
+            # 流式模式已在 Live 中显示过内容，不重复打印
+            if not (self.config.streaming and self.config.stream_content):
+                console.print(Panel(Markdown(assistant_content), border_style="dim"))
         api_tool_calls = [
             {"id": tc["id"], "type": "function",
              "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=True)}}
