@@ -188,3 +188,28 @@ class TestReset:
         test_agent._error_displayed_in_stream = True
         test_agent.reset()
         assert test_agent._error_displayed_in_stream is False
+
+
+class TestStreamLoggerNoTracebackLeak:
+    """merco.core.agent 的 StreamingProvider 错误日志不应包含 exc_info=True。
+
+    原因：非 debug 阶段 logger.warning + exc_info=True 会把整段 Python traceback
+    写到 stderr，被 TUI 终端直接接管显示 — 用户看到一坨 stacktrace。
+    契约：exc_info=False；traceback 改走 logger.debug(..., exc_info=True)，仅在
+    显式启用 DEBUG 日志时才见。
+    """
+
+    def test_streaming_provider_error_logger_does_not_include_exc_info(self, caplog):
+        """源码静态检查：merco/core/agent.py StreamingProvider 的 logger.warning 调用
+        不应含 exc_info=True。logger.debug 含 exc_info=True 是允许的（仅 debug 阶段输出）。
+        """
+        import inspect
+        from merco.core.agent import StreamingProvider
+        source = inspect.getsource(StreamingProvider.get_response)
+        assert "StreamingProvider API 错误" in source
+        for line in source.splitlines():
+            stripped = line.strip()
+            if "StreamingProvider API 错误" in stripped and "logger.warning" in stripped:
+                assert "exc_info=True" not in stripped, (
+                    f"StreamingProvider logger.warning 不应含 exc_info=True：\n  {stripped}"
+                )

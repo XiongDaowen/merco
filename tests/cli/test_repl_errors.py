@@ -1,7 +1,7 @@
 """_run_one_turn() 异常路径测试 — 用户最关心的 LLM 失败友好性"""
 import asyncio
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from cli.main import _run_one_turn, PromptArea
 from tests.cli.conftest import make_fake_agent
@@ -283,3 +283,61 @@ async def test_empty_input_returns_continue(capture_console):
     assert result == "continue"
     handle_cmd.assert_not_called()
     agent.run.assert_not_called()
+
+
+# ─────────── Bug 修复契约（2026-07-20）───────────
+# 失败时 UI 不应：
+#   1. 把 Python traceback 泄漏到 capture output（non-debug 阶段）
+#   2. 重复输出同一个错误（panel + simple red 错误行各一次）
+
+
+@pytest.mark.asyncio
+async def test_logger_warning_dedupes_repeated_provider_errors(caplog, monkeypatch):
+    """同一 Provider 异常在多次 retry 中：logger.warning 不应逐次打印。
+
+    现实：retry pipeline 重试 N 次时，每个重试都会触发 Provider 重新走 except 块，
+    导致 logger.warning 重复 N 次（用户截图里看到 4-5 次 WARNING + Panel）。
+
+    契约：StreamLogger 应使用 WeakValueDictionary（或 set）按 id(exc) 去重；
+    同一异常对象只第一次打 warning，后续同 id 直接跳过。
+    """
+    import logging
+
+    caplog.clear()
+    caplog.set_level(logging.WARNING, logger="merco.agent")
+
+    # 通过 monkeypatch 计数 logger.warning 调用次数
+    call_count = {"n": 0}
+    real_warn = logging.getLogger("merco.agent").warning
+
+    def counting_warn(*args, **kwargs):
+        call_count["n"] += 1
+        return real_warn(*args, **kwargs)
+
+    monkeypatch.setattr(logging.getLogger("merco.agent"), "warning", counting_warn)
+
+    # 直接模拟 _agent_loop 的 retry 路径：连续 3 次抛同样异常
+    # 这里测的是去重机制本身
+    from merco.core.agent import StreamingProvider
+
+    # 通过 patch.get_response 模拟 provider 总是失败
+    provider = StreamingProvider()
+    fake_agent = MagicMock()
+    fake_agent.llm.chat_stream = AsyncMock(
+        side_effect=Exception("rate limit")
+    )
+    fake_agent._error_displayed_in_stream = False
+    fake_agent.config.stream_thinking = True
+    fake_agent.config.stream_content = True
+    fake_agent.config.stream_thinking_transient = False
+
+    # 调用 3 次 — 实际中 retry pipeline 会调 3 次
+    for _ in range(3):
+        try:
+            await provider.get_response(fake_agent, [], [])
+        except Exception:
+            pass
+
+    assert call_count["n"] <= 1, (
+        f"同一异常最多 logger.warning 一次（收到 {call_count['n']} 次）"
+    )
