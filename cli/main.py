@@ -362,7 +362,12 @@ async def _run_one_turn(agent, prompt_area, driver, handle_command, current_task
         return "back_input"
 
     # 只在响应未被流式显示时打印
-    if not (agent.config.streaming and agent.config.stream_content):
+    # 错误响应（❌ 开头）始终显示——流式模式已在 Live 中显示一行简短提示，
+    # 此处用完整 ⚠ API 错误 Panel 给出最终错误详情。
+    if response.startswith("❌"):
+        c.print(Panel(Markdown(response), border_style="red",
+                       title="⚠ API 错误", title_align="left", padding=(0, 1)))
+    elif not (agent.config.streaming and agent.config.stream_content):
         c.print(Panel(Markdown(response), border_style="dim"))
     c.rule(style="dim")
     return "continue"
