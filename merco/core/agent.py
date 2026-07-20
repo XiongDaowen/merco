@@ -6,7 +6,6 @@ import asyncio
 import logging
 import shutil
 import time
-import weakref
 from typing import Optional
 from abc import ABC, abstractmethod
 from rich.console import Console
@@ -28,12 +27,6 @@ from merco.sandbox.guard import GuardConfirmationRequired, GuardAction
 
 console = Console()
 logger = logging.getLogger("merco.agent")
-
-# ── Stream logger 去重 ─────────────────────────────────
-# 重试 Pipeline 每次重新进入 Provider 都会进入 except 块，导致 logger.warning 重复
-# N 次（用户截图里看到 4-5 次同一条 WARNING）。按 exc id 去重：同一异常对象
-# 只第一次 warn，后续跳过。WeakSet 在 exc 被回收时自动移除，避免内存泄漏。
-_logged_stream_errors: "weakref.WeakSet[BaseException]" = weakref.WeakSet()
 
 # ── System Prompt 构建器 ─────────────────────────────
 
@@ -268,18 +261,19 @@ class StreamingProvider(ResponseProvider):
             raise
         except Exception as e:
             stream_error = e
-            # exc_info=False 防止 traceback 泄漏到 stderr（被 TUI 终端接管显示）。
-            # 完整 stacktrace 通过 logger.debug(..., exc_info=True) 单独保留，
-            # 仅在用户显式启用 DEBUG 日志（cli/main.py:154）时才可见。
-            # ── 去重：重试 Pipeline 多次重新进入 Provider 时，同一异常只 warn 一次 ──
-            if e not in _logged_stream_errors:
-                _logged_stream_errors.add(e)
-                logger.warning("StreamingProvider API 错误: %s", e)
+            # logger.info：非 debug 模式（WARNING 阈值）不会输出到 stderr。
+            # 完整 stacktrace 走 logger.debug(exc_info=True)，仅 debug 模式可见。
+            logger.info("StreamingProvider API 错误: %s", e)
             logger.debug("StreamingProvider API 错误 traceback", exc_info=True)
-            from merco.core.llm.error_ui import classify_error, build_error_panel
+            # 不在 Live 中渲染完整 ⚠ Panel——retry 时每个 Live 会叠在上一个下面。
+            # 仅替换 thinking 面板为一行简短提示；最终错误由 _agent_loop 的
+            # llm_error(e) 返回字符串，_run_one_turn 渲染为 Panel。
+            from merco.core.llm.error_ui import classify_error
             info = classify_error(e)
-            nonlocal_thinking_panel[0] = build_error_panel(info)
-            nonlocal_content_panel[0] = content_panel  # preserve partial content
+            nonlocal_thinking_panel[0] = Panel(
+                f"[red]⚠ {info.label} — {info.hint}[/red]",
+                border_style="red", padding=(0, 1))
+            nonlocal_content_panel[0] = content_panel
             live.update(_rebuild_group())
             await asyncio.sleep(0.15)
         finally:
@@ -297,12 +291,9 @@ class StreamingProvider(ResponseProvider):
             if transient and content_buf and agent.config.stream_content:
                 console.print(Panel(Markdown(content_buf), border_style="dim",
                                     title_align="left", padding=(0, 1)))
-            # Error path: print static red Panel if needed, then re-raise
+            # Error path: no static print — Live 中已显示一行动态提示。
+            # 完整 Panel 由 _agent_loop 返回 llm_error(e) 字符串后在 _run_one_turn 渲染。
             if stream_error is not None:
-                from merco.core.llm.error_ui import classify_error, build_error_panel
-                need_static = transient or (not reasoning_buf and not content_buf)
-                if need_static:
-                    console.print(build_error_panel(classify_error(stream_error)))
                 agent._error_displayed_in_stream = True
                 raise stream_error
 

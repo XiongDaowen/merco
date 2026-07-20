@@ -292,35 +292,35 @@ async def test_empty_input_returns_continue(capture_console):
 
 
 @pytest.mark.asyncio
-async def test_logger_warning_dedupes_repeated_provider_errors(caplog, monkeypatch):
-    """同一 Provider 异常在多次 retry 中：logger.warning 不应逐次打印。
+async def test_provider_error_uses_logger_info_not_warning(caplog, monkeypatch):
+    """Provider 异常时使用 logger.info（非 debug 模式不可见），不用 logger.warning。
 
-    现实：retry pipeline 重试 N 次时，每个重试都会触发 Provider 重新走 except 块，
-    导致 logger.warning 重复 N 次（用户截图里看到 4-5 次 WARNING + Panel）。
-
-    契约：StreamLogger 应使用 WeakValueDictionary（或 set）按 id(exc) 去重；
-    同一异常对象只第一次打 warning，后续同 id 直接跳过。
+    注意：retry 时每次 chat_stream 抛新 Exception 对象，WeakSet 去重无效。
+    真正的"不重复"保证来自：info 在 non-debug 模式被 WARNING 阈值抑制。
     """
     import logging
 
     caplog.clear()
-    caplog.set_level(logging.WARNING, logger="merco.agent")
+    caplog.set_level(logging.DEBUG, logger="merco.agent")
 
-    # 通过 monkeypatch 计数 logger.warning 调用次数
-    call_count = {"n": 0}
-    real_warn = logging.getLogger("merco.agent").warning
+    count = {"info": 0, "warning": 0}
 
-    def counting_warn(*args, **kwargs):
-        call_count["n"] += 1
-        return real_warn(*args, **kwargs)
+    real_info = logging.getLogger("merco.agent").info
+    real_warning = logging.getLogger("merco.agent").warning
 
-    monkeypatch.setattr(logging.getLogger("merco.agent"), "warning", counting_warn)
+    def counting_info(*a, **kw):
+        count["info"] += 1
+        return real_info(*a, **kw)
 
-    # 直接模拟 _agent_loop 的 retry 路径：连续 3 次抛同样异常
-    # 这里测的是去重机制本身
+    def counting_warning(*a, **kw):
+        count["warning"] += 1
+        return real_warning(*a, **kw)
+
+    monkeypatch.setattr(logging.getLogger("merco.agent"), "info", counting_info)
+    monkeypatch.setattr(logging.getLogger("merco.agent"), "warning", counting_warning)
+
     from merco.core.agent import StreamingProvider
 
-    # 通过 patch.get_response 模拟 provider 总是失败
     provider = StreamingProvider()
     fake_agent = MagicMock()
     fake_agent.llm.chat_stream = AsyncMock(
@@ -331,13 +331,11 @@ async def test_logger_warning_dedupes_repeated_provider_errors(caplog, monkeypat
     fake_agent.config.stream_content = True
     fake_agent.config.stream_thinking_transient = False
 
-    # 调用 3 次 — 实际中 retry pipeline 会调 3 次
     for _ in range(3):
         try:
             await provider.get_response(fake_agent, [], [])
         except Exception:
             pass
 
-    assert call_count["n"] <= 1, (
-        f"同一异常最多 logger.warning 一次（收到 {call_count['n']} 次）"
-    )
+    assert count["warning"] == 0, "不应使用 logger.warning"
+    assert count["info"] >= 1, "应使用 logger.info"

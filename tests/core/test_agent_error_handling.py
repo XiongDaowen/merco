@@ -114,8 +114,12 @@ class TestStreamingProviderError:
 
     @pytest.mark.asyncio
     async def test_error_panel_contains_error_info(self, tmp_path, monkeypatch):
-        """When error occurs with empty bufs (default non-transient), error
-        output is printed and contains error category."""
+        """Provider 抛异常时：_error_displayed_in_stream=True，异常 re-raise。
+
+        重构后 Provider 不再 console.print 完整 ⚠ Panel（避免 retry 时 Panel 叠层）。
+        动态提示由 Live 内嵌的一行 red 文案负责；完整 Panel 由 _agent_loop 返回
+        llm_error(e) 字符串后在 _run_one_turn 渲染。
+        """
         exc = Exception("rate limit exceeded")
         exc.status_code = 429
         agent = await _make_agent_with_failing_llm(monkeypatch, tmp_path, exc)
@@ -129,9 +133,7 @@ class TestStreamingProviderError:
                     agent,
                     [{"role": "user", "content": "hi"}],
                     [])
-        output = fake_out.getvalue()
-        # Non-transient + empty bufs triggers static print path
-        assert "API" in output or "限流" in output or "429" in output
+        assert agent._error_displayed_in_stream is True
 
     @pytest.mark.asyncio
     async def test_cancelled_error_propagates_without_setting_error_flag(self, tmp_path, monkeypatch):
@@ -191,17 +193,16 @@ class TestReset:
 
 
 class TestStreamLoggerNoTracebackLeak:
-    """merco.core.agent 的 StreamingProvider 错误日志不应包含 exc_info=True。
+    """merco.core.agent 的 StreamingProvider 错误日志行为契约。
 
-    原因：非 debug 阶段 logger.warning + exc_info=True 会把整段 Python traceback
-    写到 stderr，被 TUI 终端直接接管显示 — 用户看到一坨 stacktrace。
-    契约：exc_info=False；traceback 改走 logger.debug(..., exc_info=True)，仅在
-    显式启用 DEBUG 日志时才见。
+    - 非 debug 模式：logger.info 输出被 WARNING 阈值抑制，stderr 无输出
+    - debug 模式：logger.info + logger.debug(exc_info=True) 两者都可见
+    - 无论何种模式：不应有 logger.warning(exc_info=True)
     """
 
-    def test_streaming_provider_error_logger_does_not_include_exc_info(self, caplog):
-        """源码静态检查：merco/core/agent.py StreamingProvider 的 logger.warning 调用
-        不应含 exc_info=True。logger.debug 含 exc_info=True 是允许的（仅 debug 阶段输出）。
+    def test_streaming_provider_error_uses_info_not_warning_with_exc_info(self, caplog):
+        """静态检查：merco/core/agent.py StreamingProvider 的错误日志中
+        logger.warning 不应出现（已被 logger.info 替代）。
         """
         import inspect
         from merco.core.agent import StreamingProvider
@@ -210,6 +211,6 @@ class TestStreamLoggerNoTracebackLeak:
         for line in source.splitlines():
             stripped = line.strip()
             if "StreamingProvider API 错误" in stripped and "logger.warning" in stripped:
-                assert "exc_info=True" not in stripped, (
-                    f"StreamingProvider logger.warning 不应含 exc_info=True：\n  {stripped}"
+                raise AssertionError(
+                    f"StreamingProvider 不应使用 logger.warning：\n  {stripped}"
                 )
