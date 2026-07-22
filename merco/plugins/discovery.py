@@ -112,16 +112,47 @@ class PluginDiscovery:
         return True
 
     def _finalize(self, specs: dict[str, PluginSpec]) -> list[PluginSpec]:
-        """校验 depends_on 存在性，剪枝。"""
+        """校验 depends_on 存在性 + 循环依赖检测。"""
         names = set(specs.keys())
-        result = []
+        # 存在性剪枝
+        pruned = set()
         for name, spec in specs.items():
             missing = [d for d in spec.depends_on if d not in names]
             if missing:
                 logger.warning("plugin '%s' skipped: missing deps %s", name, missing)
-                continue
-            result.append(spec)
-        return result
+                pruned.add(name)
+        # 循环检测：在剩余插件里做 DFS 找环
+        remaining = {n: s for n, s in specs.items() if n not in pruned}
+        cyclic = self._find_cycles(remaining)
+        for name in cyclic:
+            logger.warning("plugin '%s' skipped: circular dependency", name)
+        return [s for n, s in specs.items() if n not in pruned and n not in cyclic]
+
+    def _find_cycles(self, specs: dict[str, PluginSpec]) -> set[str]:
+        """DFS 检测参与循环的节点名集合。"""
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {n: WHITE for n in specs}
+        cyclic: set[str] = set()
+
+        def visit(n, stack):
+            color[n] = GRAY
+            stack.append(n)
+            for dep in specs[n].depends_on:
+                if dep not in specs:
+                    continue  # 已被存在性剪枝处理
+                if color[dep] == GRAY:
+                    # 找到环：stack 中从 dep 起的部分
+                    idx = stack.index(dep)
+                    cyclic.update(stack[idx:])
+                elif color[dep] == WHITE:
+                    visit(dep, stack)
+            stack.pop()
+            color[n] = BLACK
+
+        for n in specs:
+            if color[n] == WHITE:
+                visit(n, [])
+        return cyclic
 
 
 def _load_class_from_dir(pdir: Path, entry: str) -> type:

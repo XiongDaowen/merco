@@ -137,3 +137,79 @@ def test_discover_dir_scan_bad_toml_skipped(tmp_path, monkeypatch, caplog):
         specs = discovery.discover()
     assert [s.name for s in specs] == ["good"]
     assert any("bad" in r.message for r in caplog.records)
+
+
+def test_dir_overrides_entrypoint(tmp_path, monkeypatch):
+    """同名时 dir-scan 覆盖 entry_points"""
+    _write_dir_plugin(tmp_path, "shared", priority=99)
+    cfg = _config_with(paths=[str(tmp_path)])
+    discovery = PluginDiscovery(cfg)
+
+    class EPVer(Plugin):
+        name = "shared"
+        priority = 10
+        async def activate(self, ctx): ...
+
+    monkeypatch.setattr(
+        "merco.plugins.discovery.entry_points",
+        lambda group: [_fake_ep("shared", EPVer)] if group == "merco.plugins" else [],
+    )
+    specs = {s.name: s for s in discovery.discover()}
+    assert specs["shared"].source == "dir"
+    assert specs["shared"].priority == 99  # dir 的，不是 EP 的 10
+
+
+def test_disabled_plugin_not_loaded(monkeypatch):
+    """disabled 插件不进入 specs（不 load_cls）"""
+    cfg = _config_with(plugins={"ep_test": {"enabled": False}})
+    discovery = PluginDiscovery(cfg)
+    monkeypatch.setattr(
+        "merco.plugins.discovery.entry_points",
+        lambda group: [_fake_ep("ep_test", _EPPlugin)] if group == "merco.plugins" else [],
+    )
+    specs = discovery.discover()
+    assert all(s.name != "ep_test" for s in specs)
+
+
+def test_missing_dep_pruned(monkeypatch, caplog):
+    """depends_on 引用不存在的插件 -> 剪枝"""
+    class WithMissing(Plugin):
+        name = "needs_ghost"
+        depends_on = ["ghost"]
+        async def activate(self, ctx): ...
+
+    cfg = _config_with()
+    discovery = PluginDiscovery(cfg)
+    monkeypatch.setattr(
+        "merco.plugins.discovery.entry_points",
+        lambda group: [_fake_ep("needs_ghost", WithMissing)] if group == "merco.plugins" else [],
+    )
+    with caplog.at_level("WARNING"):
+        specs = discovery.discover()
+    assert specs == []
+    assert any("ghost" in r.message for r in caplog.records)
+
+
+def test_circular_dep_skipped(monkeypatch, caplog):
+    """循环依赖 -> 检测 warn + 跳过涉及插件"""
+    class A(Plugin):
+        name = "circ_a"
+        depends_on = ["circ_b"]
+        async def activate(self, ctx): ...
+
+    class B(Plugin):
+        name = "circ_b"
+        depends_on = ["circ_a"]
+        async def activate(self, ctx): ...
+
+    cfg = _config_with()
+    discovery = PluginDiscovery(cfg)
+    monkeypatch.setattr(
+        "merco.plugins.discovery.entry_points",
+        lambda group: [_fake_ep("circ_a", A), _fake_ep("circ_b", B)] if group == "merco.plugins" else [],
+    )
+    with caplog.at_level("WARNING"):
+        specs = discovery.discover()
+    # 两个循环插件都被跳过
+    assert specs == []
+    assert any("circ" in r.message.lower() for r in caplog.records)
