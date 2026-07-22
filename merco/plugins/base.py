@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from merco.skills.registry import SkillRegistry
     from merco.mcp.manager import MCPServerManager
     from merco.scheduler.cron import CronScheduler
+    from merco.sandbox.guard import PolicyPipeline as PermissionPipeline
 
 
 _PIPELINE_WHITELIST = {
@@ -76,6 +77,7 @@ class PluginContext:
         skill_registry: "SkillRegistry" = None,
         mcp_manager: "MCPServerManager" = None,
         scheduler: "CronScheduler" = None,
+        security_pipeline: "PermissionPipeline" = None,
         metadata: dict = None,
     ):
         self.hooks = hooks
@@ -97,6 +99,7 @@ class PluginContext:
         self.skill_registry = skill_registry
         self.mcp_manager = mcp_manager
         self.scheduler = scheduler
+        self.security_pipeline = security_pipeline
         self.metadata = metadata if metadata is not None else {}
 
     def on(self, event: str, handler: "Callable") -> None:
@@ -122,6 +125,24 @@ class PluginContext:
     def add_recaller(self, recaller: "BaseRecaller") -> None:
         """Add a memory recaller"""
         self.recaller.add(recaller)
+
+    def register_agent_profile(self, profile) -> None:
+        """注册一个 AgentProfile"""
+        self.agent_profiles.register(profile)
+
+    def register_loop_policy(self, policy) -> None:
+        """注册一个 LoopPolicy"""
+        self.loop_policies.register(policy)
+
+    def add_memory_backend(self, backend) -> None:
+        """添加一个 MemoryBackend"""
+        self.memory_backends.register(backend)
+
+    def add_security_policy(self, policy) -> None:
+        """添加一个 PermissionPolicy 到安全策略链"""
+        if self.security_pipeline is None:
+            raise RuntimeError("security_pipeline not available on this context")
+        self.security_pipeline.use(policy)
 
 
 @dataclass

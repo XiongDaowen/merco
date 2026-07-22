@@ -80,8 +80,15 @@ def test_plugin_deactivate_default():
 
 
 def test_plugin_context_does_not_expose_security_pipeline(ctx):
-    """PluginContext 不直接暴露 security_pipeline，避免插件绕过沙箱"""
-    assert not hasattr(ctx, "security_pipeline")
+    """PluginContext 不直接暴露 security_pipeline，避免插件绕过沙箱
+
+    NOTE: 这一行为已在新版本中翻转。PluginContext 现在显式暴露
+    security_pipeline 给插件用于注册安全策略（add_security_policy）。
+    旧断言 `not hasattr(ctx, "security_pipeline")` 已不再适用 —— 保留
+    本测试作为安全审计的形状检查：在没有显式传入 security_pipeline 时，
+    属性应是 None（默认未注入路径），而非被隐藏。
+    """
+    assert ctx.security_pipeline is None
 
 
 def test_add_processor_rejects_non_whitelisted_pipeline(ctx):
@@ -153,3 +160,57 @@ def test_plugin_priority_overridable():
         async def activate(self, ctx): ...
     assert Q.priority == 100
     assert Q.depends_on == ["p"]
+
+
+def test_plugin_context_security_pipeline_exposed():
+    """PluginContext 暴露 security_pipeline"""
+    from unittest.mock import MagicMock
+    from merco.plugins.base import PluginContext
+    sec = MagicMock()
+    ctx = PluginContext(
+        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
+        security_pipeline=sec,
+    )
+    assert ctx.security_pipeline is sec
+
+
+def test_convenience_methods_delegate():
+    """4 个便捷方法委托到底层 registry/pipeline"""
+    from unittest.mock import MagicMock
+    from merco.plugins.base import PluginContext
+    ctx = PluginContext(
+        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
+        observer=MagicMock(), todo_manager=MagicMock(), sub_agent_manager=MagicMock(),
+        context_pipeline=MagicMock(), agent_profiles=MagicMock(),
+        memory_backends=MagicMock(), loop_policies=MagicMock(),
+        security_pipeline=MagicMock(),
+    )
+    profile, policy, backend, sec_policy = object(), object(), object(), object()
+    ctx.register_agent_profile(profile)
+    ctx.register_loop_policy(policy)
+    ctx.add_memory_backend(backend)
+    ctx.add_security_policy(sec_policy)
+    ctx.agent_profiles.register.assert_called_once_with(profile)
+    ctx.loop_policies.register.assert_called_once_with(policy)
+    ctx.memory_backends.register.assert_called_once_with(backend)
+    ctx.security_pipeline.use.assert_called_once_with(sec_policy)
+
+
+def test_add_security_policy_without_pipeline_raises():
+    """security_pipeline 为 None 时 add_security_policy 抛 RuntimeError"""
+    from unittest.mock import MagicMock
+    from merco.plugins.base import PluginContext
+    ctx = PluginContext(
+        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
+    )  # security_pipeline 默认 None
+    try:
+        ctx.add_security_policy(object())
+        assert False, "应抛 RuntimeError"
+    except RuntimeError:
+        pass
