@@ -230,3 +230,31 @@ class TestPluginManager:
 
         assert manager.active_plugins == [mock_plugin.name]
         assert isinstance(manager.active_plugins, list)
+
+    def test_register_all_specs(self, manager):
+        """register_all 存 specs"""
+        from merco.plugins.base import PluginSpec
+        spec = PluginSpec(name="from-spec", source="entrypoint", loader=lambda: MagicMock)
+        manager.register_all([spec])
+        assert "from-spec" in manager._specs
+        assert manager._specs["from-spec"] is spec
+
+    def test_meta_from_spec(self, manager):
+        """_meta 返回 spec 的 priority/depends_on"""
+        from merco.plugins.base import PluginSpec
+        spec = PluginSpec(name="m", source="dir", priority=80, depends_on=["x"], loader=lambda: MagicMock)
+        manager.register_all([spec])
+        assert manager._meta("m") == (80, ["x"])
+
+    def test_meta_defaults_for_manual_plugin(self, manager, mock_plugin):
+        """手动注册（无 spec）的 _meta 返回默认 (50, [])"""
+        manager.register(mock_plugin)
+        assert manager._meta(mock_plugin.name) == (50, [])
+
+    def test_all_names_union(self, manager, mock_plugin):
+        """_all_names 是 _plugins 与 _specs 的并集"""
+        from merco.plugins.base import PluginSpec
+        manager.register(mock_plugin)
+        manager.register_all([PluginSpec(name="spec-only", source="dir", loader=lambda: MagicMock)])
+        names = set(manager._all_names())
+        assert names == {mock_plugin.name, "spec-only"}

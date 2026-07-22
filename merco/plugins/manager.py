@@ -5,7 +5,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .base import Plugin, PluginContext
+    from .base import Plugin, PluginContext, PluginSpec
 
 logger = logging.getLogger("merco.plugins.manager")
 
@@ -16,12 +16,29 @@ class PluginManager:
     def __init__(self, ctx: "PluginContext"):
         self._ctx = ctx
         self._plugins: dict[str, "Plugin"] = {}
+        self._specs: dict[str, "PluginSpec"] = {}
         self._active: set[str] = set()
         self._ever_activated: set[str] = set()
 
     def register(self, plugin: "Plugin") -> None:
         """Register a plugin instance"""
         self._plugins[plugin.name] = plugin
+
+    def register_all(self, specs: list) -> None:
+        """注册一批 PluginSpec（discovery 产出）"""
+        for spec in specs:
+            self._specs[spec.name] = spec
+
+    def _all_names(self) -> list[str]:
+        """_plugins 与 _specs 键的并集"""
+        return list(set(self._plugins.keys()) | set(self._specs.keys()))
+
+    def _meta(self, name: str) -> tuple[int, list[str]]:
+        """返回 (priority, depends_on)；无 spec 则默认 (50, [])"""
+        spec = self._specs.get(name)
+        if spec is None:
+            return (50, [])
+        return (spec.priority, list(spec.depends_on))
 
     async def activate(self, name: str) -> None:
         """Activate a single plugin"""
