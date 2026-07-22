@@ -126,6 +126,7 @@ class MercoConfig:
     max_input_tokens: int = 64000
     compression_threshold: float = 0.75
     skills_paths: list = field(default_factory=lambda: ["./.merco/skills", "~/.config/merco/skills"])
+    plugins_paths: list = field(default_factory=lambda: ["./.merco/plugins", "~/.config/merco/plugins"])
     memory_enabled: bool = True
     memory_path: str = "~/.merco/memory"
     memory_backend: str = "json"
@@ -194,6 +195,7 @@ class MercoConfig:
             "max_input_tokens": self.max_input_tokens,
             "compression_threshold": self.compression_threshold,
             "skills_paths": self.skills_paths,
+            "plugins_paths": self.plugins_paths,
             "log_level": self.log_level,
             "sandbox_mode": self.sandbox_mode,
             "sandbox_rules": self.sandbox_rules,
@@ -253,6 +255,7 @@ class MercoConfig:
             max_input_tokens=data.get("max_input_tokens", 64000),
             compression_threshold=data.get("compression_threshold", 0.75),
             skills_paths=data.get("skills_paths", ["./.merco/skills", "~/.config/merco/skills"]),
+            plugins_paths=data.get("plugins_paths", ["./.merco/plugins", "~/.config/merco/plugins"]),
             memory_enabled=memory_data.get("enabled", data.get("memory_enabled", True)),
             memory_path=memory_data.get("path", data.get("memory_path", "~/.merco/memory")),
             memory_backend=memory_data.get("backend", "json"),

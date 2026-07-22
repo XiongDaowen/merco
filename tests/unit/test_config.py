@@ -303,3 +303,15 @@ class TestConfig:
         assert cfg.headers == {"X-API-Key": "secret"}
         assert cfg.connect_timeout == 5
         assert cfg.env == {}  # default
+
+    # ── plugins_paths config tests ──
+
+    def test_plugins_paths_default(self):
+        """plugins_paths 默认对齐 skills_paths 约定"""
+        cfg = MercoConfig()
+        assert cfg.plugins_paths == ["./.merco/plugins", "~/.config/merco/plugins"]
+
+    def test_plugins_paths_from_dict(self):
+        """从 dict 加载 plugins_paths"""
+        cfg = MercoConfig._from_dict({"plugins_paths": ["/custom/plugins"]})
+        assert cfg.plugins_paths == ["/custom/plugins"]
