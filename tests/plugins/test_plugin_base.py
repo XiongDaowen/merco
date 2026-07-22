@@ -133,3 +133,23 @@ def ctx(tmp_path):
         observer=MagicMock(),
         context_pipeline=ContextPipeline(),
     )
+
+
+def test_plugin_priority_and_depends_on_defaults():
+    """Plugin 默认 priority=50, depends_on=[]"""
+    class P(Plugin):
+        name = "p"
+        async def activate(self, ctx): ...
+    assert P.priority == 50
+    assert P.depends_on == []
+
+
+def test_plugin_priority_overridable():
+    """Plugin 可覆盖 priority 和 depends_on"""
+    class Q(Plugin):
+        name = "q"
+        priority = 100
+        depends_on = ["p"]
+        async def activate(self, ctx): ...
+    assert Q.priority == 100
+    assert Q.depends_on == ["p"]

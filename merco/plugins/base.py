@@ -39,6 +39,8 @@ class Plugin(ABC):
     name: str = ""           # unique identifier
     version: str = ""        # semantic version
     description: str = ""    # one-line description
+    priority: int = 50       # 越大越早激活；>= BOOT_PRIORITY(100) 在 boot 阶段激活
+    depends_on: list[str] = []  # 必须先激活的插件名
 
     @abstractmethod
     async def activate(self, ctx: "PluginContext") -> None:
