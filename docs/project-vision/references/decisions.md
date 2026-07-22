@@ -2,6 +2,7 @@
 
 | 日期 | 决策 | 原因 |
 |------|------|------|
+| 2026-07-23 | 下一投入方向锁定为插件动态化三波路线（波1 地基 / 波2 模型层 / 波3 多入口） | 当前插件编译期硬编码（agent.py:448-514 import+register，激活顺序硬编码 534-545），无发现机制。先做动态加载地基（discover + manifest + 拓扑排序）+ 扩展点便捷方法一致化，再 ModelProviderRegistry，最后 Scheduler 接 Runtime + GatewayRegistry。详见 [plugin-dynamic-loading-plan.md](plugin-dynamic-loading-plan.md)。核实发现 P2 PermissionPolicy 已实现（guard.py:145-195），roadmap 文档滞后。 |
 | 2026-07-21 | CLI UI 快照测试基于 Rich `Console(record=True)` + 双缓冲 (`get_markup()`) | 不用截图/ANSI 颜色码断言。markup 文本稳定（`[red]`/`[bold]`），跨终端不脆。`_CaptureConsole` 子类拦截 `print()` 保存原始 markup 到 side buffer。 |
 | 2026-07-21 | `_run_one_turn()` 从 `run_repl()` 抽出为模块级函数 | 797 行巨型 while 循环无法单独测异常路径。抽出后 13 个异常路径测试直接覆盖；InputInterrupt 留在 `repl()`（依赖 `exit_count` 闭包）。 |
 | 2026-07-21 | API 错误呈现：非 debug 模式零 WARNING + 每次 retry 一个完整 Panel | `logger.warning(exc_info=True)` 泄漏 stacktrace → 改为 `logger.info`（WARNING 阈值抑制）。Panel 不叠层：except 块 `console.print(build_error_panel(...))` 直接输出，不依赖 Live transient/static。 |
