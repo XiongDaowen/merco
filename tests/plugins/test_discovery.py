@@ -73,3 +73,67 @@ def test_discover_entrypoints_reads_priority_from_class(monkeypatch):
     spec_with_deps = [s for s in specs if s.name == "with_deps"][0]
     assert spec_with_deps.priority == 90
     assert spec_with_deps.depends_on == ["ep_test"]
+
+
+def _write_dir_plugin(tmp_path, name, entry="main:MyPlugin", priority=50, depends_on=None):
+    """在 tmp_path/<name>/ 下造一个目录扫描插件"""
+    pdir = tmp_path / name
+    pdir.mkdir()
+    (pdir / "plugin.toml").write_text(
+        f'[plugin]\nname = "{name}"\nversion = "0.1.0"\n'
+        f'description = "d"\npriority = {priority}\n'
+        f'depends_on = {depends_on or []}\nentry = "{entry}"\n', encoding="utf-8"
+    )
+    (pdir / "main.py").write_text(
+        "from merco.plugins.base import Plugin\n"
+        f"class MyPlugin(Plugin):\n"
+        f'    name = "{name}"\n    version = "0.1.0"\n'
+        "    async def activate(self, ctx): ...\n",
+        encoding="utf-8",
+    )
+    return pdir
+
+
+def test_discover_dir_scan_basic(tmp_path, monkeypatch):
+    """目录扫描发现 plugin.toml 插件"""
+    _write_dir_plugin(tmp_path, "myplug", priority=55)
+    cfg = _config_with(paths=[str(tmp_path)])
+    discovery = PluginDiscovery(cfg)
+    monkeypatch.setattr("merco.plugins.discovery.entry_points", lambda group: [])
+
+    specs = discovery.discover()
+    assert len(specs) == 1
+    s = specs[0]
+    assert s.name == "myplug"
+    assert s.source == "dir"
+    assert s.priority == 55  # 从 toml 读，不被 class default 50 覆盖
+    assert s.instantiate().name == "myplug"
+
+
+def test_discover_dir_scan_skips_dir_without_toml(tmp_path, monkeypatch):
+    """无 plugin.toml 的目录静默跳过"""
+    (tmp_path / "not_a_plugin").mkdir()
+    (tmp_path / "not_a_plugin" / "readme.txt").write_text("hi")
+    _write_dir_plugin(tmp_path, "real")
+    cfg = _config_with(paths=[str(tmp_path)])
+    discovery = PluginDiscovery(cfg)
+    monkeypatch.setattr("merco.plugins.discovery.entry_points", lambda group: [])
+
+    specs = discovery.discover()
+    assert [s.name for s in specs] == ["real"]
+
+
+def test_discover_dir_scan_bad_toml_skipped(tmp_path, monkeypatch, caplog):
+    """plugin.toml 解析失败 -> warn + 跳过"""
+    pdir = tmp_path / "bad"
+    pdir.mkdir()
+    (pdir / "plugin.toml").write_text("not = valid = toml = ==", encoding="utf-8")
+    _write_dir_plugin(tmp_path, "good")
+    cfg = _config_with(paths=[str(tmp_path)])
+    discovery = PluginDiscovery(cfg)
+    monkeypatch.setattr("merco.plugins.discovery.entry_points", lambda group: [])
+
+    with caplog.at_level("WARNING"):
+        specs = discovery.discover()
+    assert [s.name for s in specs] == ["good"]
+    assert any("bad" in r.message for r in caplog.records)

@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import logging
+import tomllib
+import importlib.util
 from importlib.metadata import entry_points
+from pathlib import Path
 
 from merco.plugins.base import Plugin, PluginSpec
 
@@ -21,8 +24,14 @@ class PluginDiscovery:
         specs: dict[str, PluginSpec] = {}
         # 1. entry_points
         for spec in self._discover_entrypoints():
+            if spec.name in specs:
+                logger.warning("duplicate plugin name '%s': entry_point overwritten", spec.name)
             specs[spec.name] = spec
-        # 2. 目录扫描（覆盖同名 entry_point）— Task 6 补
+        # 2. 目录扫描（覆盖同名 entry_point）
+        for spec in self._discover_dirs():
+            if spec.name in specs:
+                logger.info("plugin '%s': dir-scan overrides entry_point", spec.name)
+            specs[spec.name] = spec
         return self._finalize(specs)
 
     def _discover_entrypoints(self) -> list[PluginSpec]:
@@ -35,6 +44,49 @@ class PluginDiscovery:
                 continue
             out.append(spec)
         return out
+
+    def _discover_dirs(self) -> list[PluginSpec]:
+        out = []
+        for raw in self._config.plugins_paths:
+            base = Path(raw).expanduser()
+            if not base.is_dir():
+                continue
+            for pdir in sorted(base.iterdir()):
+                if not pdir.is_dir():
+                    continue
+                spec = self._spec_from_dir(pdir)
+                if spec is not None:
+                    out.append(spec)
+        return out
+
+    def _spec_from_dir(self, pdir: Path) -> PluginSpec | None:
+        toml = pdir / "plugin.toml"
+        if not toml.is_file():
+            return None  # 不是插件，静默跳过
+        try:
+            with open(toml, "rb") as f:
+                data = tomllib.load(f)
+            p = data["plugin"]
+            name = p["name"]
+            entry = p["entry"]
+        except Exception as e:
+            logger.warning("plugin dir '%s' manifest parse failed: %s", pdir.name, e)
+            return None
+        if not self._is_enabled(name):
+            return None
+        loader = (lambda pd=pdir, en=entry: _load_class_from_dir(pd, en))
+        spec = PluginSpec(
+            name=name,
+            source="dir",
+            loader=loader,
+            version=p.get("version", ""),
+            description=p.get("description", ""),
+            priority=p.get("priority", 50),
+            depends_on=list(p.get("depends_on", [])),
+        )
+        if not self._load_and_validate(spec, read_meta=False):
+            return None
+        return spec
 
     def _is_enabled(self, name: str) -> bool:
         return self._config.plugins.get(name, {}).get("enabled", True)
@@ -70,3 +122,21 @@ class PluginDiscovery:
                 continue
             result.append(spec)
         return result
+
+
+def _load_class_from_dir(pdir: Path, entry: str) -> type:
+    """从目录加载 module:Class，不污染 sys.path。"""
+    module_name, _, class_name = entry.partition(":")
+    if not class_name:
+        raise ImportError(f"entry '{entry}' must be 'module:Class'")
+    module_path = pdir / f"{module_name}.py"
+    if not module_path.is_file():
+        raise ImportError(f"module file not found: {module_path}")
+    full = f"merco_plugin_{pdir.name}_{module_name}"
+    spec = importlib.util.spec_from_file_location(full, module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # 可能抛异常
+    cls = getattr(module, class_name, None)
+    if cls is None:
+        raise ImportError(f"class {class_name} not found in {module_path}")
+    return cls
