@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from merco.hooks.registry import HookRegistry
@@ -23,7 +25,6 @@ if TYPE_CHECKING:
     from merco.skills.registry import SkillRegistry
     from merco.mcp.manager import MCPServerManager
     from merco.scheduler.cron import CronScheduler
-    from typing import Callable
 
 
 _PIPELINE_WHITELIST = {
@@ -122,3 +123,33 @@ class PluginContext:
     def add_recaller(self, recaller: "BaseRecaller") -> None:
         """Add a memory recaller"""
         self.recaller.add(recaller)
+
+
+@dataclass
+class PluginSpec:
+    """已发现插件的元数据 + 懒加载器。discovery 产出、manager 消费。"""
+
+    name: str
+    source: str                            # "entrypoint" | "dir" | "manual"
+    loader: Callable[[], type] = None      # 返回 Plugin 子类（懒加载）
+    version: str = ""
+    description: str = ""
+    priority: int = 50
+    depends_on: list[str] = field(default_factory=list)
+
+    _cls: type | None = None
+    _instance: "Plugin | None" = None
+
+    def load_cls(self) -> type:
+        """导入并返回 Plugin 子类，缓存到 _cls。"""
+        if self._cls is None:
+            if self.loader is None:
+                raise RuntimeError(f"PluginSpec '{self.name}' has no loader")
+            self._cls = self.loader()
+        return self._cls
+
+    def instantiate(self) -> "Plugin":
+        """返回 Plugin 实例，缓存到 _instance。"""
+        if self._instance is None:
+            self._instance = self.load_cls()()
+        return self._instance
