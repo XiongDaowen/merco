@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -131,14 +130,14 @@ class PluginSpec:
 
     name: str
     source: str                            # "entrypoint" | "dir" | "manual"
-    loader: Callable[[], type] = None      # 返回 Plugin 子类（懒加载）
+    loader: Callable[[], type] | None = None  # 返回 Plugin 子类（懒加载）
     version: str = ""
     description: str = ""
     priority: int = 50
     depends_on: list[str] = field(default_factory=list)
 
-    _cls: type | None = None
-    _instance: "Plugin | None" = None
+    _cls: type | None = field(default=None, init=False, repr=False, compare=False)
+    _instance: "Plugin | None" = field(default=None, init=False, repr=False, compare=False)
 
     def load_cls(self) -> type:
         """导入并返回 Plugin 子类，缓存到 _cls。"""
