@@ -126,7 +126,19 @@ class PluginDiscovery:
         cyclic = self._find_cycles(remaining)
         for name in cyclic:
             logger.warning("plugin '%s' skipped: circular dependency", name)
-        return [s for n, s in specs.items() if n not in pruned and n not in cyclic]
+        # 二次存在性闭包：循环移除后可能有 dangling 依赖（DFS 可能漏节点），级联剪枝
+        bad = pruned | cyclic
+        changed = True
+        while changed:
+            changed = False
+            for name, spec in specs.items():
+                if name in bad:
+                    continue
+                if any(d in bad for d in spec.depends_on):
+                    logger.warning("plugin '%s' skipped: dependency removed", name)
+                    bad.add(name)
+                    changed = True
+        return [s for n, s in specs.items() if n not in bad]
 
     def _find_cycles(self, specs: dict[str, PluginSpec]) -> set[str]:
         """DFS 检测参与循环的节点名集合。"""

@@ -212,4 +212,4 @@ def test_circular_dep_skipped(monkeypatch, caplog):
         specs = discovery.discover()
     # 两个循环插件都被跳过
     assert specs == []
-    assert any("circ" in r.message.lower() for r in caplog.records)
+    assert any("circular" in r.message for r in caplog.records)
