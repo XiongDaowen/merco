@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from rich.console import Console
 
 from merco.core.agent import Agent, StreamingProvider
-from merco.core.config import MercoConfig
+from merco.core.config import MercoConfig, StreamingConfig
 from merco.memory.session_store import SessionStore
 from merco.tools.registry import ToolRegistry
 
@@ -38,10 +38,12 @@ async def _make_agent_with_failing_llm(monkeypatch, tmp_path, exc: Exception,
     cfg.model.api_key = "test-key"
     cfg.model.model = "test-model"
     cfg.sandbox_mode = "auto"
-    cfg.streaming = streaming
-    cfg.stream_thinking = True
-    cfg.stream_content = True
-    cfg.stream_thinking_transient = False  # default: persistent panels
+    cfg.streaming = StreamingConfig(
+        enabled=streaming,
+        think=True,
+        content=True,
+        think_transient=False,
+    )
     cfg.memory_path = str(tmp_path / "memory")
     cfg.max_input_tokens = 8000
     cfg.compression_threshold = 0.8
@@ -151,10 +153,12 @@ class TestStreamingProviderError:
         cfg.model.api_key = "test"
         cfg.model.model = "m"
         cfg.sandbox_mode = "auto"
-        cfg.streaming = True
-        cfg.stream_thinking = True
-        cfg.stream_content = True
-        cfg.stream_thinking_transient = False
+        cfg.streaming = StreamingConfig(
+            enabled=True,
+            think=True,
+            content=True,
+            think_transient=False,
+        )
         cfg.memory_path = str(tmp_path / "mem")
         cfg.max_input_tokens = 8000
         cfg.compression_threshold = 0.8

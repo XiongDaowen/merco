@@ -13,7 +13,7 @@ import pytest
 from io import StringIO
 from unittest.mock import patch, MagicMock
 
-from merco.core.config import MercoConfig
+from merco.core.config import MercoConfig, StreamingConfig
 from merco.core.agent import Agent, StreamingProvider
 from tests.conftest import MockLLMClient, make_test_registry
 
@@ -114,10 +114,12 @@ def stream_agent(monkeypatch, tmp_path):
     cfg.model.api_key = "test-key"
     cfg.model.model = "test-model"
     cfg.sandbox_mode = "auto"
-    cfg.streaming = True
-    cfg.stream_content = True
-    cfg.stream_thinking = True
-    cfg.stream_thinking_transient = False
+    cfg.streaming = StreamingConfig(
+        enabled=True,
+        content=True,
+        think=True,
+        think_transient=False,
+    )
 
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
@@ -400,10 +402,12 @@ async def test_stream_thinking_transient_true(monkeypatch, tmp_path):
     cfg.model.api_key = "test-key"
     cfg.model.model = "test-model"
     cfg.sandbox_mode = "auto"
-    cfg.streaming = True
-    cfg.stream_content = True
-    cfg.stream_thinking = True
-    cfg.stream_thinking_transient = True  # <-- key config
+    cfg.streaming = StreamingConfig(
+        enabled=True,
+        content=True,
+        think=True,
+        think_transient=True,  # <-- key config
+    )
 
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
@@ -418,7 +422,7 @@ async def test_stream_thinking_transient_true(monkeypatch, tmp_path):
     assert "Final answer" in result
 
     # Verify the config is correctly set
-    assert agent.config.stream_thinking_transient is True
+    assert agent.config.streaming.think_transient is True
 
 
 @pytest.mark.asyncio
@@ -436,10 +440,12 @@ async def test_stream_thinking_transient_false_preserves_panel(monkeypatch, tmp_
     cfg.model.api_key = "test-key"
     cfg.model.model = "test-model"
     cfg.sandbox_mode = "auto"
-    cfg.streaming = True
-    cfg.stream_content = True
-    cfg.stream_thinking = True
-    cfg.stream_thinking_transient = False  # <-- default
+    cfg.streaming = StreamingConfig(
+        enabled=True,
+        content=True,
+        think=True,
+        think_transient=False,  # <-- default
+    )
 
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
@@ -452,7 +458,7 @@ async def test_stream_thinking_transient_false_preserves_panel(monkeypatch, tmp_
 
     result = await agent.run("Test persistent")
     assert "Final answer" in result
-    assert agent.config.stream_thinking_transient is False
+    assert agent.config.streaming.think_transient is False
 
 
 # ═══════════════════════════════════════════════════════════
@@ -474,10 +480,12 @@ async def test_stream_content_false(monkeypatch, tmp_path):
     cfg.model.api_key = "test-key"
     cfg.model.model = "test-model"
     cfg.sandbox_mode = "auto"
-    cfg.streaming = True
-    cfg.stream_content = False  # <-- disabled
-    cfg.stream_thinking = True
-    cfg.stream_thinking_transient = False
+    cfg.streaming = StreamingConfig(
+        enabled=True,
+        content=False,  # <-- disabled
+        think=True,
+        think_transient=False,
+    )
 
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
@@ -499,7 +507,7 @@ async def test_stream_content_false(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_streaming_false_uses_non_streaming_provider(stream_agent, quiet_console):
     """When streaming=False, NonStreamingProvider should be used."""
-    stream_agent.config.streaming = False
+    stream_agent.config.streaming.enabled = False
     # Re-create provider
     from merco.core.agent import NonStreamingProvider
     stream_agent._provider = NonStreamingProvider()

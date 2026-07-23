@@ -141,8 +141,8 @@ class StreamingProvider(ResponseProvider):
         content_buf = ""
         tc_buf: dict[int, dict] = {}
 
-        stream_think = agent.config.stream_thinking
-        render_interval = agent.config.stream_render_interval
+        stream_think = agent.config.streaming.think
+        render_interval = agent.config.streaming.render_interval
         _last_render = 0.0
         _last_content_update = 0.0
         _content_update_interval = 0.3  # 300ms throttle for content panel
@@ -156,7 +156,7 @@ class StreamingProvider(ResponseProvider):
 
         # ── 使用单个 Live 来显示 thinking 面板（content 面板延迟加入 Group）──
         live = Live(Group(thinking_panel), console=console, refresh_per_second=4,
-                    transient=agent.config.stream_thinking_transient)
+                    transient=agent.config.streaming.think_transient)
         live.start()
 
         # ── 定时刷新任务：防止 API 返回慢时 thinking 面板卡顿 ──
@@ -224,7 +224,7 @@ class StreamingProvider(ResponseProvider):
                             nonlocal_thinking_panel[0] = _build_reasoning_panel(reasoning_buf)
                             live.update(_rebuild_group())
                 content_buf += chunk.get("content", "")
-                if content_buf.strip() and agent.config.stream_content:
+                if content_buf.strip() and agent.config.streaming.content:
                     # Lazy init: create content_panel on first content chunk
                     if content_panel is None:
                         content_panel = Panel("", border_style="dim",
@@ -326,7 +326,6 @@ class Agent:
             cooldown=0.3,  # 请求冷却（秒），0=禁用；共享网关可调大
             extra_params=config.model.extra_params,
             headers=config.model.headers,
-            stream_options=config.model.stream_options,
         )
 
         self._tool_calls_count = 0
@@ -369,7 +368,7 @@ class Agent:
         # _restore_context() 在 Agent.create()._initialize_async_plugins() 中执行
 
         # ── 工厂：根据 config 选响应策略 ──
-        if self.config.streaming:
+        if self.config.streaming.enabled:
             self._provider: ResponseProvider = StreamingProvider()
         else:
             self._provider: ResponseProvider = NonStreamingProvider()
@@ -815,7 +814,7 @@ class Agent:
         assistant_content = (response.get("content", "") or "").strip()
         if assistant_content:
             # 流式模式已在 Live 中显示过内容，不重复打印
-            if not (self.config.streaming and self.config.stream_content):
+            if not (self.config.streaming.enabled and self.config.streaming.content):
                 console.print(Panel(Markdown(assistant_content), border_style="dim"))
         api_tool_calls = [
             {"id": tc["id"], "type": "function",

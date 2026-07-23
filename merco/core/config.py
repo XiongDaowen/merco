@@ -33,6 +33,7 @@ class ProviderInfo:
         raise KeyError(key)
 
 
+# TODO(T16): delete with setup.py migration
 PROVIDER_REGISTRY: dict[str, ProviderInfo] = {
     "openai": ProviderInfo(
         key="openai",
@@ -90,7 +91,7 @@ PROVIDER_REGISTRY: dict[str, ProviderInfo] = {
 
 @dataclass
 class ModelConfig:
-    """模型配置"""
+    """模型配置 - 纯数据袋。凭证解析由 ModelRegistry.select() 负责。"""
     provider: str = "openai"
     model: str = "gpt-4"
     api_key: str | None = None
@@ -99,22 +100,18 @@ class ModelConfig:
     max_tokens: int = 4096
     extra_params: dict = field(default_factory=dict)
     headers: dict = field(default_factory=dict)
-    stream_options: dict | None = None
+    request_cooldown: float = 0.3          # 吸收 agent.py 硬编码 cooldown=0.3
+    fallbacks: list = field(default_factory=list)   # list[ModelConfig] for ModelFallbackRecovery
 
-    def resolve(self):
-        """后处理：根据 provider 名补齐未填的字段"""
-        entry = PROVIDER_REGISTRY.get(self.provider)
-        if entry:
-            if not self.base_url:
-                self.base_url = entry.base_url
-            if not self.api_key:
-                self.api_key = os.environ.get(entry.key_env, "")
-        elif not self.base_url:
-            # 未收录的 provider —— 用户必须显式写 base_url
-            logger.warning(
-                "Provider '%s' 未在注册表中。请确认 base_url 已正确填写，"
-                "或使用 provider: 'custom' 明确标注。", self.provider
-            )
+
+@dataclass
+class StreamingConfig:
+    """流式渲染配置（归组，替旧 5 扁平字段）。"""
+    enabled: bool = False
+    think: bool = True
+    content: bool = True
+    think_transient: bool = False
+    render_interval: float = 0.05
 
 
 @dataclass
@@ -133,11 +130,7 @@ class MercoConfig:
     log_level: str = "INFO"
     sandbox_mode: str = "ask"
     sandbox_rules: list = field(default_factory=list)
-    streaming: bool = False
-    stream_thinking: bool = True
-    stream_content: bool = True
-    stream_thinking_transient: bool = False  # 流式思考内容是否仅临时显示（不保留思考面板）
-    stream_render_interval: float = 0.3  # 流式 reasoning 面板最小渲染间隔（秒），0=不限制
+    streaming: StreamingConfig = field(default_factory=StreamingConfig)
     diff_view: str = "unified"
     memory_recall_enabled: bool = True
     memory_recall_limit: int = 3
@@ -164,8 +157,6 @@ class MercoConfig:
         else:
             cfg = cls()
 
-        # 后处理：根据 provider 补全未填字段
-        cfg.model.resolve()
         return cfg
 
     def save(self, config_path: str):
@@ -189,7 +180,21 @@ class MercoConfig:
                 "max_tokens": self.model.max_tokens,
                 "extra_params": self.model.extra_params or None,
                 "headers": self.model.headers or None,
-                "stream_options": self.model.stream_options,
+                "request_cooldown": self.model.request_cooldown,
+                "fallbacks": [
+                    {
+                        "provider": m.provider,
+                        "model": m.model,
+                        "api_key": m.api_key,
+                        "base_url": m.base_url,
+                        "temperature": m.temperature,
+                        "max_tokens": m.max_tokens,
+                        "extra_params": m.extra_params or None,
+                        "headers": m.headers or None,
+                        "request_cooldown": m.request_cooldown,
+                    }
+                    for m in self.model.fallbacks
+                ] if self.model.fallbacks else None,
             },
             "max_tool_calls": self.max_tool_calls,
             "max_input_tokens": self.max_input_tokens,
@@ -199,11 +204,7 @@ class MercoConfig:
             "log_level": self.log_level,
             "sandbox_mode": self.sandbox_mode,
             "sandbox_rules": self.sandbox_rules,
-            "streaming": self.streaming,
-            "stream_thinking": self.stream_thinking,
-            "stream_content": self.stream_content,
-            "stream_thinking_transient": self.stream_thinking_transient,
-            "stream_render_interval": self.stream_render_interval,
+            "streaming": self._streaming_to_dict(self.streaming),
             "diff_view": self.diff_view,
             "memory": {
                 "enabled": self.memory_enabled,
@@ -226,11 +227,36 @@ class MercoConfig:
             "plugins": self.plugins,
         }
 
+    @staticmethod
+    def _streaming_to_dict(streaming: StreamingConfig) -> dict:
+        return {
+            "enabled": streaming.enabled,
+            "think": streaming.think,
+            "content": streaming.content,
+            "think_transient": streaming.think_transient,
+            "render_interval": streaming.render_interval,
+        }
+
     @classmethod
     def _from_dict(cls, data: dict) -> "MercoConfig":
         model_data = data.get("model", {})
         if not isinstance(model_data, dict):
             model_data = {}
+        fallbacks_raw = model_data.get("fallbacks", [])
+        fallbacks = [
+            ModelConfig(
+                provider=f.get("provider", "openai"),
+                model=f.get("model", "gpt-4"),
+                api_key=f.get("api_key"),
+                base_url=f.get("base_url"),
+                temperature=f.get("temperature", 0.7),
+                max_tokens=f.get("max_tokens", 4096),
+                extra_params=f.get("extra_params", {}),
+                headers=f.get("headers", {}),
+                request_cooldown=f.get("request_cooldown", 0.3),
+            )
+            for f in fallbacks_raw
+        ] if isinstance(fallbacks_raw, list) and fallbacks_raw else []
         model = ModelConfig(
             provider=model_data.get("provider", "openai"),
             model=model_data.get("model", "gpt-4"),
@@ -240,7 +266,8 @@ class MercoConfig:
             max_tokens=model_data.get("max_tokens", 4096),
             extra_params=model_data.get("extra_params", {}),
             headers=model_data.get("headers", {}),
-            stream_options=model_data.get("stream_options"),
+            request_cooldown=model_data.get("request_cooldown", 0.3),
+            fallbacks=fallbacks,
         )
         memory_data = data.get("memory", {})
         if not isinstance(memory_data, dict):
@@ -262,11 +289,7 @@ class MercoConfig:
             log_level=data.get("log_level", "INFO"),
             sandbox_mode=data.get("sandbox_mode", "ask"),
             sandbox_rules=data.get("sandbox_rules", []),
-            streaming=data.get("streaming", False),
-            stream_thinking=data.get("stream_thinking", True),
-            stream_content=data.get("stream_content", True),
-            stream_thinking_transient=data.get("stream_thinking_transient", False),
-            stream_render_interval=data.get("stream_render_interval", 0.05),
+            streaming=cls._streaming_from_dict(data),
             diff_view=data.get("diff_view", "unified"),
             memory_recall_enabled=memory_data.get("recall_enabled", True),
             memory_recall_limit=memory_data.get("recall_limit", 3),
@@ -280,6 +303,27 @@ class MercoConfig:
             fork_reset_observer=isinstance(sess, dict) and sess.get("fork_reset_observer", False),
             mcp_servers=data.get("mcp_servers", {}),
             plugins=data.get("plugins", {}),
+        )
+
+    @staticmethod
+    def _streaming_from_dict(data: dict) -> StreamingConfig:
+        raw = data.get("streaming")
+        if isinstance(raw, bool):        # one-time migration: old `streaming: true`
+            return StreamingConfig(
+                enabled=raw,
+                think=data.get("stream_thinking", True),
+                content=data.get("stream_content", True),
+                think_transient=data.get("stream_thinking_transient", False),
+                render_interval=data.get("stream_render_interval", 0.05),
+            )
+        if not isinstance(raw, dict):
+            return StreamingConfig()
+        return StreamingConfig(
+            enabled=raw.get("enabled", False),
+            think=raw.get("think", raw.get("stream_thinking", True)),
+            content=raw.get("content", raw.get("stream_content", True)),
+            think_transient=raw.get("think_transient", raw.get("stream_thinking_transient", False)),
+            render_interval=raw.get("render_interval", raw.get("stream_render_interval", 0.05)),
         )
 
     @staticmethod

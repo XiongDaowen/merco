@@ -46,6 +46,8 @@ def capture_console(monkeypatch):
     return capture, buf
 
 
+from merco.core.config import StreamingConfig
+
 def make_fake_agent(
     run_return=None,
     run_side_effect=None,
@@ -57,15 +59,14 @@ def make_fake_agent(
         run_return: agent.run() 的返回值
         run_side_effect: agent.run() 的 side_effect（异常/返回值序列）
         config_overrides: 覆盖 agent.config 的字段，如
-            {"streaming": False, "stream_content": False, ...}
+            {"streaming": StreamingConfig(enabled=False), ...}
 
     Returns:
         MagicMock: 形如真实 Agent 的 mock；config.model 有 provider/model 属性
     """
     agent = MagicMock()
     config = MagicMock()
-    config.streaming = False
-    config.stream_content = False
+    config.streaming = StreamingConfig(enabled=False, content=False)
     config.model.provider = "openai"
     config.model.model = "gpt-4o"
     config.sandbox_mode = "local"

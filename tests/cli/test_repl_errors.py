@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from cli.main import _run_one_turn, PromptArea
 from tests.cli.conftest import make_fake_agent
+from merco.core.config import StreamingConfig
 
 
 class FakeDriver:
@@ -52,7 +53,7 @@ async def test_stream_mode_suppresses_panel(capture_console):
     capture, buf = capture_console
     agent = make_fake_agent(
         run_return="this should NOT be wrapped",
-        config_overrides={"streaming": True, "stream_content": True},
+        config_overrides={"streaming": StreamingConfig(enabled=True, content=True)},
     )
     driver = FakeDriver(inputs=["hi"])
     area = PromptArea()
@@ -73,7 +74,7 @@ async def test_stream_mode_but_no_stream_content_still_panels(capture_console):
     capture, buf = capture_console
     agent = make_fake_agent(
         run_return="response",
-        config_overrides={"streaming": True, "stream_content": False},
+        config_overrides={"streaming": StreamingConfig(enabled=True, content=False)},
     )
     driver = FakeDriver(inputs=["hi"])
     area = PromptArea()
@@ -327,9 +328,7 @@ async def test_provider_error_uses_logger_info_not_warning(caplog, monkeypatch):
         side_effect=Exception("rate limit")
     )
     fake_agent._error_displayed_in_stream = False
-    fake_agent.config.stream_thinking = True
-    fake_agent.config.stream_content = True
-    fake_agent.config.stream_thinking_transient = False
+    fake_agent.config.streaming = StreamingConfig(think=True, content=True, think_transient=False)
 
     for _ in range(3):
         try:

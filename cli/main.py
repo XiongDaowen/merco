@@ -369,7 +369,7 @@ async def _run_one_turn(agent, prompt_area, driver, handle_command, current_task
             from rich.text import Text
             c.print(Panel(Text.from_markup(response), border_style="red",
                            title="⚠ API 错误", title_align="left", padding=(0, 1)))
-    elif not (agent.config.streaming and agent.config.stream_content):
+    elif not (agent.config.streaming.enabled and agent.config.streaming.content):
         c.print(Panel(Markdown(response), border_style="dim"))
     c.rule(style="dim")
     return "continue"
