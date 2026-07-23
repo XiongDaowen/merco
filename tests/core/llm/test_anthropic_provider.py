@@ -104,6 +104,27 @@ def test_parse_response_blocks():
     assert result["tool_calls"][0]["function"]["name"] == "search"
 
 
+def test_parse_response_extracts_cached_tokens():
+    """Anthropic 缓存用量：从 cache_read_input_tokens 提取 cached_tokens。
+
+    新架构下 Anthropic 用量提取住在 anthropic_provider._parse_response，仅吐
+    cached_tokens（来自 cache_read_input_tokens）。旧 _client 的
+    cache_read_tokens / cache_write_tokens 字段已废弃，不再断言。
+    """
+    provider = AnthropicNativeProvider(api_key="k", model="claude-sonnet-4-20250514")
+    fake = MagicMock()
+    fake.content = [SimpleNamespace(type="text", text="answer")]
+    fake.stop_reason = "end_turn"
+    fake.usage = MagicMock(
+        input_tokens=100, output_tokens=20, cache_read_input_tokens=50
+    )
+    result = provider._parse_response(fake)
+    assert result["usage"]["prompt_tokens"] == 100
+    assert result["usage"]["completion_tokens"] == 20
+    assert result["usage"]["total_tokens"] == 120
+    assert result["usage"]["cached_tokens"] == 50
+
+
 @pytest.mark.asyncio
 async def test_chat_translates_rate_limit():
     import anthropic
