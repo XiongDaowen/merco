@@ -55,7 +55,7 @@ async def _make_agent_with_failing_llm(monkeypatch, tmp_path, exc: Exception,
         agent._session_store = SessionStore(db_path)
         agent.session = type(agent.session).resume_or_create(agent._session_store)
         agent._restore_context()
-        agent.llm = _FailingStreamLLM(exc)  # inject failing LLM
+        agent.provider = _FailingStreamLLM(exc)  # inject failing provider
         return agent
 
     monkeypatch.setattr(Agent, "create", staticmethod(_fake_create))
@@ -170,7 +170,7 @@ class TestStreamingProviderError:
             a._session_store = SessionStore(db_path)
             a.session = type(a.session).resume_or_create(a._session_store)
             a._restore_context()
-            a.llm = _CancelImmediateLLM()
+            a.provider = _CancelImmediateLLM()
             return a
 
         monkeypatch.setattr(Agent, "create", staticmethod(_fake_create))

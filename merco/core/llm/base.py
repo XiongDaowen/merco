@@ -43,9 +43,7 @@ class ModelProvider(ABC):
 class ModelProviderInfo:
     """Provider metadata - the registry/wizard source of truth.
 
-    Strict superset of the old ProviderInfo (drops the dict-compat __getitem__,
-    which was debt). ``provider_class`` is what makes this a registry spec, not
-    a static dict.
+    ``provider_class`` is what makes this a registry spec, not a static dict.
     """
 
     name: str                                  # id: "openai" / "anthropic" / third-party

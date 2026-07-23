@@ -98,7 +98,7 @@ def make_test_registry() -> ToolRegistry:
 # ── Mock ModelProvider ─────────────────────────────────────
 
 class MockModelProvider(ModelProvider):
-    """按顺序消费预设响应，记录每次调用。替代旧 MockLLMClient（Task 9 rewiring）。"""
+    """按顺序消费预设响应，记录每次调用。"""
 
     name = "mock"
 
@@ -122,10 +122,6 @@ class MockModelProvider(ModelProvider):
         yield resp
 
 
-# TEMPORARY scaffolding (removed in Task 16): keep old test imports working.
-MockLLMClient = MockModelProvider
-
-
 # ── Test Agent Factory ────────────────────────────────────
 
 @pytest.fixture
@@ -133,7 +129,7 @@ async def test_agent(monkeypatch, tmp_path):
     """创建带有 mock provider + 测试工具 + 临时 session store 的 Agent"""
     db_path = str(tmp_path / "test.db")
 
-    # Mock _get_db_path，让 Agent 使用临时目录（agent 不再构造 LLMClient）
+    # Mock _get_db_path，让 Agent 使用临时目录
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()

@@ -1,7 +1,7 @@
 """LLM error UI helpers — classification, rendering, retry feedback.
 
 Responsibility: what errors look like. NOT when to show them (callers decide).
-Zero side effects: no logging, no openai import (duck-typing only).
+Zero side effects: no logging, no SDK import (duck-typing only).
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def classify_error(exc: Exception) -> ErrorInfo:
     """Classify an exception into ErrorInfo using duck-typing.
 
     Reads ``exc.status_code`` if present; falls back to scanning str(exc) and
-    the exception class name. Does NOT import openai.
+    the exception class name. Uses duck-typing only (no SDK import).
     """
     status = getattr(exc, "status_code", None)
     body = str(exc).lower()

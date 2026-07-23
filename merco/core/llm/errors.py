@@ -40,40 +40,6 @@ class ModelNotFoundError(ProviderError):
     """404 / unknown model."""
 
 
-def translate_openai_error(exc: Exception) -> ProviderError:
-    """Translate an openai SDK exception into a merco ProviderError subclass."""
-    import openai
-    status = getattr(exc, "status_code", None) or 0
-    if isinstance(exc, openai.AuthenticationError):
-        return AuthError(str(exc), status_code=status or 401)
-    if isinstance(exc, openai.RateLimitError):
-        return RateLimitError(str(exc), status_code=status or 429)
-    if isinstance(exc, openai.APIConnectionError):
-        return ConnectionError(str(exc), status_code=0)
-    if isinstance(exc, openai.NotFoundError):
-        return ModelNotFoundError(str(exc), status_code=status or 404)
-    if isinstance(exc, openai.APIStatusError):
-        return ProviderError(str(exc), status_code=status)
-    return ProviderError(str(exc), status_code=status)
-
-
-def translate_anthropic_error(exc: Exception) -> ProviderError:
-    """Translate an anthropic SDK exception into a merco ProviderError subclass."""
-    import anthropic
-    status = getattr(exc, "status_code", None) or 0
-    if isinstance(exc, getattr(anthropic, "AuthenticationError", type(None))):
-        return AuthError(str(exc), status_code=status or 401)
-    if isinstance(exc, getattr(anthropic, "RateLimitError", type(None))):
-        return RateLimitError(str(exc), status_code=status or 429)
-    if isinstance(exc, getattr(anthropic, "APIConnectionError", type(None))):
-        return ConnectionError(str(exc), status_code=0)
-    if isinstance(exc, getattr(anthropic, "NotFoundError", type(None))):
-        return ModelNotFoundError(str(exc), status_code=status or 404)
-    if isinstance(exc, getattr(anthropic, "APIStatusError", type(None))):
-        return ProviderError(str(exc), status_code=status)
-    return ProviderError(str(exc), status_code=status)
-
-
 def llm_error(exc: Exception) -> str:
     """Backward-compatible wrapper: convert an exception to a user-facing
     error message. Delegates to error_ui."""

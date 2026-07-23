@@ -1,4 +1,4 @@
-"""OpenAI-compatible ModelProvider - absorbs LLMClient transport."""
+"""OpenAI-compatible ModelProvider transport."""
 from __future__ import annotations
 
 import asyncio
@@ -9,7 +9,13 @@ import time
 from typing import Any, AsyncIterator, Optional
 
 from merco.core.llm.base import ModelProvider
-from merco.core.llm.errors import ProviderError, translate_openai_error
+from merco.core.llm.errors import (
+    AuthError,
+    ConnectionError,
+    ModelNotFoundError,
+    ProviderError,
+    RateLimitError,
+)
 from merco.core.llm.thinking import (
     ThinkingExtractor, make_thinking_extractor,
     _strip_think_tags, _clean_content,
@@ -20,7 +26,7 @@ logger = logging.getLogger("merco.llm.openai")
 _SURROGATE_RE = re.compile(r'[\ud800-\udfff]')
 
 
-def _clean_surrogates(obj):  # migrated verbatim from _client.py:19-27
+def _clean_surrogates(obj):  # recursive surrogate cleaning
     if isinstance(obj, str):
         return _SURROGATE_RE.sub('', obj)
     if isinstance(obj, list):
@@ -30,7 +36,7 @@ def _clean_surrogates(obj):  # migrated verbatim from _client.py:19-27
     return obj
 
 
-def _extract_usage(response) -> dict:  # migrated from _client.py:80-106, OpenAI-only
+def _extract_usage(response) -> dict:  # OpenAI-only usage extraction
     usage = response.usage
     if not usage:
         return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -45,6 +51,23 @@ def _extract_usage(response) -> dict:  # migrated from _client.py:80-106, OpenAI
         if cd is not None:
             result["cached_tokens"] = cd
     return result
+
+
+def translate_openai_error(exc: Exception) -> ProviderError:
+    """Translate an openai SDK exception into a merco ProviderError subclass."""
+    import openai
+    status = getattr(exc, "status_code", None) or 0
+    if isinstance(exc, openai.AuthenticationError):
+        return AuthError(str(exc), status_code=status or 401)
+    if isinstance(exc, openai.RateLimitError):
+        return RateLimitError(str(exc), status_code=status or 429)
+    if isinstance(exc, openai.APIConnectionError):
+        return ConnectionError(str(exc), status_code=0)
+    if isinstance(exc, openai.NotFoundError):
+        return ModelNotFoundError(str(exc), status_code=status or 404)
+    if isinstance(exc, openai.APIStatusError):
+        return ProviderError(str(exc), status_code=status)
+    return ProviderError(str(exc), status_code=status)
 
 
 class OpenAICompatibleProvider(ModelProvider):
@@ -99,8 +122,8 @@ class OpenAICompatibleProvider(ModelProvider):
                 yield parsed
 
     def _build_params(self, messages, tools, tool_choice, stream=False) -> dict:
-        # migrated verbatim from _client.py:364-385, but stream_options is now
-        # provider-internal (always include_usage), not config-driven.
+        # Streaming always requests usage in the final chunk (provider-internal,
+        # not config-driven).
         params = {
             "model": self.model,
             "messages": _clean_surrogates(messages),
@@ -116,13 +139,13 @@ class OpenAICompatibleProvider(ModelProvider):
         params.update(self.extra_params)
         return params
 
-    async def _ensure_client_ready(self):  # verbatim from _client.py:387-392
+    async def _ensure_client_ready(self):
         if self._client_ready:
             return
         await asyncio.sleep(0)
         self._client_ready = True
 
-    async def _request(self, params: dict):  # adapted from _client.py:394-414
+    async def _request(self, params: dict):
         if self.cooldown > 0:
             elapsed = time.monotonic() - self._last_request_time
             if elapsed < self.cooldown:
@@ -138,7 +161,7 @@ class OpenAICompatibleProvider(ModelProvider):
         return response
 
     @staticmethod
-    def _normalize_tool_calls(tool_calls: list) -> list[dict]:  # verbatim _client.py:416-430
+    def _normalize_tool_calls(tool_calls: list) -> list[dict]:
         result = []
         for tc in tool_calls:
             entry: dict = {
@@ -152,7 +175,7 @@ class OpenAICompatibleProvider(ModelProvider):
             result.append(entry)
         return result
 
-    def _parse_response(self, response) -> dict:  # verbatim _client.py:432-471
+    def _parse_response(self, response) -> dict:
         if not response.choices:
             return {"content": "", "finish_reason": None, "usage": _extract_usage(response)}
         choice = response.choices[0]
@@ -181,7 +204,7 @@ class OpenAICompatibleProvider(ModelProvider):
             ]
         return result
 
-    def _parse_chunk(self, chunk, extractor=None):  # verbatim _client.py:473-505
+    def _parse_chunk(self, chunk, extractor=None):
         choice = chunk.choices[0] if chunk.choices else None
         if not choice:
             return None

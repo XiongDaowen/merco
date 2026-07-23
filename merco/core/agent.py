@@ -116,7 +116,7 @@ class Agent:
         self.tool_registry = tool_registry
         self.skill_registry = None
 
-        # 模型层：registry + 懒 provider property（替代内联 LLMClient 构造）
+        # 模型层：registry + 懒 provider property
         from merco.core.llm.registry import ModelRegistry
         self.model_registry = ModelRegistry()
         self._model_provider = None  # lazy cache; resolved by `provider` property
@@ -318,16 +318,6 @@ class Agent:
 
     @provider.setter
     def provider(self, value) -> None:
-        self._model_provider = value
-
-    @property
-    def llm(self):
-        """TEMPORARY scaffolding (removed in Task 16): alias for provider."""
-        return self.provider
-
-    @llm.setter
-    def llm(self, value) -> None:
-        # Direct cache write (no registry resolution) so test mocks inject cleanly.
         self._model_provider = value
 
     @classmethod

@@ -1,7 +1,7 @@
 """ResponseProvider - streaming/non-streaming assembly + rendering.
 
 Extracted from agent.py. Uses agent.config (StreamingConfig), agent.context,
-agent.session, agent.provider (renamed from agent.llm in Task 9).
+agent.session, agent.provider.
 """
 import asyncio
 import json as _json

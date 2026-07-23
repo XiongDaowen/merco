@@ -1,8 +1,9 @@
 """merco LLM exception types - provider-translated, SDK-agnostic."""
 import pytest
 from merco.core.llm.errors import (
-    ProviderError, RateLimitError, AuthError, ConnectionError, translate_openai_error,
+    ProviderError, RateLimitError, AuthError, ConnectionError,
 )
+from merco.core.llm.openai_provider import translate_openai_error
 
 
 def test_provider_error_carries_status_code():

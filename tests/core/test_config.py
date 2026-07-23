@@ -3,12 +3,11 @@ import json, tempfile, os
 from merco.core.config import ModelConfig, StreamingConfig, MercoConfig
 
 
-def test_model_config_no_resolve_no_stream_options():
+def test_model_config_defaults():
     cfg = ModelConfig(provider="openai", model="gpt-4o")
-    assert not hasattr(cfg, "resolve")           # deleted
-    assert not hasattr(cfg, "stream_options")    # deleted
-    assert cfg.request_cooldown == 0.3           # new, absorbs hardcoded cooldown
-    assert cfg.fallbacks == []                    # new
+    assert not hasattr(cfg, "resolve")           # resolve() removed
+    assert cfg.request_cooldown == 0.3           # absorbs hardcoded cooldown
+    assert cfg.fallbacks == []
 
 
 def test_streaming_config_grouped():

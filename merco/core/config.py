@@ -1,4 +1,4 @@
-"""配置系统 - 支持多层级配置合并 + provider 自动发现"""
+"""配置系统 - 支持多层级配置合并"""
 
 import os
 import json
@@ -7,86 +7,6 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("merco.config")
-
-# ── Provider 注册表：内置平台的完整元数据 ──
-# 新增平台只需加一条 ProviderInfo，setup 向导自动适配。
-
-
-@dataclass
-class ProviderInfo:
-    """平台元数据 — 一条记录即可驱动配置向导和自动补全"""
-    key: str              # provider id: "openai", "minimax", ...
-    name: str             # 显示名: "OpenAI", "MiniMax"
-    base_url: str         # 默认 API 端点
-    key_env: str          # 环境变量名
-    default_model: str    # 推荐模型
-    models: list[str]     # 已知模型列表（空 = 用户自行输入）
-    key_help: str         # 获取 API key 的链接
-    description: str      # 一句话介绍
-
-    # 向后兼容：支持 dict-style 访问（旧代码用 PROVIDER_REGISTRY["openai"]["base_url"]）
-    def __getitem__(self, key: str):
-        if key == "base_url":
-            return self.base_url
-        if key == "key_env":
-            return self.key_env
-        raise KeyError(key)
-
-
-# TODO(T16): delete with setup.py migration
-PROVIDER_REGISTRY: dict[str, ProviderInfo] = {
-    "openai": ProviderInfo(
-        key="openai",
-        name="OpenAI",
-        base_url="https://api.openai.com/v1",
-        key_env="OPENAI_API_KEY",
-        default_model="gpt-4o",
-        models=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini", "o1"],
-        key_help="https://platform.openai.com/api-keys",
-        description="最通用的平台，GPT-4o / o3 系列",
-    ),
-    "minimax": ProviderInfo(
-        key="minimax",
-        name="MiniMax",
-        base_url="https://api.minimaxi.com/v1",
-        key_env="MINIMAX_API_KEY",
-        default_model="MiniMax-M2.7",
-        models=["MiniMax-M2.7", "MiniMax-Text-01", "abab7-chat"],
-        key_help="https://platform.minimaxi.com/user-center/basic-information",
-        description="国产平台，MiniMax-M2.7 性价比高",
-    ),
-    "anthropic": ProviderInfo(
-        key="anthropic",
-        name="Anthropic",
-        base_url="https://api.anthropic.com",
-        key_env="ANTHROPIC_API_KEY",
-        default_model="claude-sonnet-4-20250514",
-        models=["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022",
-                "claude-3-opus-20240229", "claude-3-5-sonnet-20241022"],
-        key_help="https://console.anthropic.com/settings/keys",
-        description="Claude 系列，代码能力优秀",
-    ),
-    "openrouter": ProviderInfo(
-        key="openrouter",
-        name="OpenRouter",
-        base_url="https://openrouter.ai/api/v1",
-        key_env="OPENROUTER_API_KEY",
-        default_model="anthropic/claude-sonnet-4",
-        models=[],  # 模型太多，用户自行输入
-        key_help="https://openrouter.ai/keys",
-        description="模型聚合平台，一个 key 调用上百种模型",
-    ),
-    "deepseek": ProviderInfo(
-        key="deepseek",
-        name="DeepSeek",
-        base_url="https://api.deepseek.com/v1",
-        key_env="DEEPSEEK_API_KEY",
-        default_model="deepseek-chat",
-        models=["deepseek-chat", "deepseek-reasoner"],
-        key_help="https://platform.deepseek.com/api_keys",
-        description="国产平台，deepseek-reasoner 推理能力强",
-    ),
-}
 
 
 @dataclass

@@ -1,5 +1,13 @@
 """LLM 子系统：模型调用和错误处理。"""
 
-from ._client import LLMClient, _strip_think_tags, _clean_content
+from .base import ModelProvider, ModelProviderInfo
+from .registry import ModelRegistry
+from .openai_provider import OpenAICompatibleProvider
+from .anthropic_provider import AnthropicNativeProvider
+from .errors import ProviderError, RateLimitError, AuthError, ConnectionError
 
-__all__ = ["LLMClient", "_strip_think_tags", "_clean_content"]
+__all__ = [
+    "ModelProvider", "ModelProviderInfo", "ModelRegistry",
+    "OpenAICompatibleProvider", "AnthropicNativeProvider",
+    "ProviderError", "RateLimitError", "AuthError", "ConnectionError",
+]

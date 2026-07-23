@@ -108,8 +108,8 @@ def test_parse_response_extracts_cached_tokens():
     """Anthropic 缓存用量：从 cache_read_input_tokens 提取 cached_tokens。
 
     新架构下 Anthropic 用量提取住在 anthropic_provider._parse_response，仅吐
-    cached_tokens（来自 cache_read_input_tokens）。旧 _client 的
-    cache_read_tokens / cache_write_tokens 字段已废弃，不再断言。
+    cached_tokens（来自 cache_read_input_tokens）。
+    cache_read_tokens / cache_write_tokens 字段不再断言。
     """
     provider = AnthropicNativeProvider(api_key="k", model="claude-sonnet-4-20250514")
     fake = MagicMock()

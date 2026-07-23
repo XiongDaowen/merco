@@ -1,4 +1,4 @@
-"""OpenAICompatibleProvider - absorbs LLMClient transport."""
+"""OpenAICompatibleProvider transport tests."""
 import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -92,7 +92,7 @@ def _fake_chunk(content=None, tool_calls=None, finish_reason=None, usage=None):
     return SimpleNamespace(choices=[choice], usage=usage)
 
 
-# ── surrogate cleaning (migrated from _client._clean_surrogates) ───────────
+# ── surrogate cleaning ───────────
 
 class TestSurrogateCleaning:
     """代理对字符清理测试 - _clean_surrogates 现在住在 openai_provider.py。"""
@@ -122,7 +122,7 @@ class TestSurrogateCleaning:
         assert clean == original
 
 
-# ── usage extraction (OpenAI-only; migrated from _client._extract_usage) ───
+# ── usage extraction (OpenAI-only) ───
 
 class TestUsageExtraction:
     """Token 用量提取测试 - _extract_usage 现在是 OpenAI-only，仅吐 cached_tokens。"""
@@ -159,7 +159,7 @@ class TestUsageExtraction:
         assert usage["cached_tokens"] == 75
 
 
-# ── _parse_chunk edge cases (migrated from test_llm.py) ────────────────────
+# ── _parse_chunk edge cases ────────────────────
 
 def test_parse_chunk_handles_none_arguments():
     """_parse_chunk 处理 tool_call 首 chunk 的 arguments=None 时不抛 TypeError，落地为 ""。"""
@@ -189,7 +189,7 @@ def test_parse_chunk_handles_none_id_and_name():
     assert parsed["arguments"] == "ls -la"
 
 
-# ── _parse_response edge cases (migrated from test_llm.py) ─────────────────
+# ── _parse_response edge cases ─────────────────
 
 def test_parse_response_handles_empty_choices():
     """_parse_response 中 response.choices 为空时不抛 IndexError，返回空 content + None finish。"""

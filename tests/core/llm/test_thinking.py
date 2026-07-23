@@ -38,7 +38,7 @@ def test_extract_direct_field_reasoning():
     assert result["reasoning"] == "chain of thought"
 
 
-# ── _strip_think_tags / _clean_content unit behavior (migrated from test_llm.py / test_client.py) ──
+# ── _strip_think_tags / _clean_content unit behavior ──
 
 class TestThinkTagHandling:
     """Think 标签底层清理：_strip_think_tags（chunk 安全，不动空白）与 _clean_content（终态 strip）。"""
@@ -102,7 +102,7 @@ def test_clean_content_strips_think_tags_and_outer_whitespace():
     assert _clean_content("<think>t1</think> middle <think>t2</think>") == "middle"
 
 
-# ── ThinkTagStrategy (migrated from test_client.py; incl. cross-chunk delta) ──
+# ── ThinkTagStrategy (incl. cross-chunk delta) ──
 
 class TestThinkTagStrategy:
     """ThinkTagStrategy 策略测试，含跨 chunk 状态机。"""
@@ -218,7 +218,7 @@ class TestThinkTagStrategy:
         assert strategy._close_tag == ""
 
 
-# ── DirectFieldStrategy (migrated from test_client.py) ─────────────────────
+# ── DirectFieldStrategy ─────────────────────
 
 class TestDirectFieldStrategy:
     """DirectFieldStrategy：从顶层 reasoning_content / reasoning 字段提取。"""
@@ -247,7 +247,7 @@ class TestDirectFieldStrategy:
         assert result is None
 
 
-# ── ModelExtraStrategy (migrated from test_client.py) ──────────────────────
+# ── ModelExtraStrategy ──────────────────────
 
 class TestModelExtraStrategy:
     """ModelExtraStrategy：从 model_extra 字典提取 reasoning_content / reasoning。"""
@@ -283,7 +283,7 @@ class TestModelExtraStrategy:
         assert result is None
 
 
-# ── ThinkingExtractor integration (migrated from test_client.py) ───────────
+# ── ThinkingExtractor integration ───────────
 
 class TestThinkingExtractor:
     """ThinkingExtractor 集成测试：优先级 / fallback / reset 委托。"""

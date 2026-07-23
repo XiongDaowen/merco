@@ -1,8 +1,8 @@
 """ModelRegistry - sole source of truth for model providers.
 
 _BUILTIN_PROVIDERS is declarative data feeding the registry (not a static dict
-with logic like the old PROVIDER_REGISTRY). Third-party providers register at
-runtime via PluginContext.register_model_provider.
+of provider metadata). Third-party providers register at runtime via
+PluginContext.register_model_provider.
 """
 from __future__ import annotations
 

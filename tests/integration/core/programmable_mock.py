@@ -111,7 +111,3 @@ class ProgrammableModelProvider(ModelProvider):
     async def chat_stream(self, messages: list[dict], **kwargs):
         resp = await self.chat(messages, **kwargs)
         yield resp
-
-
-# TEMPORARY scaffolding (removed in Task 16): keep old test imports working.
-ProgrammableLLMClient = ProgrammableModelProvider

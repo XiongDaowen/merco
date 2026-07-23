@@ -24,8 +24,8 @@ from tests.conftest import MockModelProvider, make_test_registry
 class StreamingMockProvider(ModelProvider):
     """Mock LLM that yields multiple chunks to simulate real streaming.
 
-    Can be used as a class replacement for LLMClient (accepts same init kwargs)
-    or instantiated directly with chunks for test setup.
+    Can be used as a drop-in mock (accepts the same init kwargs) or
+    instantiated directly with chunks for test setup.
     """
     name = "mock"
 
@@ -37,7 +37,7 @@ class StreamingMockProvider(ModelProvider):
           - "tool_calls": list of tool_call chunks
           - "finish_reason": str
           - "usage": dict
-        **kwargs: accepted for compatibility with LLMClient init signature
+        **kwargs: accepted for init-signature compatibility
         """
         self.chunks = list(chunks or [])
         self.calls: list[dict] = []
