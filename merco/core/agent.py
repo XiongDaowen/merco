@@ -179,6 +179,9 @@ class Agent:
         self.recovery_pipeline = RecoveryPipeline()
         self.recovery_pipeline.use(WaitRecovery(delay=3.0))
         self.recovery_pipeline.use(ContextCompressRecovery())
+        from merco.core.recovery.model_fallback import ModelFallbackRecovery
+        if self.config.model.fallbacks:
+            self.recovery_pipeline.use(ModelFallbackRecovery(fallbacks=self.config.model.fallbacks))
         self.empty_response_pipeline = EmptyResponsePipeline()
         self.empty_response_pipeline.use(CallbackEmptyResponse())
 
@@ -510,8 +513,9 @@ class Agent:
                     if ctx.compress:
                         await self._compress_context()
                     if ctx.switch_model:
-                        logger.info("→ 切换模型: %s", ctx.switch_model)
-                        self.llm.model = ctx.switch_model
+                        logger.info("-> 切换模型: %s/%s", ctx.switch_model.provider, ctx.switch_model.model)
+                        self.config.model = ctx.switch_model
+                        self._model_provider = None  # invalidate -> re-resolve on next access
                     continue
                 from merco.core.llm.errors import llm_error
                 return llm_error(e)

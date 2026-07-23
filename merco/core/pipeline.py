@@ -146,7 +146,7 @@ class RecoveryContext:
     # ── 意图标志位（策略设置，Agent 执行）──
     compress: bool = False                # 需要压缩上下文
     reduce_tools: bool = False            # 需要精简工具列表
-    switch_model: str | None = None       # 切换到指定模型
+    switch_model: "ModelConfig | None" = None   # 跨 provider 切换（provider+model 全 spec）
     reduce_history: bool = False          # 需要裁剪对话历史
     extra_wait: float = 0.0               # 额外等待时间（秒），0 = 不等
 
