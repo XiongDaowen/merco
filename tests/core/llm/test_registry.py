@@ -45,6 +45,36 @@ def test_select_unknown_provider_raises():
         reg.select(cfg)
 
 
+def test_select_unknown_provider_with_base_url_falls_back_to_openai_compatible():
+    """Wizard '自定义平台' path (I3 regression): a novel provider name + base_url
+    is a custom OpenAI-compatible endpoint, not a typo -> select() falls back
+    to OpenAICompatibleProvider instead of raising KeyError."""
+    from merco.core.llm.openai_provider import OpenAICompatibleProvider
+    reg = ModelRegistry()
+    cfg = ModelConfig(
+        provider="scnet",  # novel name, NOT in _BUILTIN_PROVIDERS
+        model="scnet-xl",
+        api_key="sk-custom",
+        base_url="https://api.scnet.example.com/v1",
+    )
+    provider = reg.select(cfg)
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.model == "scnet-xl"
+    # custom base_url flows through to the underlying OpenAI client
+    assert str(provider.client.base_url).rstrip("/") == "https://api.scnet.example.com/v1"
+
+
+def test_select_known_builtin_still_works():
+    """Regression guard: the try/except refactor in select() must not break the
+    normal builtin path."""
+    from merco.core.llm.openai_provider import OpenAICompatibleProvider
+    reg = ModelRegistry()
+    cfg = ModelConfig(provider="openai", model="gpt-4o", api_key="sk-test")
+    provider = reg.select(cfg)
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.model == "gpt-4o"
+
+
 def test_register_third_party():
     reg = ModelRegistry()
     Fake = MagicMock()

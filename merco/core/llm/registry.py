@@ -75,8 +75,31 @@ class ModelRegistry:
         return list(self._providers.values())
 
     def select(self, model_config) -> ModelProvider:
-        """Resolve credentials (config > env > info defaults) + build provider."""
-        info = self.get(model_config.provider)
+        """Resolve credentials (config > env > info defaults) + build provider.
+
+        An unknown provider name WITH a configured base_url is treated as a
+        custom OpenAI-compatible endpoint (setup wizard '自定义平台' path: the
+        wizard writes a novel provider name + base_url for an OpenAI-compatible
+        service). Without a base_url, an unknown name is a genuine typo /
+        misconfiguration and still raises KeyError.
+        """
+        try:
+            info = self.get(model_config.provider)
+        except KeyError:
+            if not model_config.base_url:
+                raise  # unknown provider + no base_url = typo / misconfiguration
+            # Custom OpenAI-compatible endpoint (wizard '自定义平台' path):
+            # no info defaults available, build directly from config.
+            return OpenAICompatibleProvider(
+                api_key=model_config.api_key or "",
+                model=model_config.model,
+                base_url=model_config.base_url,
+                temperature=model_config.temperature,
+                max_tokens=model_config.max_tokens,
+                cooldown=getattr(model_config, "request_cooldown", 0),
+                extra_params=model_config.extra_params,
+                headers=model_config.headers,
+            )
         api_key = model_config.api_key or os.environ.get(info.key_env, "")
         base_url = model_config.base_url or info.base_url
         return info.provider_class(
