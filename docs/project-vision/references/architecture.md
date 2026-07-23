@@ -18,8 +18,9 @@ merco/
 ├── sandbox/        # 沙箱环境 (guard, security, confirm, snapshot)              🟢 POLISHED
 ├── scheduler/      # 定时任务 (cron, jobs, delivery)                            🟢 POLISHED
 ├── observability/  # 可观测性 (observer, metrics, audit, logger, tracing)       🟢 POLISHED
-├── plugins/        # 插件系统 (base, manager, builtin/{mcp,observability,
-│                   #             scheduler,skills,subagent,web,superpower})      🟢 NEW
+├── plugins/        # 插件系统 (base[Plugin/PluginSpec/PluginContext], discovery,
+│                   #             manager, builtin/{mcp,observability,scheduler,
+│                   #             skills,subagent,web,superpower})                🟢 NEW
 ├── context/        # 上下文处理 (pipeline, processors/, recovery)               🟢 NEW
 ├── agents/         # 子 Agent 管理 (subagent, profile)                          🟢 NEW
 ├── todo/           # 待办事项 (manager, models)                                 🟢 NEW
@@ -56,7 +57,7 @@ references/         # 参考源码 (git 忽略)
 | Sandbox | 🟢 POLISHED | ToolGuard + SecurityChecker + Confirm + Snapshot |
 | Observability | 🟢 POLISHED | Observer 全链路接入，metrics/audit/tracing |
 | Scheduler | 🟢 POLISHED | CronScheduler + SchedulerPlugin 接入 Agent 生命周期 |
-| Plugins | 🟢 NEW | Plugin + PluginContext，19 扩展点，8 个内置插件 |
+| Plugins | 🟢 NEW | Plugin + PluginSpec + PluginContext + PluginDiscovery，20 扩展点 + 4 便捷方法，7 个内置插件（entry_points 动态发现） |
 | SubAgent | 🟢 NEW | SubAgentManager + AgentProfile + AgentProfileRegistry |
 | Todo | 🟢 NEW | TodoItem + TodoManager，支持子任务分解 |
 | Gateway | ⚪ LEGACY | 消息网关预留，未完善 |
@@ -131,7 +132,7 @@ package "merco" {
 
   package "扩展层" {
     rectangle "Hooks\n(15 事件)" as Hooks #LightGray
-    rectangle "Plugins\n(8 内置插件)" as Plugins #LightGray
+    rectangle "Plugins\n(7 内置插件, entry_points)" as Plugins #LightGray
     rectangle "Scheduler\n(CronScheduler)" as Scheduler #LightGray
     rectangle "Observer\n(全链路接入)" as Observer #LightGray
   }
@@ -199,7 +200,7 @@ end note
 ## 2. 插件系统架构图
 
 > **扩展点说明**：插件系统有两套扩展机制：
-> - **PluginContext 属性（19个）**：代码层面直接注入的子系统引用
+> - **PluginContext 属性（20个）**：代码层面直接注入的子系统引用 + 4 个便捷方法
 > - **Hook 事件扩展点（15个）**：生命周期事件，插件可订阅
 
 ```plantuml
@@ -209,36 +210,58 @@ skinparam componentStyle rectangle
 skinparam packageStyle rectangle
 
 package "Plugin System" {
+  rectangle "PluginDiscovery" as Discovery #LightGreen
+  note bottom of Discovery
+    无副作用发现（仅吃 config）：
+    - entry_points(group="merco.plugins")
+    - 目录扫描 plugins_paths (plugin.toml)
+    - 去重 / enabled 过滤 / 循环检测
+  end note
+
+  rectangle "PluginSpec" as Spec #LightGreen
+  note bottom of Spec
+    纯数据 + 懒加载器：
+    - load_cls() / instantiate()
+    - priority / depends_on
+  end note
+
   rectangle "PluginManager" as Manager #LightGreen
   note bottom of Manager
     生命周期管理：
-    - register(Plugin)
-    - activate_all()
-    - deactivate_all()
+    - register_all(specs)
+    - _resolve_order() (Kahn 拓扑 + priority)
+    - activate_boot() (priority>=100)
+    - activate_all() / deactivate_all()
+    - 懒实例化 + dep-active 检查
   end note
 
   rectangle "PluginContext" as Context #LightYellow
   note bottom of Context
-    19 个扩展属性：
+    20 个扩展属性（含 security_pipeline）：
     hooks / agent / config
     tool_registry / skill_registry
-    observer / scheduler / mcp_manager
+    prompt_builder / observer
+    scheduler / mcp_manager
     todo_manager / sub_agent_manager
     memory_save_pipeline / recaller
     context_pipeline / agent_profiles
     memory_backends / loop_policies
+    recovery_pipeline / result_pipeline
+    security_pipeline
+    便捷方法：register_agent_profile /
+    register_loop_policy / add_memory_backend /
+    add_security_policy
   end note
 }
 
-package "Builtin Plugins (8)" {
+package "Builtin Plugins (7, entry_points)" {
   rectangle "MCPPlugin" as MCP #LightBlue
-  rectangle "ObserverPlugin" as Obs #LightBlue
+  rectangle "ObservabilityPlugin" as Obs #LightBlue
   rectangle "SchedulerPlugin" as Sched #LightBlue
   rectangle "SkillsPlugin" as Skills #LightBlue
   rectangle "SubAgentPlugin" as SubAgent #LightBlue
   rectangle "WebPlugin" as Web #LightBlue
   rectangle "SuperpowerPlugin" as Super #LightBlue
-  rectangle "PermissionPolicyPlugin" as Policy #LightBlue
 }
 
 package "Hook Events (15)" {
@@ -259,6 +282,8 @@ package "Hook Events (15)" {
   card "memory.saved" as E15
 }
 
+Discovery --> Spec : discover 产出
+Spec --> Manager : register_all(specs)
 Manager --> Context : 创建并注入
 Manager --> MCP : activate(ctx)
 Manager --> Obs : activate(ctx)
@@ -267,7 +292,6 @@ Manager --> Skills : activate(ctx)
 Manager --> SubAgent : activate(ctx)
 Manager --> Web : activate(ctx)
 Manager --> Super : activate(ctx)
-Manager --> Policy : activate(ctx)
 
 MCP ..> E5 : 订阅
 Obs ..> E1 : 订阅
@@ -283,11 +307,25 @@ Skills ..> E6 : 订阅
 SubAgent ..> E9 : 订阅
 Super ..> E1 : 订阅
 Super ..> E10 : 订阅
-Policy ..> E8 : 订阅
-Policy ..> E9 : 订阅
 
 @enduml
 ```
+
+### 插件动态加载流程
+
+**设计意图**：可动态拓展——向 `./.merco/plugins/` 或 `~/.config/merco/plugins/` 丢一个含 `plugin.toml` + `main.py` 的目录即被自动发现、拓扑排序、激活，经便捷方法访问全部扩展点；架构分层清爽。
+
+**加载链路**：
+1. **`PluginDiscovery`**（无副作用，仅吃 `config`）——两源发现：
+   - `entry_points(group="merco.plugins")`：从 Plugin 子类的 `priority`/`depends_on` 类属性读元数据；
+   - `config.plugins_paths` 目录扫描：解析子目录 `plugin.toml`，`entry = "module:Class"` 经 `importlib.util.spec_from_file_location` 加载（零 `sys.path` 污染，支持单文件插件）。
+   - 目录扫描同名覆盖 entry_points；`enabled` 过滤；DFS 循环检测 + 存在性闭包剪枝。
+2. **`PluginSpec`**（纯数据 + 懒加载器）：`load_cls()` 缓存 `_cls`，`instantiate()` 缓存 `_instance`。
+3. **`PluginManager.register_all(specs)`**：注册全部 spec。
+4. **`_resolve_order(names, boot_only)`**：Kahn 拓扑排序，`(-priority, name)` tiebreak，存在性闭包，循环排除。
+5. **两阶段 boot**（`agent.py`）：`activate_boot()`（激活 `priority >= 100`，如 Observability）-> 绑定 `self.observer = ctx.observer` -> `_restore_context()` -> `activate_all()`（剩余按拓扑序激活，dep 未激活则跳过并 emit `plugin.error`）。
+
+7 个 builtin 现为"普通插件"——agent.py 零 `from merco.plugins.builtin.*` 导入、零特殊分支，boot 序完全由 `priority` 数据驱动。
 
 ---
 
@@ -621,7 +659,7 @@ end note
 :Plugins.on_init();
 note right
   PluginContext 注入所有子系统
-  8 个内置插件初始化
+  7 个内置插件初始化（entry_points 动态发现 + 拓扑激活）
 end note
 
 :Memory Recall (HybridRecaller);
@@ -901,9 +939,9 @@ end
 | `mcp.connect` | (inline) | - | MCPServerManager | - |
 | `mcp.tool_call` | (inline) | - | MCPServerManager | - |
 | `mcp.error` | (inline) | - | MCPServerManager | - |
-| `plugin.activated` | (inline) | - | PluginManager | - |
-| `plugin.deactivated` | (inline) | - | PluginManager | - |
-| `plugin.error` | (inline) | - | PluginManager | - |
+| `plugin.activated` | (inline) | - | PluginManager | 激活成功后 emit |
+| `plugin.deactivated` | (inline) | - | PluginManager | 停用后 emit |
+| `plugin.error` | (inline) | - | PluginManager | 激活/实例化失败或 dep 未激活时 emit |
 
 **状态：大部分事件已实现并 emit，仅 memory.* 事件仅被 save_pipeline emit 而无订阅者。**
 

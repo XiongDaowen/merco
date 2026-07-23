@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-07-21 (v0.4.0 当前开发版)
+> 最后更新: 2026-07-23 (波1 插件动态化完成)
 
 ## 目标对标
 
@@ -9,7 +9,21 @@
 
 ## 当前状态
 
-**阶段**: Phase 5 推进中 → v0.4.0 发布 | **焦点**: Memory 召回体系 + Session Fork + CLI UI 测试覆盖 + 错误呈现优化
+**阶段**: Phase 5 完成 → v0.4.0 发布 | **焦点**: 插件动态化波1 完成（discovery + PluginSpec + manager 拓扑激活 + 两阶段 boot）
+
+### 本次会话更新 (2026-07-23)
+
+**插件动态化 波1（重大架构升级）**：
+- **20 个 commit**（自 `3b07a88`：17 实现 + 1 polish `d99cc87` + 2 文档），最终代码 commit `d99cc87`。**910 passed / 1 skipped**。终审 **SHIP**。
+- **目标**：可动态拓展--通过插件系统可动态安装插件进行拓展，架构清爽干净。
+- **`plugins/discovery.py` (NEW, ~190 行)**：`PluginDiscovery` 无副作用发现器（仅吃 `config`，产出 `PluginSpec`）。两个来源：`entry_points(group="merco.plugins")`（从类属性读 priority/depends_on）+ `config.plugins_paths` 目录扫描（解析子目录 `plugin.toml`，`importlib.util.spec_from_file_location` 加载 `entry="module:Class"`，零 sys.path 污染，支持单文件插件）。目录扫描同名覆盖 entry_points；`enabled` 过滤；DFS 循环检测 + 存在性闭包剪枝。
+- **`plugins/base.py`**：`Plugin` ABC 增 `priority: int = 50` + `depends_on: list[str] = []`。NEW `PluginSpec` dataclass（元数据 + 懒加载器 `load_cls()`/`instantiate()`，缓存 `_cls`/`_instance`）。`PluginContext` 增 `security_pipeline` 参数（**20** 注入属性，原 19）+ 4 便捷方法（`register_agent_profile`/`register_loop_policy`/`add_memory_backend`/`add_security_policy`，末者 `security_pipeline is None` 时抛 `RuntimeError`）。
+- **`plugins/manager.py`**：`PluginManager` 增 `register_all(specs)` / `_resolve_order(names, boot_only)`（Kahn 拓扑排序，`(-priority, name)` tiebreak，存在性闭包，循环排除）/ `activate_boot()`（激活 `priority >= BOOT_PRIORITY=100`）/ `activate()` 懒实例化 + dep-active 检查（依赖未激活则跳过）/ `_emit_error()`（emit `plugin.error`）。`activate_all`/`activate_boot` 尊重 `config.plugins.<name>.enabled`。emit `plugin.activated`/`plugin.deactivated`/`plugin.error`。
+- **`core/agent.py`**：装配段从 ~70 行硬编码 `from merco.plugins.builtin.*.plugin import *Plugin` + `register(*Plugin())` 重写为单行 `PluginDiscovery(config).discover()` + `register_all(...)`。`PluginContext(...)` 传入 `security_pipeline=self._security_pipeline`。`_initialize_async_plugins` 重写为**两阶段 boot**：`activate_boot()` → 绑定 `self.observer = ctx.observer` → `_restore_context()` → `activate_all()`。**零** `from merco.plugins.builtin.*` 导入残留。
+- **`core/config.py`**：新增 `plugins_paths` 字段，默认 `["./.merco/plugins", "~/.config/merco/plugins"]`（镜像 `skills_paths`）。
+- **`pyproject.toml`**：声明 7 个 `merco.plugins` entry_points。
+- **7 个 builtin**（非 8）：observability(100)/skills(60)/mcp(50)/subagent(40)/web(30)/scheduler(20)/superpower(10)，全部经 entry_points 发现，priority 数据驱动 boot 序。修正旧文档虚构的 `PermissionPolicyPlugin`（不存在）。
+- **分层**：`PluginDiscovery`（无副作用发现）→ `PluginSpec`（纯数据+懒加载）→ `PluginManager`（激活状态）→ `PluginContext`（被动扩展点袋）。7 个 builtin 现为"普通插件"，agent.py 零特殊分支。
 
 ### 本次会话更新 (2026-07-21)
 
@@ -98,9 +112,10 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `manager.py` | 🟢 REAL | PluginManager：load/unload/activate/deactivate。 |
-| `base.py` | 🟢 REAL | PluginBase ABC。 |
-| `builtin/` | 🟢 REAL | ObservabilityPlugin / SkillPlugin / MCPPlugin / SubAgentPlugin / WebPlugin / SchedulerPlugin。 |
+| `discovery.py` | 🟢 NEW | `PluginDiscovery` 无副作用发现器：entry_points(group="merco.plugins") + `plugins_paths` 目录扫描（plugin.toml manifest，`importlib.util.spec_from_file_location` 单文件加载，零 sys.path 污染）。同名目录覆盖 entry_points；enabled 过滤 + DFS 循环检测 + 存在性闭包剪枝。~190 行。 |
+| `manager.py` | 🟢 REAL | PluginManager：`register_all(specs)` / `_resolve_order`(Kahn 拓扑 + `(-priority,name)` tiebreak) / `activate_boot`(priority>=100) / `activate` 懒实例化 + dep-active 检查 / `_emit_error`。emit `plugin.activated`/`deactivated`/`error`。 |
+| `base.py` | 🟢 REAL | `Plugin` ABC(+`priority`/`depends_on`) + `PluginSpec` dataclass(懒加载 `load_cls`/`instantiate`) + `PluginContext`(20 注入属性 + 4 便捷方法 `register_agent_profile`/`register_loop_policy`/`add_memory_backend`/`add_security_policy`)。 |
+| `builtin/` | 🟢 REAL | **7 个** builtin（observability/skills/mcp/subagent/web/scheduler/superpower）经 entry_points 发现，priority 标注 (100/60/50/40/30/20/10)。 |
 
 ### merco/mcp/ — MCP Integration
 
@@ -213,7 +228,7 @@
 | **Recaller → Agent** | ✅ WIRED | `BaseRecaller` → `FTS5Recaller` → `MemoryRecaller` → `HybridRecaller` 四级协议。Agent 启动自动注入。 |
 | **Session Fork → Agent** | ✅ WIRED | `Session.fork()` + `/fork` + `/tree` CLI 命令 + `snapshot.set_current_session()`。 |
 | **Snapshot → Agent** | ✅ WIRED | 文件快照追踪，`/revert` 撤销修改。 |
-| **Plugins → Agent** | ✅ WIRED | PluginManager + 6 个 builtin 插件。`/plugins` CLI。 |
+| **Plugins → Agent** | ✅ WIRED | discovery 驱动装配：`PluginDiscovery(config).discover()` + `register_all`，两阶段 boot（`activate_boot` → restore → `activate_all`）。7 个 builtin 经 entry_points。`/plugins` CLI。 |
 | **Scheduler → Runtime** | ❌ NOT WIRED | CLI/Web 未启动 CronScheduler。代码完整但从未激活。Phase 6。 |
 | **TUI** | ❌ NOT WIRED | `tui.py` 仍为占位。Phase 7。 |
 | **Web → Agent** | ❌ NOT WIRED | `/chat` 返回 `"coming soon"`。Phase 7。 |
@@ -226,11 +241,13 @@
 
 | Status | Count | 说明 |
 |--------|-------|------|
-| 🟢 REAL (可用) | 34 | 生产级或基本可用的独立模块（+10 从上次） |
+| 🟢 REAL (可用) | 35 | 生产级或基本可用的独立模块（+1：新增 `plugins/discovery.py`） |
 | 🟡 PARTIAL (部分) | 3 | web/app.py / web_tools / task_tools |
 | 🔴 SKELETON (骨架) | 2 | tui.py / 2 个 gateway |
 | ❌ NOT WIRED (未集成) | 4 | Scheduler → Runtime / TUI / Web → Agent / SubAgent |
 | **CLI 测试** | **94** | 9 个测试文件，覆盖 Dashboard / PromptArea / commands / lifecycle / REPL errors |
+| **Plugin 测试** | **新增** | test_discovery / test_spec / test_manager / test_plugin_base / test_plugin_integration + 7 个 builtin 插件测试 |
+| **总测试** | **910 passed / 1 skipped** | 波1 插件动态化后全量 |
 
 ## 下一步（按优先级）
 
@@ -244,6 +261,11 @@
 5. **Web 对接 Agent** — `app.py` 接入 Agent + 会话管理
 6. **SubAgent 多代理协作** — `task_tools.py` 完整实现
 7. **Gateway 实现** — Telegram/Discord
+
+### 插件动态化（波2/波3）
+- **波1 ✅ 完成**（2026-07-23）：discovery + PluginSpec + manager 拓扑激活 + 两阶段 boot。
+- **波2** - ModelProviderRegistry：动态模型供应商，镜像插件发现机制。
+- **波3** - Scheduler->Runtime + GatewayRegistry：调度器升级为 Runtime + 网关动态注册。
 
 ### 持续
 - **agent.py 拆分** — 1186 行太重，StreamingProvider / NonStreamingProvider 可独立文件
