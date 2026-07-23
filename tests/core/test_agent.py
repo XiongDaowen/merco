@@ -546,15 +546,15 @@ async def test_agent_create_injects_managers_into_task_tool(monkeypatch, tmp_pat
 
 # ── Task 12: plugin dynamic loading regression tests ─────────
 
-# 7 个 builtin 的期望激活序：boot(observability) 先于 restore，其余按 priority 降序
+# 8 个 builtin 的期望激活序：boot(observability) 先于 restore，其余按 priority 降序
 _EXPECTED_ACTIVATION_ORDER = [
-    "observability", "skills", "mcp", "subagent", "web", "scheduler", "superpower",
+    "observability", "skills", "mcp", "subagent", "web", "gateway", "scheduler", "superpower",
 ]
 
 
 @pytest.mark.asyncio
 async def test_builtin_plugins_activate_in_priority_order(monkeypatch, tmp_path):
-    """7 个 builtin 按 priority 真实激活序：observability(boot) 最先，其余 priority 降序。
+    """8 个 builtin 按 priority 真实激活序：observability(boot) 最先，其余 priority 降序。
 
     用 plugin.activated 钩子记录真实激活顺序——active_plugins 返回 list(set)，
     无法体现顺序，所以必须订阅钩子并在 _initialize_async_plugins 之前注册回调。
@@ -646,13 +646,13 @@ async def test_agent_no_hardcoded_plugin_imports():
     import inspect
     from merco.core import agent as agent_mod
     src = inspect.getsource(agent_mod)
-    for name in ["observability", "skills", "mcp", "subagent", "web", "scheduler", "superpower"]:
+    for name in ["observability", "skills", "mcp", "subagent", "web", "gateway", "scheduler", "superpower"]:
         assert f"from merco.plugins.builtin.{name}.plugin import" not in src, \
             f"硬编码 import {name}"
     # 不应手动 register 任何 builtin 插件实例（与 import-grep 互补，覆盖非 .plugin 路径的导入）
     for cls in [
         "ObservabilityPlugin", "SkillPlugin", "MCPPlugin", "SubAgentPlugin",
-        "WebPlugin", "SchedulerPlugin", "SuperpowerPlugin",
+        "WebPlugin", "GatewayPlugin", "SchedulerPlugin", "SuperpowerPlugin",
     ]:
         assert f".register({cls}()" not in src, f"硬编码 register {cls}"
 

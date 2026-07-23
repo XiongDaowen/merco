@@ -34,6 +34,7 @@ mcp = "merco.plugins.builtin.mcp.plugin:MCPPlugin"
 subagent = "merco.plugins.builtin.subagent.plugin:SubAgentPlugin"
 web = "merco.plugins.builtin.web.plugin:WebPlugin"
 scheduler = "merco.plugins.builtin.scheduler.plugin:SchedulerPlugin"
+gateway = "merco.plugins.builtin.gateway.plugin:GatewayPlugin"
 superpower = "merco.plugins.builtin.superpower.plugin:SuperpowerPlugin"
 
 [build-system]
