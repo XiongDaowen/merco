@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from merco.mcp.manager import MCPServerManager
     from merco.scheduler.cron import CronScheduler
     from merco.sandbox.guard import PolicyPipeline as PermissionPipeline
+    from merco.core.llm.registry import ModelRegistry
+    from merco.core.llm.base import ModelProviderInfo
 
 
 _PIPELINE_WHITELIST = {
@@ -78,6 +80,7 @@ class PluginContext:
         mcp_manager: "MCPServerManager" = None,
         scheduler: "CronScheduler" = None,
         security_pipeline: "PermissionPipeline" = None,
+        model_registry: "ModelRegistry" = None,
         metadata: dict = None,
     ):
         self.hooks = hooks
@@ -100,6 +103,7 @@ class PluginContext:
         self.mcp_manager = mcp_manager
         self.scheduler = scheduler
         self.security_pipeline = security_pipeline
+        self.model_registry = model_registry
         self.metadata = metadata if metadata is not None else {}
 
     def on(self, event: str, handler: "Callable") -> None:
@@ -143,6 +147,12 @@ class PluginContext:
         if self.security_pipeline is None:
             raise RuntimeError("security_pipeline not available on this context")
         self.security_pipeline.use(policy)
+
+    def register_model_provider(self, info: "ModelProviderInfo") -> None:
+        """注册一个 ModelProvider（第三方插件用）。"""
+        if self.model_registry is None:
+            raise RuntimeError("model_registry not available on this context")
+        self.model_registry.register(info)
 
 
 @dataclass

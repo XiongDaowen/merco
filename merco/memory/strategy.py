@@ -62,11 +62,11 @@ class SessionEndExtractStrategy(MemorySaveStrategy):
 {messages}
 """
 
-    def __init__(self, pipeline, llm, *,
+    def __init__(self, pipeline, provider_getter, *,
                  session_store=None, max_per_session: int = 3,
                  min_messages: int = 5):
         super().__init__(pipeline)
-        self.llm = llm
+        self._provider_getter = provider_getter
         self._session_store = session_store
         self.max = max_per_session
         self.min_msgs = min_messages
@@ -93,7 +93,8 @@ class SessionEndExtractStrategy(MemorySaveStrategy):
             messages=self._format_messages(messages)
         )
         try:
-            response = await self.llm.chat(
+            provider = self._provider_getter()
+            response = await provider.chat(
                 [{"role": "user", "content": prompt}],
                 tools=None, tool_choice="none",
             )

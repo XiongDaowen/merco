@@ -113,7 +113,7 @@ async def test_session_end_skips_too_short():
     p = FakePipeline()
     llm = FakeLLM(content="[]")
     store = FakeSessionStore(messages=[{"role": "user", "content": "hi"}])
-    s = SessionEndExtractStrategy(p, llm, session_store=store, min_messages=5)
+    s = SessionEndExtractStrategy(p, lambda: llm, session_store=store, min_messages=5)
     await s.on_event("session.destroy", session_id="s1")
     assert p.saved == []
     assert llm.calls == []  # 没调 LLM
@@ -130,7 +130,7 @@ async def test_session_end_extracts_and_saves():
     ])
     llm = FakeLLM(content=llm_content)
     store = FakeSessionStore(messages=msgs)
-    s = SessionEndExtractStrategy(p, llm, session_store=store, min_messages=5)
+    s = SessionEndExtractStrategy(p, lambda: llm, session_store=store, min_messages=5)
     await s.on_event("session.destroy", session_id="s1")
     assert len(p.saved) == 2
     assert p.saved[0].source == "extracted"
@@ -146,7 +146,7 @@ async def test_session_end_caps_max_per_session():
     items = [{"key": f"k{i}", "value": f"v{i}", "tags": []} for i in range(10)]
     llm = FakeLLM(content=json.dumps(items))
     store = FakeSessionStore(messages=msgs)
-    s = SessionEndExtractStrategy(p, llm, session_store=store, min_messages=5, max_per_session=2)
+    s = SessionEndExtractStrategy(p, lambda: llm, session_store=store, min_messages=5, max_per_session=2)
     await s.on_event("session.destroy", session_id="s1")
     assert len(p.saved) == 2
 
@@ -162,7 +162,7 @@ async def test_session_end_swallows_llm_errors():
             raise RuntimeError("network down")
 
     store = FakeSessionStore(messages=msgs)
-    s = SessionEndExtractStrategy(p, FailingLLM(), session_store=store, min_messages=5)
+    s = SessionEndExtractStrategy(p, lambda: FailingLLM(), session_store=store, min_messages=5)
     # 不应抛
     await s.on_event("session.destroy", session_id="s1")
     assert p.saved == []
@@ -175,6 +175,6 @@ async def test_session_end_handles_invalid_json():
     msgs = [{"role": "user", "content": f"msg{i}"} for i in range(6)]
     llm = FakeLLM(content="not a json")
     store = FakeSessionStore(messages=msgs)
-    s = SessionEndExtractStrategy(p, llm, session_store=store, min_messages=5)
+    s = SessionEndExtractStrategy(p, lambda: llm, session_store=store, min_messages=5)
     await s.on_event("session.destroy", session_id="s1")
     assert p.saved == []

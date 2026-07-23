@@ -228,7 +228,7 @@ class Agent:
         if self.config.memory_auto_extract_on_session_end:
             self.memory_strategies.append(
                 SessionEndExtractStrategy(
-                    self.memory_save_pipeline, self.llm,
+                    self.memory_save_pipeline, lambda: self.provider,
                     session_store=self._session_store,
                     max_per_session=self.config.memory_extract_max_per_session,
                     min_messages=self.config.memory_extract_min_messages,
@@ -290,6 +290,7 @@ class Agent:
             agent_profiles=self.agent_profiles,
             loop_policies=self.loop_policies,
             security_pipeline=self._security_pipeline,
+            model_registry=self.model_registry,
         )
         self._plugin_ctx.agent = self
         self.plugin_manager = PluginManager(self._plugin_ctx)

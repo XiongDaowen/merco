@@ -93,6 +93,7 @@ async def test_plugins_see_all_extension_points_on_activate(test_agent):
             seen["memory_backends"] = ctx.memory_backends is not None
             seen["agent_profiles"] = ctx.agent_profiles is not None
             seen["security_pipeline"] = ctx.security_pipeline is not None
+            seen["model_registry"] = ctx.model_registry is not None
 
     test_agent.plugin_manager.register(ProbePlugin())
     await test_agent.plugin_manager.activate("probe")
@@ -103,6 +104,7 @@ async def test_plugins_see_all_extension_points_on_activate(test_agent):
     assert seen["memory_backends"] is True
     assert seen["agent_profiles"] is True
     assert seen["security_pipeline"] is True  # 已通过 agent.py 注入
+    assert seen["model_registry"] is True
 
 
 async def test_external_dir_plugin_registers_via_convenience_methods(tmp_path, monkeypatch):
@@ -169,3 +171,31 @@ async def test_external_dir_plugin_registers_via_convenience_methods(tmp_path, m
     ctx.agent_profiles.register.assert_called_once()
     ctx.memory_backends.register.assert_called_once()
     ctx.security_pipeline.use.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_plugin_can_register_model_provider(test_agent):
+    """Third-party provider registers via ctx.register_model_provider."""
+    from merco.plugins.base import Plugin, PluginContext, PluginSpec
+    from merco.core.llm.base import ModelProvider, ModelProviderInfo
+
+    class FakeProvider(ModelProvider):
+        name = "fake"
+        async def chat(self, messages, tools=None, tool_choice=None):
+            return {"content": "fake", "finish_reason": "stop"}
+        async def chat_stream(self, messages, tools=None, tool_choice=None):
+            yield {"content": "fake"}
+
+    class FakePlugin(Plugin):
+        name = "fake_provider"
+        async def activate(self, ctx):
+            ctx.register_model_provider(ModelProviderInfo(
+                name="fake", provider_class=FakeProvider, display_name="Fake"))
+
+    assert test_agent.model_registry is not None
+    # simulate plugin activation
+    from merco.core.llm.registry import ModelRegistry
+    test_agent.model_registry.register(ModelProviderInfo(
+        name="fake", provider_class=FakeProvider, display_name="Fake"))
+    info = test_agent.model_registry.get("fake")
+    assert info.provider_class is FakeProvider

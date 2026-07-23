@@ -74,7 +74,7 @@ async def test_full_lifecycle_session_end_extract(tmp_path):
     llm = FakeLLM(content=llm_content)
 
     strategy = SessionEndExtractStrategy(
-        pipeline, llm, session_store=sess_store, min_messages=5,
+        pipeline, lambda: llm, session_store=sess_store, min_messages=5,
     )
     strategy.subscribe(hooks)
 
