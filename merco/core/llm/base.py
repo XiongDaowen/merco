@@ -4,7 +4,12 @@ The ABC defines a normalized contract: chat/chat_stream take OpenAI-shaped
 messages/tools and return/yield normalized response dicts:
     {role, content, reasoning, finish_reason,
      usage{prompt_tokens,completion_tokens,total,cached?},
-     tool_calls[{id, type, function{name, arguments}}]}
+     tool_calls[{id, name, arguments, index?}]}
+tool_calls use merco's INTERNAL FLAT shape: ``arguments`` is a dict (non-
+streaming) or an accumulated JSON string (streaming, json.loads'd by the
+response assembler). The nested OpenAI wire format
+``{id,type,function{name,arguments}}`` is NOT used here - _dispatch_tool_calls
+re-nests flat->nested only when storing into context for the next turn.
 Each provider populates `reasoning` its own way (OpenAI-compatible via
 thinking.py; Anthropic via native thinking blocks).
 """

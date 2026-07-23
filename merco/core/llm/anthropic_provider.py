@@ -173,11 +173,8 @@ class AnthropicNativeProvider(ModelProvider):
                 tool_calls.append(
                     {
                         "id": getattr(block, "id", ""),
-                        "type": "function",
-                        "function": {
-                            "name": getattr(block, "name", ""),
-                            "arguments": getattr(block, "input", {}) or {},
-                        },
+                        "name": getattr(block, "name", ""),
+                        "arguments": getattr(block, "input", {}) or {},
                     }
                 )
         usage = response.usage
@@ -227,7 +224,21 @@ class AnthropicNativeProvider(ModelProvider):
             raise translate_anthropic_error(exc) from exc
 
     def _parse_stream_event(self, event) -> dict | None:
-        if getattr(event, "type", None) != "content_block_delta":
+        event_type = getattr(event, "type", None)
+        if event_type == "content_block_start":
+            block = getattr(event, "content_block", None)
+            if block is not None and getattr(block, "type", None) == "tool_use":
+                return {
+                    "tool_calls": [
+                        {
+                            "index": getattr(event, "index", 0),
+                            "id": getattr(block, "id", ""),
+                            "name": getattr(block, "name", ""),
+                        }
+                    ]
+                }
+            return None
+        if event_type != "content_block_delta":
             return None
         delta = event.delta
         delta_type = getattr(delta, "type", None)
@@ -239,7 +250,7 @@ class AnthropicNativeProvider(ModelProvider):
             return {
                 "tool_calls": [
                     {
-                        "index": 0,
+                        "index": getattr(event, "index", 0),
                         "arguments": getattr(delta, "partial_json", ""),
                     }
                 ]

@@ -83,6 +83,7 @@ class ModelProvider(ABC):
 - **归一化响应 dict 契约**（`chat` 返回 / `chat_stream` 末 chunk）：
   `{role, content, reasoning, finish_reason, usage{prompt,completion,total,cached?}, tool_calls[{id,type,function{name,arguments}}]}`
   正式化 `_parse_response`/`_parse_chunk` 已产出的形状为 ABC 契约；`MockModelProvider`/`ProgrammableModelProvider` 实现它即可静态校验。
+  > 注（实现订正）：实际实现的内部契约是**扁平** `tool_calls[{id,name,arguments,index?}]`（`arguments` 非流式为 dict、流式为 JSON 字符串），非 OpenAI 外层 nested 形状；`_dispatch_tool_calls` 存入 context 时才重新 nested 化。`base.py` docstring 以实现为准。
 
 **`ModelProviderInfo`**（dataclass，替代 `ProviderInfo`，strict 超集）：
 ```python

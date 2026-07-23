@@ -101,7 +101,9 @@ def test_parse_response_blocks():
     assert result["reasoning"] == "chain"
     assert result["finish_reason"] == "stop"
     assert result["usage"]["prompt_tokens"] == 10
-    assert result["tool_calls"][0]["function"]["name"] == "search"
+    assert result["tool_calls"][0]["id"] == "tc1"
+    assert result["tool_calls"][0]["name"] == "search"
+    assert result["tool_calls"][0]["arguments"] == {"q": "x"}
 
 
 def test_parse_response_extracts_cached_tokens():
