@@ -9,11 +9,7 @@ import it from this module — it delegates to ``error_ui``.
 """
 from __future__ import annotations
 
-from merco.core.llm.error_ui import (  # noqa: F401
-    classify_error,
-    error_message,
-    build_error_panel,
-)
+from merco.core.llm.error_ui import classify_error, error_message
 
 
 class ProviderError(Exception):

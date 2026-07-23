@@ -604,6 +604,33 @@ Agent.run(prompt)
 
 ---
 
+## 模型层架构（ModelProvider / ModelRegistry）
+
+波2 重构后，`merco/core/llm/` 从单文件 `_client.py` 演进为 provider ABC + registry 架构，镜像插件动态化分层（ABC -> 元数据 -> registry -> 具体 provider -> agent 懒属性）。Agent 不再硬编码 OpenAI 客户端，而是经 `ModelRegistry.select()` 拿到具体 provider。
+
+### 目录布局
+
+| 模块 | 职责 |
+|------|------|
+| `base.py` | `ModelProvider` ABC（`chat`/`chat_stream`/`info` 契约）+ `ModelProviderInfo` dataclass（name/provider_class/display_name/base_url/key_env/key_help/default_model/models/description，纯元数据 + 懒加载器）。 |
+| `registry.py` | `ModelRegistry` 单一真相源：`register/get/list/select`。`select(config)` **拥有凭证解析**（读 `key_env` -> env -> config -> `ModelConfig.api_key`），agent/config 不再各自补 base_url/api_key。`_BUILTIN_PROVIDERS` 预置 OpenAICompatible/AnthropicNative。 |
+| `openai_provider.py` | `OpenAICompatibleProvider` 吸收旧 `LLMClient` transport（`AsyncOpenAI` 构造 + chat/chat_stream + tool_calls 解析 + None 字段防护）；拥有 `translate_openai_error`（SDK 异常 -> `ProviderError`）。 |
+| `anthropic_provider.py` | `AnthropicNativeProvider` 原生 Messages API（非 OpenAI 兼容 shim），**证明 ABC 不被 OpenAI 形状绑架**；拥有 `translate_anthropic_error`。 |
+| `thinking.py` | `ThinkingExtractor` 策略链（reasoning 字段提取，纯提取自旧 `_client.py`）。 |
+| `response.py` | `ResponseProvider` + `StreamingProvider`/`NonStreamingProvider`（流式/非流式双模式，纯提取自 `agent.py`）。 |
+| `errors.py` | SDK 无关的 `ProviderError` 层级（`RateLimitError`/`AuthError`/`ConnectionError`/`ModelNotFoundError`，携带 `status_code`）。**不 import 任何 SDK**--`translate_*_error` 已移入各 provider 文件。保留 `llm_error` 兼容包装。 |
+| `error_ui.py` | `classify_error`/`error_message`/`build_error_panel`/`build_retry_line`--按 `status_code` + 异常类名分类 + Rich 红 Panel 渲染 + 重试反馈。 |
+
+### 关键设计
+
+- **`agent.provider` 懒属性**：首次访问时 `ModelRegistry.select(config.model)` 实例化 provider 并缓存到 `_model_provider`/`_response_provider`；setter 走 `switch_model`（跨 provider 修复：构造新 `ModelConfig` 触发 re-select，而非假设同 client）。SubAgent 覆盖 `config.model` 即自动 re-select，无需额外代码。
+- **`agent.model_registry`**：agent 持有 registry 引用，`switch_model` / recovery 均经此拿 provider。
+- **`PluginContext.model_registry`**：第三方扩展点。插件经 `ctx.register_model_provider(ProviderClass)` 注入自有 provider，agent 无需感知。
+- **每个 provider 拥有自己的 SDK error mapping**：`translate_openai_error`/`translate_anthropic_error` 各居其 provider 文件，`errors.py` 保持 SDK 无关--agent 与 `error_ui` 永不 import SDK。
+- **凭证解析归 `ModelRegistry.select()` 独占**：`ModelConfig` 退化为纯数据（删 `resolve()`/`stream_options`），`_get_api_key` 删除。
+
+---
+
 ## Agent Loop 详细流程图
 
 以下是 Agent Loop 的完整执行流程，展示了从用户输入到最终输出的所有关键步骤和 Hook 事件：

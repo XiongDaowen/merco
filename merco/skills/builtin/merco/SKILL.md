@@ -256,10 +256,10 @@ merco -m Qwen3-235B-A22B   # 指定模型
 
 **三次误判**：
 1. `json.loads → json.dumps` 往返导致 arguments 格式变化 → **已退还**
-2. `stream_options: {"include_usage": true}` 硬编码导致不支持 provider 400 → **已退还**（改为 ModelConfig 显式字段）
+2. `stream_options: {"include_usage": true}` 硬编码导致不支持 provider 400 → **已退还**（现为 `OpenAICompatibleProvider` 流式内部细节，非配置驱动）
 3. 会话恢复时 reasoning 泄漏到历史消息 → **不匹配证据**
 
-**根因**：`httpx.AsyncClient` 在 `LLMClient.__init__()`（同步）中通过 `AsyncOpenAI()` 构造，但异步连接池的初始化还未被事件循环调度过。首次 `chat.completions.create()` 调用时，httpx 内部状态未就绪，造成连接建立竞态——API 收到不完整的请求体。`asyncio.sleep(0)` 让出一次事件循环即可解决。
+**根因**：`httpx.AsyncClient` 在 `OpenAICompatibleProvider.__init__()`（同步）中通过 `AsyncOpenAI()` 构造，但异步连接池的初始化还未被事件循环调度过。首次 `chat.completions.create()` 调用时，httpx 内部状态未就绪，造成连接建立竞态——API 收到不完整的请求体。`asyncio.sleep(0)` 让出一次事件循环即可解决。
 
 **为何是 heisenbug**：任何导致首次 API 调用前出现同步操作的行为（debug 日志写入、文件 IO、多余的 json.dumps）都会改变事件循环的调度时机，从而掩盖竞态窗口。`--debug` 模式的额外日志输出恰好提供了足够的 yield 点。
 

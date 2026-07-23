@@ -162,13 +162,6 @@ class TestErrorsWrapper:
         assert msg.startswith("❌ ")
         assert "502" in msg
 
-    def test_reexports_error_ui_names(self):
-        import merco.core.llm.errors as errors_mod
-        assert hasattr(errors_mod, "classify_error")
-        assert hasattr(errors_mod, "build_error_panel")
-        assert hasattr(errors_mod, "error_message")
-        assert callable(errors_mod.llm_error)
-
     def test_is_retryable_llm_error_removed(self):
         import merco.core.llm.errors as errors_mod
         assert not hasattr(errors_mod, "_is_retryable_llm_error")

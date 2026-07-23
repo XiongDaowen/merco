@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-07-23 (波1 插件动态化完成)
+> 最后更新: 2026-07-23 (波2 ModelProviderRegistry 完成)
 
 ## 目标对标
 
@@ -9,9 +9,27 @@
 
 ## 当前状态
 
-**阶段**: Phase 5 完成 → v0.4.0 发布 | **焦点**: 插件动态化波1 完成（discovery + PluginSpec + manager 拓扑激活 + 两阶段 boot）
+**阶段**: Phase 5 完成 → v0.4.0 发布 | **焦点**: 插件动态化波2 完成（ModelProvider ABC + ModelRegistry 单一真相源 + OpenAI/Anthropic 双 provider + thinking/response 提取）
 
-### 本次会话更新 (2026-07-23)
+### 本次会话更新 (2026-07-23) - 波2 ModelProviderRegistry
+
+**模型供应商动态化 波2（重大架构升级）**：
+- **18 个 commit**（自 `95e300d9`：1 spec 文档 + 16 实现/重构/测试 + 1 no-debt gate `4951099`），最终代码 commit `4951099`。**945 passed / 1 skipped**。终审 **SHIP**。
+- **目标**：模型供应商动态化--镜像插件发现机制，第三方可通过 `PluginContext.model_registry` 注册自有 provider，agent 不再硬编码 OpenAI 客户端。ABC 不被 OpenAI 形状绑架（`AnthropicNativeProvider` 原生 Messages API 证明）。
+- **`llm/base.py` (NEW)**：`ModelProvider` ABC（`chat`/`chat_stream`/`info`）+ `ModelProviderInfo` dataclass（name/provider_class/display_name/base_url/key_env/key_help/default_model/models/description）。
+- **`llm/registry.py` (NEW)**：`ModelRegistry` 单一真相源--`register/get/list/select`。`select()` 拥有凭证解析（读 `key_env` -> env -> config -> `ModelConfig.api_key`），agent/config 不再各自补 base_url/api_key。`_BUILTIN_PROVIDERS` 预置 OpenAICompatible/AnthropicNative。
+- **`llm/openai_provider.py` (NEW)**：`OpenAICompatibleProvider` 吸收旧 `LLMClient` transport（`AsyncOpenAI` 构造 + chat/chat_stream + tool_calls 解析 + None 字段防护），拥有 `translate_openai_error`（SDK 异常 -> ProviderError）。
+- **`llm/anthropic_provider.py` (NEW)**：`AnthropicNativeProvider` 原生 Messages API（非 OpenAI 兼容 shim），证明 ABC 不被 OpenAI 形状绑架；拥有 `translate_anthropic_error`。新增 `anthropic` 依赖。
+- **`llm/thinking.py` (NEW, 纯提取)**：`ThinkingExtractor` 策略链（从 `_client.py` 原样搬出）。
+- **`llm/response.py` (NEW, 纯提取)**：`ResponseProvider`/`StreamingProvider`/`NonStreamingProvider`（从 `agent.py` 原样搬出）。
+- **`llm/errors.py`**：SDK 无关的 `ProviderError` 层级（`RateLimitError`/`AuthError`/`ConnectionError`/`ModelNotFoundError`，携带 `status_code`）。`translate_*_error` 移入各 provider 文件（errors.py 不再 import 任何 SDK）。保留 `llm_error` 兼容包装；删除死 re-export `build_error_panel` + `# noqa: F401`。
+- **`core/config.py`**：`ModelConfig` 纯数据（删 `resolve()`/`stream_options`，凭证交给 `ModelRegistry.select()`）；新增 `StreamingConfig` 分组（enabled/think/content/think_transient/render_interval）。
+- **`core/agent.py`**：`provider` 懒属性（首次访问 `ModelRegistry.select(config.model)`，setter 走 `switch_model`）+ `model_registry` 字段。`switch_model` 跨 provider 修复（构造新 `ModelConfig` 触发 re-select，而非假设同 client）。`_model_provider`/`_response_provider` 内部槽。删 `agent.llm` 别名 + `LLMClient` 构造 + `_get_api_key`。
+- **`plugins/base.py`**：`PluginContext` 增 `model_registry` 注入 + `register_model_provider()` 便捷方法（第三方扩展点）。memory strategy 用 deferred provider getter。
+- **删除**：`_client.py`、`PROVIDER_REGISTRY`、`ProviderInfo`、`resolve()`、`_get_api_key`、`LLMClient`/`MockLLMClient`/`ProgrammableLLMClient` 及全部迁移别名。4-grep no-debt gate 全空。
+- **分层**：`ModelProvider` ABC（契约）-> `ModelProviderInfo`（纯元数据）-> `ModelRegistry`（单一真相源 + 凭证解析）-> 具体 provider（各自拥有 SDK error mapping）-> `agent.provider` 懒属性。镜像插件分层（discovery -> spec -> manager -> context）。
+
+### 本次会话更新 (2026-07-23) - 波1 插件动态化
 
 **插件动态化 波1（重大架构升级）**：
 - **20 个 commit**（自 `3b07a88`：17 实现 + 1 polish `d99cc87` + 2 文档），最终代码 commit `d99cc87`。**910 passed / 1 skipped**。终审 **SHIP**。
@@ -101,7 +119,7 @@
 | `agent.py` | 🟢 REAL | Full agent loop。Hooks 4 事件 emit、Observer 订阅、ToolGuard 拦截、SessionStore 持久化、`_wrap_up` 收尾、PromptBuilder+3 chunks、Pipeline (Result/Recovery/EmptyResponse) 完整集成、StreamingProvider/NonStreamingProvider 双模式、LoopPolicy 决策。1186 行。 |
 | `config.py` | 🟢 REAL | `MercoConfig` + `ModelConfig` + `ProviderInfo` dataclass。5 个预置平台。`ProviderInfo.__getitem__` 向后兼容。`resolve()` 自动补 base_url/api_key。226 行。 |
 | `setup.py` | 🟢 REAL | 交互式 API 配置向导，5 步流程。`merco setup` CLI 命令。192 行。 |
-| `llm/` | 🟢 REAL | 模块化 LLM 层：`_client.py` (OpenAI 兼容客户端)、`errors.py` (向后兼容包装)、`error_ui.py` (226 行分类+渲染+重试反馈)。 |
+| `llm/` | 🟢 REAL | 模块化 LLM 层（波2 重构）：`base.py` (ModelProvider ABC + ModelProviderInfo)、`registry.py` (ModelRegistry 单一真相源)、`openai_provider.py`/`anthropic_provider.py` (双 provider，各自拥有 SDK error mapping)、`thinking.py`/`response.py` (提取)、`errors.py` (SDK 无关 ProviderError 层级)、`error_ui.py` (分类+渲染+重试反馈)。 |
 | `session.py` | 🟢 REAL | Session 数据类 + save/load/resume_or_create + **`fork()` 已实现**。 |
 | `context.py` | 🟢 REAL | `ContextManager` + `estimate_tokens`/`msg_tokens` + `total_tokens` 优先 API 实测。`CompressProcessor` 已实现（滑动窗口 + LLM 摘要）。 |
 | `pipeline.py` | 🟢 REAL | `ResultPipeline` + `RecoveryPipeline` + `EmptyResponsePipeline`，链式 use()/process()。含 TruncationProcessor / SkillViewProcessor / WaitRecovery / ContextCompressRecovery / CallbackEmptyResponse。573 行。 |
@@ -247,7 +265,7 @@
 | ❌ NOT WIRED (未集成) | 4 | Scheduler → Runtime / TUI / Web → Agent / SubAgent |
 | **CLI 测试** | **94** | 9 个测试文件，覆盖 Dashboard / PromptArea / commands / lifecycle / REPL errors |
 | **Plugin 测试** | **新增** | test_discovery / test_spec / test_manager / test_plugin_base / test_plugin_integration + 7 个 builtin 插件测试 |
-| **总测试** | **910 passed / 1 skipped** | 波1 插件动态化后全量 |
+| **总测试** | **945 passed / 1 skipped** | 波2 ModelProviderRegistry 后全量 |
 
 ## 下一步（按优先级）
 
@@ -264,7 +282,7 @@
 
 ### 插件动态化（波2/波3）
 - **波1 ✅ 完成**（2026-07-23）：discovery + PluginSpec + manager 拓扑激活 + 两阶段 boot。
-- **波2** - ModelProviderRegistry：动态模型供应商，镜像插件发现机制。
+- **波2 ✅ 完成**（2026-07-23）- ModelProviderRegistry：动态模型供应商，镜像插件发现机制。
 - **波3** - Scheduler->Runtime + GatewayRegistry：调度器升级为 Runtime + 网关动态注册。
 
 ### 持续
