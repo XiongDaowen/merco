@@ -117,7 +117,7 @@
 | File | Status | Details |
 |------|--------|---------|
 | `agent.py` | 🟢 REAL | Full agent loop。Hooks 4 事件 emit、Observer 订阅、ToolGuard 拦截、SessionStore 持久化、`_wrap_up` 收尾、PromptBuilder+3 chunks、Pipeline (Result/Recovery/EmptyResponse) 完整集成、StreamingProvider/NonStreamingProvider 双模式、LoopPolicy 决策。1186 行。 |
-| `config.py` | 🟢 REAL | `MercoConfig` + `ModelConfig` + `ProviderInfo` dataclass。5 个预置平台。`ProviderInfo.__getitem__` 向后兼容。`resolve()` 自动补 base_url/api_key。226 行。 |
+| `config.py` | 🟢 REAL | `MercoConfig`（主配置，load/save/merge + JSON 序列化）+ `ModelConfig`（纯数据袋，`resolve()`/`stream_options` 已删，凭证交 `ModelRegistry.select()`）+ `StreamingConfig` 分组（enabled/think/content/think_transient/render_interval）。`ProviderInfo`/`PROVIDER_REGISTRY` 已删（波2）。259 行。 |
 | `setup.py` | 🟢 REAL | 交互式 API 配置向导，5 步流程。`merco setup` CLI 命令。192 行。 |
 | `llm/` | 🟢 REAL | 模块化 LLM 层（波2 重构）：`base.py` (ModelProvider ABC + ModelProviderInfo)、`registry.py` (ModelRegistry 单一真相源)、`openai_provider.py`/`anthropic_provider.py` (双 provider，各自拥有 SDK error mapping)、`thinking.py`/`response.py` (提取)、`errors.py` (SDK 无关 ProviderError 层级)、`error_ui.py` (分类+渲染+重试反馈)。 |
 | `session.py` | 🟢 REAL | Session 数据类 + save/load/resume_or_create + **`fork()` 已实现**。 |
