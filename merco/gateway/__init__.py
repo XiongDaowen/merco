@@ -1,5 +1,4 @@
 """消息网关"""
+from .base import GatewayAdapter
 
-from .base import BaseGateway
-
-__all__ = ["BaseGateway"]
+__all__ = ["GatewayAdapter"]
