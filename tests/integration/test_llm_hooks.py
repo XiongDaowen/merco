@@ -9,7 +9,7 @@ from merco.hooks import HookResult
 async def test_llm_before_chat_can_modify_messages_and_tools(test_agent):
     """llm.before_chat can replace messages and tools before LLM call."""
     agent = test_agent
-    agent.llm.responses = [{"content": "done", "finish_reason": "stop"}]
+    agent.provider.responses = [{"content": "done", "finish_reason": "stop"}]
 
     async def before_chat(messages, tools, **kwargs):
         modified_messages = list(messages)
@@ -21,8 +21,8 @@ async def test_llm_before_chat_can_modify_messages_and_tools(test_agent):
     result = await agent.run("hello")
 
     assert result == "done"
-    assert agent.llm.calls, "LLM should have been called"
-    call = agent.llm.calls[-1]
+    assert agent.provider.calls, "LLM should have been called"
+    call = agent.provider.calls[-1]
     assert call["messages"][-1] == {"role": "user", "content": "hook injected"}
     assert call["tools"] is None
 
@@ -31,7 +31,7 @@ async def test_llm_before_chat_can_modify_messages_and_tools(test_agent):
 async def test_llm_before_chat_can_short_circuit_with_response(test_agent):
     """llm.before_chat stop=True with response skips the LLM call."""
     agent = test_agent
-    agent.llm.responses = [{"content": "should not be used", "finish_reason": "stop"}]
+    agent.provider.responses = [{"content": "should not be used", "finish_reason": "stop"}]
 
     async def before_chat(messages, tools, **kwargs):
         return HookResult(
@@ -44,14 +44,14 @@ async def test_llm_before_chat_can_short_circuit_with_response(test_agent):
     result = await agent.run("hello")
 
     assert result == "from hook"
-    assert agent.llm.calls == []
+    assert agent.provider.calls == []
 
 
 @pytest.mark.asyncio
 async def test_llm_after_chat_can_replace_response(test_agent):
     """llm.after_chat can replace the LLM response before Agent processes it."""
     agent = test_agent
-    agent.llm.responses = [{"content": "original", "finish_reason": "stop"}]
+    agent.provider.responses = [{"content": "original", "finish_reason": "stop"}]
 
     async def after_chat(response, **kwargs):
         assert response["content"] == "original"

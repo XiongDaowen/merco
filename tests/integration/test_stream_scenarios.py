@@ -13,19 +13,21 @@ import pytest
 from io import StringIO
 from unittest.mock import patch, MagicMock
 
+from merco.core.llm.base import ModelProvider
 from merco.core.config import MercoConfig, StreamingConfig
 from merco.core.agent import Agent, StreamingProvider
-from tests.conftest import MockLLMClient, make_test_registry
+from tests.conftest import MockModelProvider, make_test_registry
 
 
 # ── Enhanced Mock LLM for streaming tests ──────────────────────────
 
-class StreamingMockLLMClient:
+class StreamingMockProvider(ModelProvider):
     """Mock LLM that yields multiple chunks to simulate real streaming.
-    
+
     Can be used as a class replacement for LLMClient (accepts same init kwargs)
     or instantiated directly with chunks for test setup.
     """
+    name = "mock"
 
     def __init__(self, chunks: list[dict] | None = None, **kwargs):
         """
@@ -65,7 +67,7 @@ class StreamingMockLLMClient:
             yield chunk
 
 
-class SlowStreamingMockLLMClient(StreamingMockLLMClient):
+class SlowStreamingMockProvider(StreamingMockProvider):
     """Mock LLM with delays between chunks to simulate slow API."""
 
     def __init__(self, chunks: list[dict] | None = None, delay: float = 0.05, **kwargs):
@@ -80,8 +82,9 @@ class SlowStreamingMockLLMClient(StreamingMockLLMClient):
             yield chunk
 
 
-class CancellingMockLLMClient:
+class CancellingMockProvider(ModelProvider):
     """Mock LLM that cancels the current task mid-stream."""
+    name = "mock"
 
     def __init__(self, chunks_before_cancel: list[dict], **kwargs):
         self.chunks = list(chunks_before_cancel)
@@ -142,7 +145,7 @@ def quiet_console(monkeypatch):
 async def test_thinking_and_content_both_streaming(stream_agent, quiet_console):
     """streaming=True, stream_content=True, stream_thinking=True:
     Both thinking and content panels should stream and be preserved."""
-    stream_agent.llm = StreamingMockLLMClient([
+    stream_agent.provider = StreamingMockProvider([
         {"reasoning": "Let me think..."},
         {"reasoning": " about this."},
         {"content": "The answer is "},
@@ -165,7 +168,7 @@ async def test_thinking_and_content_both_streaming(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_thinking_only_no_content(stream_agent, quiet_console):
     """Model returns reasoning but empty content — should not crash."""
-    stream_agent.llm = StreamingMockLLMClient([
+    stream_agent.provider = StreamingMockProvider([
         {"reasoning": "Thinking hard..."},
         {"reasoning": " still thinking..."},
         {"content": ""},
@@ -181,7 +184,7 @@ async def test_thinking_only_no_content(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_content_only_no_thinking(stream_agent, quiet_console):
     """Model returns content without reasoning — should work fine."""
-    stream_agent.llm = StreamingMockLLMClient([
+    stream_agent.provider = StreamingMockProvider([
         {"content": "Hello "},
         {"content": "world!"},
         {"finish_reason": "stop"},
@@ -199,7 +202,7 @@ async def test_content_only_no_thinking(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_empty_content_no_crash(stream_agent, quiet_console):
     """Empty content should not crash — handled by empty response pipeline."""
-    stream_agent.llm = StreamingMockLLMClient([
+    stream_agent.provider = StreamingMockProvider([
         {"content": ""},
         {"finish_reason": "stop"},
     ])
@@ -212,7 +215,7 @@ async def test_empty_content_no_crash(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_whitespace_only_content(stream_agent, quiet_console):
     """Whitespace-only content should be handled gracefully."""
-    stream_agent.llm = StreamingMockLLMClient([
+    stream_agent.provider = StreamingMockProvider([
         {"content": "   "},
         {"content": "\n\n"},
         {"finish_reason": "stop"},
@@ -231,7 +234,7 @@ async def test_tool_calls_with_streaming(stream_agent, quiet_console):
     """Tool calls should work correctly with streaming enabled."""
     # First call: return a tool_call
     # Second call (after tool result): return final content
-    stream_agent.llm = StreamingMockLLMClient([
+    stream_agent.provider = StreamingMockProvider([
         # First response: tool call
         {"reasoning": "I need to use a tool"},
         {"tool_calls": [{"id": "tc_1", "name": "echo", "index": 0,
@@ -239,7 +242,7 @@ async def test_tool_calls_with_streaming(stream_agent, quiet_console):
         {"finish_reason": "tool_calls"},
     ])
     # Override to provide second response after tool execution
-    original_stream = stream_agent.llm.chat_stream
+    original_stream = stream_agent.provider.chat_stream
     call_count = [0]
 
     async def multi_turn_stream(messages, tools=None, tool_choice="auto"):
@@ -256,9 +259,9 @@ async def test_tool_calls_with_streaming(stream_agent, quiet_console):
             yield {"content": "hello"}
             yield {"finish_reason": "stop"}
 
-    stream_agent.llm.chat_stream = multi_turn_stream
+    stream_agent.provider.chat_stream = multi_turn_stream
     # Also need to handle non-streaming chat for the wrap-up path
-    stream_agent.llm.chat = MagicMock(side_effect=[
+    stream_agent.provider.chat = MagicMock(side_effect=[
         # For the second call, the agent loop calls chat_stream, not chat
     ])
 
@@ -275,7 +278,7 @@ async def test_tool_calls_with_streaming(stream_agent, quiet_console):
             yield {"content": "The tool returned: hello"}
             yield {"finish_reason": "stop"}
 
-    stream_agent.llm.chat_stream = mock_chat_stream
+    stream_agent.provider.chat_stream = mock_chat_stream
     call_count[0] = 0
 
     result = await stream_agent.run("Use echo tool")
@@ -305,7 +308,7 @@ async def test_tool_calls_streaming_arguments(stream_agent, quiet_console):
             yield {"content": "Done"}
             yield {"finish_reason": "stop"}
 
-    stream_agent.llm.chat_stream = mock_chat_stream
+    stream_agent.provider.chat_stream = mock_chat_stream
 
     result = await stream_agent.run("Echo hello")
     assert result is not None
@@ -332,7 +335,7 @@ async def test_interrupt_during_streaming(stream_agent, quiet_console):
         # Simulate cancellation arriving
         raise asyncio.CancelledError()
 
-    stream_agent.llm.chat_stream = cancelling_stream
+    stream_agent.provider.chat_stream = cancelling_stream
 
     # Run in a task so we can cancel it
     task = asyncio.create_task(stream_agent.run("Long question"))
@@ -366,7 +369,7 @@ async def test_interrupt_preserves_partial_content(stream_agent, quiet_console):
         # Yield one more to give the checkpoint a chance
         yield {"content": " more"}
 
-    stream_agent.llm.chat_stream = slow_stream_with_cancel
+    stream_agent.provider.chat_stream = slow_stream_with_cancel
 
     task = asyncio.create_task(stream_agent.run("Tell me a story"))
     await asyncio.sleep(0.05)
@@ -410,7 +413,7 @@ async def test_stream_thinking_transient_true(monkeypatch, tmp_path):
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
 
-    agent.llm = StreamingMockLLMClient([
+    agent.provider = StreamingMockProvider([
         {"reasoning": "Transient thinking..."},
         {"content": "Final answer"},
         {"finish_reason": "stop"},
@@ -447,7 +450,7 @@ async def test_stream_thinking_transient_false_preserves_panel(monkeypatch, tmp_
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
 
-    agent.llm = StreamingMockLLMClient([
+    agent.provider = StreamingMockProvider([
         {"reasoning": "Persistent thinking..."},
         {"content": "Final answer"},
         {"finish_reason": "stop"},
@@ -486,7 +489,7 @@ async def test_stream_content_false(monkeypatch, tmp_path):
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
 
-    agent.llm = StreamingMockLLMClient([
+    agent.provider = StreamingMockProvider([
         {"reasoning": "Thinking..."},
         {"content": "Answer without streaming"},
         {"finish_reason": "stop"},
@@ -508,7 +511,7 @@ async def test_streaming_false_uses_non_streaming_provider(stream_agent, quiet_c
     from merco.core.agent import NonStreamingProvider
     stream_agent._provider = NonStreamingProvider()
 
-    stream_agent.llm = StreamingMockLLMClient([
+    stream_agent.provider = StreamingMockProvider([
         {"content": "Non-streaming answer"},
     ])
 
@@ -519,7 +522,7 @@ async def test_streaming_false_uses_non_streaming_provider(stream_agent, quiet_c
 @pytest.mark.asyncio
 async def test_streaming_with_usage_info(stream_agent, quiet_console):
     """Streaming with usage info should not crash."""
-    stream_agent.llm = StreamingMockLLMClient([
+    stream_agent.provider = StreamingMockProvider([
         {"reasoning": "Thinking..."},
         {"content": "Answer"},
         {"finish_reason": "stop", "usage": {"prompt_tokens": 10, "completion_tokens": 5}},
@@ -535,7 +538,7 @@ async def test_many_small_chunks(stream_agent, quiet_console):
     chunks = [{"content": char} for char in "Hello, World!"]
     chunks.append({"finish_reason": "stop"})
 
-    stream_agent.llm = StreamingMockLLMClient(chunks)
+    stream_agent.provider = StreamingMockProvider(chunks)
 
     result = await stream_agent.run("Spell it out")
     assert "Hello, World!" in result
@@ -544,7 +547,7 @@ async def test_many_small_chunks(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_interleaved_reasoning_and_content(stream_agent, quiet_console):
     """Interleaved reasoning and content chunks should both be captured."""
-    stream_agent.llm = StreamingMockLLMClient([
+    stream_agent.provider = StreamingMockProvider([
         {"reasoning": "Step 1: "},
         {"content": "First part. "},
         {"reasoning": "Step 2: "},

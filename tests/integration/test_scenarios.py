@@ -10,7 +10,7 @@ from merco.core.recovery.wait import WaitRecovery
 from merco.core.session import Session
 from merco.sandbox.guard import ToolGuard, GuardAction
 from openai import APIStatusError
-from tests.conftest import MockLLMClient
+from tests.conftest import MockModelProvider
 
 
 # ═══════════════════════════════════════════════════════════
@@ -20,7 +20,7 @@ from tests.conftest import MockLLMClient
 @pytest.mark.asyncio
 async def test_simple_conversation(test_agent):
     """用户问 → LLM 答 → session 有 2 条消息"""
-    test_agent.llm = MockLLMClient([{"content": "你好！"}])
+    test_agent.provider = MockModelProvider([{"content": "你好！"}])
 
     result = await test_agent.run("你好")
     assert result == "你好！"
@@ -32,7 +32,7 @@ async def test_simple_conversation(test_agent):
 @pytest.mark.asyncio
 async def test_multi_turn(test_agent):
     """多轮对话 → session 累积消息"""
-    test_agent.llm = MockLLMClient([
+    test_agent.provider = MockModelProvider([
         {"content": "第一轮"},
         {"content": "第二轮"},
     ])
@@ -51,7 +51,7 @@ async def test_multi_turn(test_agent):
 @pytest.mark.asyncio
 async def test_tool_call_chain(test_agent):
     """用户问 → tool_call → tool_result → LLM 答 → 完整链路持久化"""
-    test_agent.llm = MockLLMClient([
+    test_agent.provider = MockModelProvider([
         {
             "tool_calls": [{"id": "t1", "name": "echo",
                             "arguments": {"message": "hello"}}],
@@ -75,7 +75,7 @@ async def test_tool_call_chain(test_agent):
 @pytest.mark.asyncio
 async def test_session_save_and_load(test_agent):
     """run → save → 新 session load → 消息一致"""
-    test_agent.llm = MockLLMClient([{"content": "你好！"}])
+    test_agent.provider = MockModelProvider([{"content": "你好！"}])
 
     await test_agent.run("你好")
     test_agent.session.save()
@@ -92,7 +92,7 @@ async def test_session_save_and_load(test_agent):
 @pytest.mark.asyncio
 async def test_session_resume_or_create(test_agent):
     """resume_or_create → 自动恢复上次会话"""
-    test_agent.llm = MockLLMClient([{"content": "第一条"}])
+    test_agent.provider = MockModelProvider([{"content": "第一条"}])
     await test_agent.run("问")
     test_agent.session.save()
 
@@ -104,7 +104,7 @@ async def test_session_resume_or_create(test_agent):
 @pytest.mark.asyncio
 async def test_new_session_preserves_old(test_agent):
     """/new → 旧 session 保留 → 新 session 独立"""
-    test_agent.llm = MockLLMClient([
+    test_agent.provider = MockModelProvider([
         {"content": "旧对话"}, {"content": "新对话"},
     ])
 
@@ -169,7 +169,7 @@ async def test_context_compression_triggered(test_agent):
     test_agent.context.max_tokens = 20000  # ContextManager 已在 __init__ 创建，需同步更新
 
     # Mock LLM 5 次调用：前 4 轮大消息触发压缩，第 5 轮压缩后的正常消息
-    test_agent.llm = MockLLMClient([
+    test_agent.provider = MockModelProvider([
         {"content": big_msg},  # 第 1 轮
         {"content": big_msg},  # 第 2 轮
         {"content": big_msg},  # 第 3 轮
@@ -198,7 +198,7 @@ async def test_context_compression_triggered(test_agent):
 @pytest.mark.asyncio
 async def test_context_restore_after_switch(test_agent):
     """/sessions 切换 → 清旧 context → 灌入新 session 消息"""
-    test_agent.llm = MockLLMClient([{"content": "会话A"}])
+    test_agent.provider = MockModelProvider([{"content": "会话A"}])
     await test_agent.run("会话A的问题")
     id_a = test_agent.session.id
     test_agent.session.save()
@@ -228,7 +228,7 @@ async def test_session_fork_on_compress(test_agent):
     test_agent.context.max_tokens = 20000  # ContextManager 已在 __init__ 创建，需同步更新
 
     # Mock LLM 5 次调用：前 4 轮大消息累积触发压缩 → 自动 fork
-    test_agent.llm = MockLLMClient([
+    test_agent.provider = MockModelProvider([
         {"content": big_msg},
         {"content": big_msg},
         {"content": big_msg},
@@ -280,7 +280,7 @@ async def test_mcp_tool_calling_e2e(test_agent, tmp_path):
     test_agent.tool_registry.register(MockMCPTool())
 
     # Mock LLM：第一次 tool_call → 第二次答
-    test_agent.llm = MockLLMClient([
+    test_agent.provider = MockModelProvider([
         {
             "tool_calls": [{
                 "id": "mcp_t1",
@@ -302,6 +302,8 @@ async def test_mcp_tool_calling_e2e(test_agent, tmp_path):
 async def test_recovery_pipeline_retries_on_5xx(test_agent):
     """MockLLM 第一次抛 500 → RecoveryPipeline 重试 → 第二次成功"""
     class FlakyLLM:
+        name = "mock"
+
         def __init__(self):
             self.calls = 0
 
@@ -321,10 +323,10 @@ async def test_recovery_pipeline_retries_on_5xx(test_agent):
     # 用极短 delay 替换默认 WaitRecovery，避免 3s 真实等待
     test_agent.recovery_pipeline = RecoveryPipeline()
     test_agent.recovery_pipeline.use(WaitRecovery(delay=0.01, max_delay=0.01))
-    test_agent.llm = FlakyLLM()
+    test_agent.provider = FlakyLLM()
 
     # 跑一轮：第一次失败 → 重试 → 第二次成功
     result = await test_agent.run("hello")
     assert result == "重试后成功"
     # LLM 至少被调用 2 次（第一次失败 + 重试成功）
-    assert test_agent.llm.calls >= 2
+    assert test_agent.provider.calls >= 2

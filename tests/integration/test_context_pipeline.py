@@ -7,7 +7,7 @@ from merco.context.processors.cache_optimize import CacheOptimizeProcessor
 
 async def test_pipeline_with_compress(test_agent):
     """Context Pipeline 压缩端到端"""
-    from tests.conftest import MockLLMClient
+    from tests.conftest import MockModelProvider
 
     # Set very small max_input_tokens so compression is triggered easily
     test_agent.config.max_input_tokens = 20000
@@ -24,7 +24,7 @@ async def test_pipeline_with_compress(test_agent):
     ))
 
     # Provide enough mock LLM responses for 4 turns
-    test_agent.llm = MockLLMClient([
+    test_agent.provider = MockModelProvider([
         {"content": "reply0"},
         {"content": "reply1"},
         {"content": "reply2"},

@@ -3,7 +3,7 @@
 import pytest
 from merco.observability.observer import Observer
 from merco.hooks.registry import HookRegistry
-from tests.conftest import MockLLMClient
+from tests.conftest import MockModelProvider
 
 
 @pytest.fixture
@@ -208,7 +208,7 @@ async def test_observer_counts_hook_events_in_agent_loop(test_agent, monkeypatch
     observer.reset(full=False)
 
     # Mock LLM：第一次 tool_call → 第二次 final answer
-    test_agent.llm = MockLLMClient([
+    test_agent.provider = MockModelProvider([
         {"tool_calls": [{"id": "t1", "name": "echo", "arguments": {"message": "hi"}}]},
         {"content": "done"},
     ])
