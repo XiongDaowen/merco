@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from merco.sandbox.guard import PolicyPipeline as PermissionPipeline
     from merco.core.llm.registry import ModelRegistry
     from merco.core.llm.base import ModelProviderInfo
+    from merco.gateway.base import GatewayAdapter
+    from merco.gateway.registry import GatewayRegistry
 
 
 _PIPELINE_WHITELIST = {
@@ -81,6 +83,7 @@ class PluginContext:
         scheduler: "CronScheduler" = None,
         security_pipeline: "PermissionPipeline" = None,
         model_registry: "ModelRegistry" = None,
+        gateway_registry: "GatewayRegistry" = None,
         metadata: dict = None,
     ):
         self.hooks = hooks
@@ -104,6 +107,7 @@ class PluginContext:
         self.scheduler = scheduler
         self.security_pipeline = security_pipeline
         self.model_registry = model_registry
+        self.gateway_registry = gateway_registry
         self.metadata = metadata if metadata is not None else {}
 
     def on(self, event: str, handler: "Callable") -> None:
@@ -153,6 +157,12 @@ class PluginContext:
         if self.model_registry is None:
             raise RuntimeError("model_registry not available on this context")
         self.model_registry.register(info)
+
+    def register_gateway(self, adapter: "GatewayAdapter") -> None:
+        """注册一个 GatewayAdapter（第三方插件用）。"""
+        if self.gateway_registry is None:
+            raise RuntimeError("gateway_registry not available on this context")
+        self.gateway_registry.register(adapter)
 
 
 @dataclass
