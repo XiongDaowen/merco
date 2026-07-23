@@ -442,16 +442,10 @@ class Agent:
         for strat in self.memory_strategies:
             strat.subscribe(self.hooks)
 
-        # ── 插件系统 ──
+        # ── 插件系统（动态发现 + 注册）──
         from merco.plugins.base import PluginContext
         from merco.plugins.manager import PluginManager
-        from merco.plugins.builtin.observability.plugin import ObservabilityPlugin
-        from merco.plugins.builtin.skills.plugin import SkillPlugin
-        from merco.plugins.builtin.mcp.plugin import MCPPlugin
-        from merco.plugins.builtin.subagent.plugin import SubAgentPlugin
-        from merco.plugins.builtin.web.plugin import WebPlugin
-        from merco.plugins.builtin.scheduler.plugin import SchedulerPlugin
-        from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
+        from merco.plugins.discovery import PluginDiscovery
 
         # ── Context Pipeline ──
         from merco.context.pipeline import ContextPipeline
@@ -500,18 +494,13 @@ class Agent:
             memory_backends=self.memory_backends,
             agent_profiles=self.agent_profiles,
             loop_policies=self.loop_policies,
+            security_pipeline=self._security_pipeline,
         )
         self._plugin_ctx.agent = self
         self.plugin_manager = PluginManager(self._plugin_ctx)
 
-        # 注册内置插件
-        self.plugin_manager.register(ObservabilityPlugin())
-        self.plugin_manager.register(SkillPlugin())
-        self.plugin_manager.register(MCPPlugin())
-        self.plugin_manager.register(SubAgentPlugin())
-        self.plugin_manager.register(WebPlugin())
-        self.plugin_manager.register(SchedulerPlugin())
-        self.plugin_manager.register(SuperpowerPlugin())
+        # ── 注册通过 discovery 发现的所有 builtin 插件 ──
+        self.plugin_manager.register_all(PluginDiscovery(config).discover())
 
         # ── MCP 客户端（由 MCPPlugin 激活时创建；legacy 路径下保持 None）──
         self.mcp_manager = None
@@ -532,16 +521,11 @@ class Agent:
         return agent
 
     async def _initialize_async_plugins(self) -> None:
-        """Initialize plugins in deterministic order for Agent.create()."""
-        await self.plugin_manager.activate("observability")
+        """Initialize plugins: boot phase -> context restore -> rest."""
+        await self.plugin_manager.activate_boot()
         self.observer = self._plugin_ctx.observer
         assert self.observer is not None
         self._restore_context()
-        await self.plugin_manager.activate("skills")
-        await self.plugin_manager.activate("mcp")
-        await self.plugin_manager.activate("subagent")
-        await self.plugin_manager.activate("web")
-        await self.plugin_manager.activate("scheduler")
         await self.plugin_manager.activate_all()
 
     async def run(self, prompt: str) -> str:

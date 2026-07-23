@@ -92,7 +92,7 @@ async def test_plugins_see_all_extension_points_on_activate(test_agent):
             seen["sub_agent_manager"] = ctx.sub_agent_manager is not None
             seen["memory_backends"] = ctx.memory_backends is not None
             seen["agent_profiles"] = ctx.agent_profiles is not None
-            seen["security_pipeline"] = ctx.security_pipeline is None
+            seen["security_pipeline"] = ctx.security_pipeline is not None
 
     test_agent.plugin_manager.register(ProbePlugin())
     await test_agent.plugin_manager.activate("probe")
@@ -102,4 +102,4 @@ async def test_plugins_see_all_extension_points_on_activate(test_agent):
     assert seen["sub_agent_manager"] is True
     assert seen["memory_backends"] is True
     assert seen["agent_profiles"] is True
-    assert seen["security_pipeline"] is True  # 默认未注入时是 None
+    assert seen["security_pipeline"] is True  # 已通过 agent.py 注入

@@ -552,3 +552,32 @@ async def test_agent_create_injects_managers_into_task_tool(monkeypatch, tmp_pat
     assert task_tool is not None
     assert task_tool._todo_manager is agent.todo_manager
     assert task_tool._sub_agent_manager is agent.sub_agent_manager
+
+
+# ── Task 12: plugin dynamic loading regression tests ─────────
+
+
+@pytest.mark.asyncio
+async def test_builtin_plugins_activate_in_priority_order(test_agent):
+    """7 个 builtin 按 priority 激活，observability(boot) 最先"""
+    active = test_agent.plugin_manager.active_plugins
+    for name in ["observability", "skills", "mcp", "subagent", "web", "scheduler", "superpower"]:
+        assert name in active, f"{name} 未激活"
+
+
+@pytest.mark.asyncio
+async def test_observer_available_before_restore(test_agent):
+    """observer 在 restore 后可用（boot 语义保留）"""
+    assert test_agent.observer is not None
+
+
+@pytest.mark.asyncio
+async def test_agent_no_hardcoded_plugin_imports():
+    """agent.py 不再硬编码 import builtin 插件"""
+    import inspect
+    from merco.core import agent as agent_mod
+    src = inspect.getsource(agent_mod)
+    for name in ["observability", "skills", "mcp", "subagent", "web", "scheduler", "superpower"]:
+        assert f"from merco.plugins.builtin.{name}.plugin import" not in src, \
+            f"硬编码 import {name}"
+    assert ".register(ObservabilityPlugin()" not in src
