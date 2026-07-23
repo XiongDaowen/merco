@@ -1,8 +1,11 @@
 """Cron 调度器"""
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import Callable, Awaitable
+
+logger = logging.getLogger("merco.scheduler.cron")
 
 
 class CronJob:
@@ -64,7 +67,11 @@ class CronScheduler:
                 await self._run_job(job)
 
     async def _run_job(self, job: CronJob):
-        """执行单个任务"""
+        """执行单个任务。
+
+        handler 抛异常时记 ERROR 日志（保留 traceback），但不向上抛，
+        以免打断其他任务或调度循环；失败时不推进 last_run / run_count。
+        """
         try:
             if asyncio.iscoroutinefunction(job.handler):
                 await job.handler()
@@ -72,14 +79,23 @@ class CronScheduler:
                 job.handler()
             job.last_run = datetime.now()
             job.run_count += 1
-        except Exception as e:
-            pass  # TODO: 添加错误处理与通知
+        except Exception:
+            logger.exception("Cron job %r failed", job.name)
 
     @staticmethod
     def _is_due(schedule: str, now: datetime) -> bool:
-        """检查 cron 表达式是否匹配当前时间"""
-        # TODO: 实现完整的 cron 解析
-        # 简化实现：支持 "* * * * *" (每分钟) 和具体数字
+        """检查 cron 表达式是否匹配当前时间。
+
+        仅支持 ``*`` 与精确整数值。
+
+        不支持（完整 cron 解析超出当前范围，YAGNI）：
+        - 范围，如 ``1-5``
+        - 列表，如 ``1,3,5``
+        - 步长，如 ``*/5``
+
+        weekday 字段采用 cron 约定：``0=周日..6=周六``，
+        而非 Python ``datetime.weekday()`` 的 ``0=周一..6=周日``。
+        """
         parts = schedule.split()
         if len(parts) != 5:
             return False
@@ -91,10 +107,13 @@ class CronScheduler:
                 return True
             return str(value) == part
 
+        # cron weekday: 0=周日..6=周六；Python weekday(): 0=周一..6=周日
+        cron_wday = (now.weekday() + 1) % 7
+
         return (
             match(minute, now.minute)
             and match(hour, now.hour)
             and match(day, now.day)
             and match(month, now.month)
-            and match(weekday, now.weekday())
+            and match(weekday, cron_wday)
         )
