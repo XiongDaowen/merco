@@ -103,3 +103,69 @@ async def test_plugins_see_all_extension_points_on_activate(test_agent):
     assert seen["memory_backends"] is True
     assert seen["agent_profiles"] is True
     assert seen["security_pipeline"] is True  # 已通过 agent.py 注入
+
+
+async def test_external_dir_plugin_registers_via_convenience_methods(tmp_path, monkeypatch):
+    """外部插件经 dir-scan 发现并激活，用便捷方法注册 profile/backend/policy。
+
+    端到端验证：dir-scan discovery -> PluginManager 激活 -> PluginContext 便捷方法
+    委托到 agent_profiles/memory_backends/security_pipeline。
+    """
+    from unittest.mock import AsyncMock, MagicMock
+    from merco.plugins.discovery import PluginDiscovery
+
+    # 1. 造一个外部插件目录（plugin.toml + main.py）
+    pdir = tmp_path / "external"
+    pdir.mkdir()
+    (pdir / "plugin.toml").write_text(
+        '[plugin]\nname = "external"\nversion = "0.1.0"\n'
+        'description = "ext"\npriority = 50\ndepends_on = []\nentry = "main:ExtPlugin"\n',
+        encoding="utf-8",
+    )
+    (pdir / "main.py").write_text(
+        "from merco.plugins.base import Plugin\n"
+        "class ExtPlugin(Plugin):\n"
+        '    name = "external"\n    version = "0.1.0"\n'
+        "    async def activate(self, ctx):\n"
+        "        ctx.register_agent_profile(object())\n"
+        "        ctx.add_memory_backend(object())\n"
+        "        ctx.add_security_policy(object())\n",
+        encoding="utf-8",
+    )
+
+    # 2. 构造 PluginContext（mock 各 registry/pipeline）
+    ctx = PluginContext(
+        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
+        observer=MagicMock(), todo_manager=MagicMock(), sub_agent_manager=MagicMock(),
+        context_pipeline=MagicMock(), agent_profiles=MagicMock(),
+        memory_backends=MagicMock(), loop_policies=MagicMock(),
+        security_pipeline=MagicMock(),
+    )
+    ctx.config.plugins = {}
+    ctx.config.plugins_paths = [str(tmp_path)]
+    # HookRegistry.emit 是 async def（merco/hooks/registry.py），manager.activate 会
+    # `await ctx.hooks.emit(...)`；用 AsyncMock 让调用返回 awaitable（对齐 test_manager.py）。
+    ctx.hooks.emit = AsyncMock()
+
+    # 3. 屏蔽 entry_points，只走 dir-scan
+    monkeypatch.setattr("merco.plugins.discovery.entry_points", lambda group: [])
+
+    # 4. discover -> 恰好 1 个名为 "external" 的 spec
+    specs = PluginDiscovery(ctx.config).discover()
+    assert len(specs) == 1
+    assert specs[0].name == "external"
+
+    # 5. register_all -> activate_all
+    manager = PluginManager(ctx)
+    manager.register_all(specs)
+    await manager.activate_all()
+
+    # 6. 已激活
+    assert "external" in manager.active_plugins
+
+    # 7. 三个便捷方法抵达各自目标
+    ctx.agent_profiles.register.assert_called_once()
+    ctx.memory_backends.register.assert_called_once()
+    ctx.security_pipeline.use.assert_called_once()
