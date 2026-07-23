@@ -1,5 +1,5 @@
 """CLI 生命周期文案测试 — 启动 banner、调试模式、配置错误、退出"""
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import typer
@@ -8,8 +8,7 @@ from cli import main
 from tests.cli.conftest import make_fake_agent
 
 
-@pytest.mark.asyncio
-async def test_setup_agent_with_debug_prints_yellow_banner(capture_console):
+def test_setup_agent_with_debug_prints_yellow_banner(capture_console):
     """debug=True 时输出 [yellow]🔍 调试模式已开启[/yellow]"""
     capture, buf = capture_console
 
@@ -22,21 +21,16 @@ async def test_setup_agent_with_debug_prints_yellow_banner(capture_console):
             cfg.sandbox_mode = "local"
             mock_cfg_cls.load = MagicMock(return_value=cfg)
 
-            with patch("merco.core.agent.Agent") as mock_agent_cls:
-                mock_agent = make_fake_agent()
-                mock_agent_cls.create = AsyncMock(return_value=mock_agent)
-
-                with patch("merco.skills.builtin.install_builtin_skills"):
-                    try:
-                        await main._setup_agent(None, None, None, debug=True)
-                    except Exception:
-                        pass  # 后续路径可能仍有副作用，但前段文案已打出
+            with patch("merco.skills.builtin.install_builtin_skills"):
+                try:
+                    main._setup_agent(None, None, None, debug=True)
+                except Exception:
+                    pass  # 后续路径可能仍有副作用，但前段文案已打出
 
     assert "[yellow]🔍 调试模式已开启[/yellow]" in capture.get_markup()
 
 
-@pytest.mark.asyncio
-async def test_setup_agent_missing_api_key_prints_panel(capture_console, monkeypatch):
+def test_setup_agent_missing_api_key_prints_panel(capture_console, monkeypatch):
     """无 API Key 时输出 yellow Panel 引导用户配置"""
     capture, buf = capture_console
     monkeypatch.setattr("builtins.input", lambda *a, **kw: "n")
@@ -52,11 +46,35 @@ async def test_setup_agent_missing_api_key_prints_panel(capture_console, monkeyp
             mock_cfg_cls.load = MagicMock(return_value=cfg)
 
             with pytest.raises(typer.Exit):
-                await main._setup_agent(None, None, None, debug=False)
+                main._setup_agent(None, None, None, debug=False)
 
     text = capture.export_text()
     assert "需要配置" in text
     assert "未配置 API Key" in text
+
+
+def test_setup_agent_returns_unstarted_runtime():
+    """_setup_agent sync 返回未启动的 AgentRuntime（不是 Agent）--T10 单事件循环重构契约。"""
+    from merco.core.runtime import AgentRuntime
+
+    with patch("merco.tools.discover_tools", MagicMock()):
+        with patch("merco.core.config.MercoConfig") as mock_cfg_cls:
+            cfg = MagicMock()
+            cfg.model.api_key = "sk-test"
+            cfg.model.provider = "openai"
+            cfg.model.model = "gpt-4o"
+            cfg.sandbox_mode = "local"
+            mock_cfg_cls.load = MagicMock(return_value=cfg)
+            with patch("merco.skills.builtin.install_builtin_skills"):
+                runtime, dashboard, config_source = main._setup_agent(
+                    None, None, None, debug=False
+                )
+
+    assert isinstance(runtime, AgentRuntime)
+    assert dashboard is not None
+    # 未启动：agent 属性访问抛 RuntimeError（Agent.create 在 runtime.start() 内，尚未发生）
+    with pytest.raises(RuntimeError):
+        _ = runtime.agent
 
 
 def test_init_command_existing_config_prints_yellow(tmp_path):

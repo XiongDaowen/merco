@@ -138,10 +138,9 @@ class Dashboard:
 
 # ── 共享的 Agent 启动逻辑 ────────────────────────────────────────────────
 
-async def _setup_agent(config_path: str | None, model: str | None, api_key: str | None, debug: bool):
+def _setup_agent(config_path: str | None, model: str | None, api_key: str | None, debug: bool):
     from merco.core.config import MercoConfig
-    from merco.core.agent import Agent
-    import merco
+    from merco.core.runtime import AgentRuntime
     from merco.tools import discover_tools, tool_registry
     discover_tools()
 
@@ -195,7 +194,7 @@ async def _setup_agent(config_path: str | None, model: str | None, api_key: str 
     from merco.skills.builtin import install_builtin_skills
     install_builtin_skills()
 
-    agent = await Agent.create(config=cfg, tool_registry=tool_registry)
+    runtime = AgentRuntime(config=cfg, tool_registry=tool_registry)
 
     # 显示加载的配置来源
     config_source = "默认值"
@@ -214,7 +213,7 @@ async def _setup_agent(config_path: str | None, model: str | None, api_key: str 
         .use(ConfigSection())
         .use(HintSection()))
 
-    return agent, dashboard, config_source
+    return runtime, dashboard, config_source
 
 
 # ── 输入区 PromptDecorator ─────────────────────────────────────
@@ -375,7 +374,7 @@ async def _run_one_turn(agent, prompt_area, driver, handle_command, current_task
     return "continue"
 
 
-def run_repl(agent, dashboard=None, config_source=""):
+def run_repl(runtime, dashboard=None, config_source=""):
     import termios
 
     try:
@@ -407,6 +406,7 @@ def run_repl(agent, dashboard=None, config_source=""):
         _on_exit(lambda: termios.tcsetattr(0, termios.TCSADRAIN, old_tc))
 
     def _save_on_exit():
+        agent = runtime.agent
         agent.observer.save()
         agent.session.metadata["observer"] = agent.observer.snapshot()
         agent.session.save()
@@ -461,6 +461,10 @@ def run_repl(agent, dashboard=None, config_source=""):
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, handle_interrupt)
+
+        # ── Runtime 启动（Agent.create + 插件激活 + scheduler/gateway 起）──
+        await runtime.start()
+        agent = runtime.agent
 
         # Pre-load MCP servers before first user input
         if agent.mcp_manager and agent.config.mcp_servers:
@@ -524,6 +528,7 @@ def run_repl(agent, dashboard=None, config_source=""):
                     loop.remove_signal_handler(sig)
                 except (NotImplementedError, RuntimeError):
                     pass
+            await runtime.stop()
 
     try:
         asyncio.run(repl())
@@ -545,8 +550,8 @@ def main_callback(
 ):
     if ctx.invoked_subcommand is not None:
         return
-    agent, dashboard, config_source = asyncio.run(_setup_agent(config, model, api_key, debug))
-    run_repl(agent, dashboard, config_source)
+    runtime, dashboard, config_source = _setup_agent(config, model, api_key, debug)
+    run_repl(runtime, dashboard, config_source)
 
 
 # ── 子命令 ────────────────────────────────────────────────────────────────
@@ -558,8 +563,8 @@ def run_cmd(
     api_key: str = typer.Option(None, "--api-key", "-k", help="API Key"),
     debug: bool = typer.Option(False, "--debug", "-d", help="开启调试日志"),
 ):
-    agent, dashboard, config_source = asyncio.run(_setup_agent(config, model, api_key, debug))
-    run_repl(agent, dashboard, config_source)
+    runtime, dashboard, config_source = _setup_agent(config, model, api_key, debug)
+    run_repl(runtime, dashboard, config_source)
 
 
 @app.command("init")
