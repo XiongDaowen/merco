@@ -273,6 +273,10 @@ class Agent:
         self.loop_policies.register(DefaultLoopPolicy())
         self.loop_policies.set_active("default")
 
+        # ── Gateway Registry ──
+        from merco.gateway.registry import GatewayRegistry
+        self.gateway_registry = GatewayRegistry()
+
         self._plugin_ctx = PluginContext(
             hooks=self.hooks,
             tool_registry=self.tool_registry,
@@ -291,6 +295,7 @@ class Agent:
             loop_policies=self.loop_policies,
             security_pipeline=self._security_pipeline,
             model_registry=self.model_registry,
+            gateway_registry=self.gateway_registry,
         )
         self._plugin_ctx.agent = self
         self.plugin_manager = PluginManager(self._plugin_ctx)
@@ -319,6 +324,11 @@ class Agent:
     @provider.setter
     def provider(self, value) -> None:
         self._model_provider = value
+
+    @property
+    def plugin_ctx(self):
+        """PluginContext accessor（Runtime 读 scheduler / gateway_registry）。"""
+        return self._plugin_ctx
 
     @classmethod
     async def create(cls, config: MercoConfig, tool_registry=None) -> "Agent":
