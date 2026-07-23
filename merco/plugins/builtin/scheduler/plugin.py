@@ -18,6 +18,7 @@ class SchedulerPlugin(Plugin):
     name = "scheduler"
     version = "1.0.0"
     description = "Creates the cron scheduler"
+    priority = 20
 
     async def activate(self, ctx: "PluginContext") -> None:
         from merco.scheduler.cron import CronScheduler

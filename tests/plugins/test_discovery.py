@@ -213,3 +213,19 @@ def test_circular_dep_skipped(monkeypatch, caplog):
     # 两个循环插件都被跳过
     assert specs == []
     assert any("circular" in r.message for r in caplog.records)
+
+
+def test_builtin_entrypoints_discoverable():
+    """真实 entry_points：7 个 builtin 都能被发现且 priority 正确"""
+    cfg = _config_with()  # uses MagicMock config — not used here
+    from merco.plugins.discovery import PluginDiscovery
+    discovery = PluginDiscovery(cfg)
+    specs = {s.name: s for s in discovery.discover()}
+    expected = {
+        "observability": 100, "skills": 60, "mcp": 50,
+        "subagent": 40, "web": 30, "scheduler": 20, "superpower": 10,
+    }
+    for name, prio in expected.items():
+        assert name in specs, f"missing builtin {name}"
+        assert specs[name].priority == prio, f"{name} priority={specs[name].priority} != {prio}"
+        assert specs[name].source == "entrypoint"

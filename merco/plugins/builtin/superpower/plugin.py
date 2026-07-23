@@ -30,6 +30,7 @@ class SuperpowerPlugin(Plugin):
     name = "superpower"
     version = "1.0.0"
     description = "Extends merco with superpower capabilities"
+    priority = 10
 
     async def activate(self, ctx: "PluginContext") -> None:
         # 1. Register prompt chunk
