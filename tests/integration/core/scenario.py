@@ -11,7 +11,7 @@ from merco.sandbox.guard import (
     GuardResult,
     PermissionPolicy,
 )
-from tests.integration.core.programmable_mock import ProgrammableLLMClient
+from tests.integration.core.programmable_mock import ProgrammableModelProvider
 
 
 class _FixedActionPolicy(PermissionPolicy):
@@ -39,7 +39,7 @@ class _FixedActionPolicy(PermissionPolicy):
 class TestScenario:
     """集成测试场景上下文对象"""
     agent: Agent
-    llm: ProgrammableLLMClient
+    provider: ProgrammableModelProvider
     snapshot_root: Path
     todo_db: Path
     scheduler: object
@@ -75,7 +75,7 @@ class TestScenario:
         )
 
 
-async def build_scenario_agent(llm: ProgrammableLLMClient, tmp_path: Path, monkeypatch) -> Agent:
+async def build_scenario_agent(provider: ProgrammableModelProvider, tmp_path: Path, monkeypatch) -> Agent:
     """构建一个集成测试专用Agent"""
     # 参考根conftest.py的test_agent fixture构造
     from merco.core.config import MercoConfig
@@ -101,5 +101,5 @@ async def build_scenario_agent(llm: ProgrammableLLMClient, tmp_path: Path, monke
 
     # 用Agent.create()异步工厂
     agent = await Agent.create(config=cfg, tool_registry=reg)
-    agent.llm = llm  # 替换为我们的ProgrammableLLMClient
+    agent.provider = provider  # 替换为我们的ProgrammableModelProvider
     return agent

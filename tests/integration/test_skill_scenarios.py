@@ -40,7 +40,7 @@ class TestSkillViewExecution:
             "content": "# 技能内容\n遵循以下步骤...",
         })
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("skill_view", {"name": "test-skill"}),
             Response.content("已加载技能"),
         ])
@@ -63,7 +63,7 @@ class TestSkillViewExecution:
             "content": long_content,
         })
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("skill_view", {"name": "long-skill"}),
             Response.content("已加载"),
         ])
@@ -83,7 +83,7 @@ class TestSkillViewExecution:
             "content": "...",
         })
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("skill_view", {"name": "nonexistent"}),
             Response.content("换个技能试试"),
         ])

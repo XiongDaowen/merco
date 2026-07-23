@@ -19,7 +19,7 @@ class TestSnapshotCreation:
         # 模拟 EditApplyMiddleware：在实际代码路径中，中间件会在工具执行前调用 snapshot.track()
         snapshot.track(str(target), original, session_id="test-edit-1")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("edit_file", {
                 "path": str(target),
                 "search": "return 1",
@@ -49,7 +49,7 @@ class TestSnapshotCreation:
         # 模拟 EditApplyMiddleware：在实际代码路径中，中间件会在工具执行前调用 snapshot.track()
         snapshot.track(str(target), original, session_id="test-write-1")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {
                 "path": str(target),
                 "content": "new content",
@@ -80,7 +80,7 @@ class TestSingleRevert:
         snapshot.track(str(file_a), "original_a", session_id="multi-edit")
         file_a.write_text("modified_a")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(file_a), "content": "modified_a"}),
             Response.content("ok1"),
         ])
@@ -90,7 +90,7 @@ class TestSingleRevert:
         snapshot.track(str(file_b), "original_b", session_id="multi-edit")
         file_b.write_text("modified_b")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(file_b), "content": "modified_b"}),
             Response.content("ok2"),
         ])
@@ -123,7 +123,7 @@ class TestFullRevert:
         snapshot.track(str(file_a), "orig_a", session_id="full-revert-test")
         file_a.write_text("mod_a")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(file_a), "content": "mod_a"}),
             Response.content("ok"),
         ])
@@ -133,7 +133,7 @@ class TestFullRevert:
         snapshot.track(str(file_b), "orig_b", session_id="full-revert-test")
         file_b.write_text("mod_b")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(file_b), "content": "mod_b"}),
             Response.content("ok"),
         ])
@@ -158,7 +158,7 @@ class TestFullRevert:
         snapshot.track(str(target), "original", session_id="clear-test")
         target.write_text("modified")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(target), "content": "modified"}),
             Response.content("ok"),
         ])
@@ -184,7 +184,7 @@ class TestSnapshotHistory:
         snapshot.track(str(target), "v0", session_id="history-test")
         target.write_text("v1")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(target), "content": "v1"}),
             Response.content("ok"),
         ])
@@ -194,7 +194,7 @@ class TestSnapshotHistory:
         snapshot.track(str(target), "v1", session_id="history-test")
         target.write_text("v2")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(target), "content": "v2"}),
             Response.content("ok"),
         ])
@@ -227,7 +227,7 @@ class TestSessionIsolation:
         snapshot.track(str(target), "init", session_id="session_a")
         target.write_text("by_a")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(target), "content": "by_a"}),
             Response.content("ok"),
         ])
@@ -239,7 +239,7 @@ class TestSessionIsolation:
         snapshot.track(str(target), "by_a", session_id="session_b")
         target.write_text("by_b")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(target), "content": "by_b"}),
             Response.content("ok"),
         ])

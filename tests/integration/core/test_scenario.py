@@ -3,10 +3,10 @@ import pytest
 
 class TestBuildScenarioAgent:
     @pytest.mark.asyncio
-    async def test_returns_agent_with_programmable_llm(self, programmable_llm, tmp_path, monkeypatch):
+    async def test_returns_agent_with_programmable_provider(self, programmable_provider, tmp_path, monkeypatch):
         from tests.integration.core.scenario import build_scenario_agent
-        agent = await build_scenario_agent(llm=programmable_llm, tmp_path=tmp_path, monkeypatch=monkeypatch)
-        assert agent.llm is programmable_llm
+        agent = await build_scenario_agent(provider=programmable_provider, tmp_path=tmp_path, monkeypatch=monkeypatch)
+        assert agent.provider is programmable_provider
         assert agent.tool_registry is not None
         assert agent.plugin_manager is not None
 
@@ -14,7 +14,7 @@ class TestTestScenario:
     @pytest.mark.asyncio
     async def test_scenario_attributes(self, scenario):
         assert scenario.agent is not None
-        assert scenario.llm is not None
+        assert scenario.provider is not None
         assert scenario.snapshot_root is not None
         assert scenario.todo_db is not None
         assert scenario.scheduler is not None
@@ -39,7 +39,7 @@ class TestTestScenario:
     @pytest.mark.asyncio
     async def test_scenario_run_method_executes_agent(self, scenario):
         from tests.integration.core.programmable_mock import Response
-        scenario.llm.expect([Response.content("hello")])
+        scenario.provider.expect([Response.content("hello")])
         result = await scenario.run("hi")
         assert result == "hello"
         assert len(scenario.messages) == 2

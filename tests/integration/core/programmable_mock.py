@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 from typing import Callable
 
+from merco.core.llm.base import ModelProvider
+
 
 _counter = [0]
 
@@ -49,8 +51,10 @@ class Response:
         return cls(error=exc)
 
 
-class ProgrammableLLMClient:
+class ProgrammableModelProvider(ModelProvider):
     """可编程 LLM mock，支持预设队列、动态序列、条件分支、异常注入"""
+
+    name = "mock"
 
     def __init__(self):
         self._queue: list[Response] = []
@@ -58,21 +62,21 @@ class ProgrammableLLMClient:
         self._conditions: list[tuple[Callable, Response]] = []
         self.calls: list[dict] = []
 
-    def expect(self, responses: list[Response]) -> "ProgrammableLLMClient":
+    def expect(self, responses: list[Response]) -> "ProgrammableModelProvider":
         self._queue = list(responses)
         self._sequence_fn = None
         return self
 
     def expect_sequence(
         self, fn: Callable[[int], Response]
-    ) -> "ProgrammableLLMClient":
+    ) -> "ProgrammableModelProvider":
         self._sequence_fn = fn
         self._queue = []
         return self
 
     def when(
         self, condition: Callable, response: Response
-    ) -> "ProgrammableLLMClient":
+    ) -> "ProgrammableModelProvider":
         self._conditions.append((condition, response))
         return self
 
@@ -88,7 +92,7 @@ class ProgrammableLLMClient:
             return self._sequence_fn(idx)
         if self._queue:
             return self._queue.pop(0)
-        raise RuntimeError("ProgrammableLLMClient: no more responses queued")
+        raise RuntimeError("ProgrammableModelProvider: no more responses queued")
 
     async def chat(self, messages: list[dict], **kwargs) -> dict:
         response = self._select(messages)
@@ -103,3 +107,11 @@ class ProgrammableLLMClient:
                 "tool_calls": response.tool_calls,
             }
         return {"content": response.content, "tool_calls": []}
+
+    async def chat_stream(self, messages: list[dict], **kwargs):
+        resp = await self.chat(messages, **kwargs)
+        yield resp
+
+
+# TEMPORARY scaffolding (removed in Task 16): keep old test imports working.
+ProgrammableLLMClient = ProgrammableModelProvider

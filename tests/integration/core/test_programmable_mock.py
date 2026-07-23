@@ -1,6 +1,6 @@
-"""ProgrammableLLMClient 与 Response DSL 单元测试"""
+"""ProgrammableModelProvider 与 Response DSL 单元测试"""
 import pytest
-from tests.integration.core.programmable_mock import ProgrammableLLMClient, Response
+from tests.integration.core.programmable_mock import ProgrammableModelProvider, Response
 
 
 class TestResponseDSL:
@@ -36,10 +36,10 @@ class TestResponseDSL:
         assert r.delay == 0.0
 
 
-class TestProgrammableLLMClient:
+class TestProgrammableModelProvider:
     @pytest.mark.asyncio
     async def test_expect_returns_queued_responses(self):
-        client = ProgrammableLLMClient()
+        client = ProgrammableModelProvider()
         client.expect([
             Response.content("first"),
             Response.content("second"),
@@ -52,7 +52,7 @@ class TestProgrammableLLMClient:
 
     @pytest.mark.asyncio
     async def test_expect_sequence_dynamic(self):
-        client = ProgrammableLLMClient()
+        client = ProgrammableModelProvider()
         client.expect_sequence(lambda i: Response.content(f"call_{i}"))
 
         r1 = await client.chat(messages=[])
@@ -64,7 +64,7 @@ class TestProgrammableLLMClient:
 
     @pytest.mark.asyncio
     async def test_when_condition_routes(self):
-        client = ProgrammableLLMClient()
+        client = ProgrammableModelProvider()
         client.when(
             lambda msgs: "tool" in str(msgs),
             Response.content("with-tools"),
@@ -78,7 +78,7 @@ class TestProgrammableLLMClient:
 
     @pytest.mark.asyncio
     async def test_error_response_raises(self):
-        client = ProgrammableLLMClient()
+        client = ProgrammableModelProvider()
         client.expect([Response.error(RuntimeError("boom"))])
 
         with pytest.raises(RuntimeError, match="boom"):
@@ -86,7 +86,7 @@ class TestProgrammableLLMClient:
 
     @pytest.mark.asyncio
     async def test_tool_call_response_format(self):
-        client = ProgrammableLLMClient()
+        client = ProgrammableModelProvider()
         client.expect([
             Response.tool_call("read_file", {"path": "/tmp/x"}),
         ])
@@ -97,7 +97,7 @@ class TestProgrammableLLMClient:
 
     @pytest.mark.asyncio
     async def test_calls_recorded(self):
-        client = ProgrammableLLMClient()
+        client = ProgrammableModelProvider()
         client.expect([Response.content("x")])
 
         await client.chat(messages=[{"role": "user", "content": "hi"}])
@@ -106,6 +106,6 @@ class TestProgrammableLLMClient:
 
     @pytest.mark.asyncio
     async def test_empty_queue_raises(self):
-        client = ProgrammableLLMClient()
+        client = ProgrammableModelProvider()
         with pytest.raises(RuntimeError, match="no more responses"):
             await client.chat(messages=[])

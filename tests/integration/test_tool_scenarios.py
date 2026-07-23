@@ -27,7 +27,7 @@ class TestToolCallChain:
         test_file.write_text("hello world")
 
         # LLM先返回工具调用，然后根据工具返回结果回答
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call(
                 name="read_file",
                 arguments={"path": str(test_file)}
@@ -56,7 +56,7 @@ class TestToolCallChain:
         file_b.write_text("content B")
 
         # LLM一次返回两个工具调用
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response(
                 tool_calls=[
                     {"id": "call_1", "name": "read_file", "arguments": {"path": str(file_a)}},
@@ -86,7 +86,7 @@ class TestToolIntegrationBoundary:
     @pytest.mark.asyncio
     async def test_call_nonexistent_tool(self, scenario):
         """调用不存在的工具，返回结构化错误"""
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call(name="nonexistent_tool", arguments={}),
             Response.content("抱歉，我找不到这个工具，换个方式试试")
         ])
@@ -108,7 +108,7 @@ class TestGuardIntegration:
         """DENY: 工具调用被守卫拒绝，LLM收到错误后调整回答"""
         scenario.set_guard_action("bash", GuardAction.DENY, reason="测试拒绝")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("bash", {"command": "ls"}),
             Response.content("操作被拒绝，尝试其他方式"),
         ])
@@ -125,7 +125,7 @@ class TestGuardIntegration:
         """ASK: 守卫要求确认时抛出 GuardConfirmationRequired"""
         scenario.set_guard_action("bash", GuardAction.ASK, reason="需要确认")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("bash", {"command": "rm -rf /tmp/test"}),
         ])
 
@@ -138,7 +138,7 @@ class TestGuardIntegration:
         test_file = tmp_path / "ok.txt"
         test_file.write_text("ok")
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("read_file", {"path": str(test_file)}),
             Response.content("读到了 ok"),
         ])
@@ -153,7 +153,7 @@ class TestToolErrorHandling:
     @pytest.mark.asyncio
     async def test_tool_not_in_registry(self, scenario):
         """LLM 调用未注册的工具 → 被过滤为幻觉 → fallback 到预设 content"""
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("nonexistent_tool", {}),
             Response.content("该工具不可用，我换个方式"),
         ])
@@ -168,7 +168,7 @@ class TestToolErrorHandling:
     async def test_tool_execution_exception(self, scenario):
         scenario.agent.tool_registry.register(BoomTool())
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("boom", {}),
             Response.content("抱歉工具失败了"),
         ])
@@ -201,7 +201,7 @@ class TestBuiltinToolsE2E:
     @pytest.mark.asyncio
     async def test_write_file_creates_file(self, scenario):
         target = scenario.tmp_path / "new.txt"
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("write_file", {"path": str(target), "content": "hello"}),
             Response.content("已创建文件"),
         ])
@@ -222,7 +222,7 @@ class TestBuiltinToolsE2E:
 
         monkeypatch.setattr("merco.tools.middleware.confirm_edit", _auto_confirm)
 
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("edit_file", {
                 "path": str(target),
                 "search": "return 1",
@@ -240,7 +240,7 @@ class TestBuiltinToolsE2E:
     @pytest.mark.asyncio
     async def test_bash_executes_real_command(self, scenario):
         out_file = scenario.tmp_path / "out.txt"
-        scenario.llm.expect([
+        scenario.provider.expect([
             Response.tool_call("bash", {"command": f"echo test > {out_file}"}),
             Response.content("命令已执行"),
         ])
