@@ -324,7 +324,7 @@ async def test_provider_error_uses_logger_info_not_warning(caplog, monkeypatch):
 
     provider = StreamingProvider()
     fake_agent = MagicMock()
-    fake_agent.llm.chat_stream = AsyncMock(
+    fake_agent.provider.chat_stream = AsyncMock(
         side_effect=Exception("rate limit")
     )
     fake_agent._error_displayed_in_stream = False

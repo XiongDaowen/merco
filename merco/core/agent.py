@@ -13,7 +13,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 
 from .config import MercoConfig
-from .llm import LLMClient
+from .llm.errors import ProviderError
 from .llm.response import (
     ResponseProvider, NonStreamingProvider, StreamingProvider, _build_reasoning_panel,
 )
@@ -116,18 +116,10 @@ class Agent:
         self.tool_registry = tool_registry
         self.skill_registry = None
 
-        # 初始化 LLM 客户端
-        api_key = config.model.api_key or self._get_api_key(config.model.provider)
-        self.llm = LLMClient(
-            api_key=api_key,
-            model=config.model.model,
-            base_url=config.model.base_url,
-            temperature=config.model.temperature,
-            max_tokens=config.model.max_tokens,
-            cooldown=0.3,  # 请求冷却（秒），0=禁用；共享网关可调大
-            extra_params=config.model.extra_params,
-            headers=config.model.headers,
-        )
+        # 模型层：registry + 懒 provider property（替代内联 LLMClient 构造）
+        from merco.core.llm.registry import ModelRegistry
+        self.model_registry = ModelRegistry()
+        self._model_provider = None  # lazy cache; resolved by `provider` property
 
         self._tool_calls_count = 0
         self._max_tool_calls = self.config.max_tool_calls
@@ -170,9 +162,9 @@ class Agent:
 
         # ── 工厂：根据 config 选响应策略 ──
         if self.config.streaming.enabled:
-            self._provider: ResponseProvider = StreamingProvider()
+            self._response_provider: ResponseProvider = StreamingProvider()
         else:
-            self._provider: ResponseProvider = NonStreamingProvider()
+            self._response_provider: ResponseProvider = NonStreamingProvider()
 
         # ── Pipeline 初始化 ──
         from .pipeline import ResultPipeline, RecoveryPipeline, EmptyResponsePipeline
@@ -313,6 +305,27 @@ class Agent:
             .use(EmitInterruptHooks())
             .use(SavePartialState()))
 
+    @property
+    def provider(self):
+        """Lazily-resolved model provider. Re-resolved after switch_model."""
+        if self._model_provider is None:
+            self._model_provider = self.model_registry.select(self.config.model)
+        return self._model_provider
+
+    @provider.setter
+    def provider(self, value) -> None:
+        self._model_provider = value
+
+    @property
+    def llm(self):
+        """TEMPORARY scaffolding (removed in Task 16): alias for provider."""
+        return self.provider
+
+    @llm.setter
+    def llm(self, value) -> None:
+        # Direct cache write (no registry resolution) so test mocks inject cleanly.
+        self._model_provider = value
+
     @classmethod
     async def create(cls, config: MercoConfig, tool_registry=None) -> "Agent":
         """Create an Agent with deterministic async plugin initialization."""
@@ -441,7 +454,7 @@ class Agent:
     async def _wrap_up_call(self, messages):
         """收尾调用：无工具文字回应。"""
         try:
-            resp = await self.llm.chat(messages, tools=[], tool_choice="none")
+            resp = await self.provider.chat(messages, tools=[], tool_choice="none")
         except Exception:
             return "模型调用失败"
         content = resp.get("content", "") or "已达到调用上限。"
@@ -475,21 +488,20 @@ class Agent:
                     if before.stop:
                         response = before.data["response"]
                     else:
-                        response = await self._provider.get_response(
+                        response = await self._response_provider.get_response(
                             self, messages, tools or None)
                 else:
-                    response = await self._provider.get_response(
+                    response = await self._response_provider.get_response(
                         self, messages, tools or None)
             except Exception as e:
                 _recovery_attempts += 1
                 if _recovery_attempts > 3:
                     from merco.core.llm.errors import llm_error
                     return llm_error(e)
-                from openai import APIStatusError
                 from .pipeline import RecoveryContext
                 ctx = RecoveryContext(
                     error=e,
-                    status_code=e.status_code if isinstance(e, APIStatusError) else 0,
+                    status_code=e.status_code if isinstance(e, ProviderError) else 0,
                     context_tokens=self.context.current_tokens,
                     tool_count=len(tools), model=self.config.model.model)
                 if await self.recovery_pipeline.attempt(ctx):
@@ -807,7 +819,7 @@ class Agent:
             + "\n\nSummary:"
         )
         try:
-            response = await self.llm.chat(
+            response = await self.provider.chat(
                 [{"role": "user", "content": prompt}], tools=[]
             )
             content = response.get("content", "").strip()
@@ -925,16 +937,6 @@ class Agent:
         self._tool_calls_count = 0
         self._current_prompt = ""
         self._error_displayed_in_stream = False
-
-    @staticmethod
-    def _get_api_key(provider: str) -> str:
-        """从环境变量获取 API Key——由 PROVIDER_REGISTRY 驱动"""
-        import os
-        from .config import PROVIDER_REGISTRY
-        entry = PROVIDER_REGISTRY.get(provider)
-        if entry:
-            return os.environ.get(entry.key_env, "")
-        return ""
 
 def _get_db_path() -> str:
     """跟随配置路径确定 sessions.db 位置"""

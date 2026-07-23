@@ -277,10 +277,9 @@ async def test_agent_create_initializes_mcp_manager(monkeypatch, tmp_path):
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
     from merco.mcp.manager import MCPServerManager
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "factory_mcp.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -357,10 +356,9 @@ async def test_agent_create_initializes_observer_via_plugin(monkeypatch, tmp_pat
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
     from merco.observability.observer import Observer
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "factory.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -382,7 +380,7 @@ async def test_agent_create_restores_observer_snapshot_after_plugin_activation(m
     from merco.core.config import MercoConfig
     from merco.memory.session_store import SessionStore
     from merco.core.session import Session
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "factory.db")
     store = SessionStore(db_path)
@@ -392,7 +390,6 @@ async def test_agent_create_restores_observer_snapshot_after_plugin_activation(m
     existing.save()
     store.save_metadata(existing.id, existing.metadata)
 
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -412,10 +409,9 @@ async def test_agent_create_still_activates_superpower_plugin(monkeypatch, tmp_p
     """Factory path activates remaining enabled plugins after observability."""
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "factory.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -437,10 +433,9 @@ async def test_agent_create_initializes_skill_registry(monkeypatch, tmp_path):
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
     from merco.skills.registry import SkillRegistry
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "factory_skills.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -462,10 +457,9 @@ async def test_agent_create_injects_skill_registry_into_skill_view_tool(monkeypa
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
     from merco.tools.skill_tools import SkillViewTool
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "factory_skill_view.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -487,10 +481,8 @@ def test_agent_init_no_longer_accepts_skill_registry(monkeypatch, tmp_path):
     """Agent.__init__ rejects skill_registry keyword argument."""
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
-    from tests.conftest import MockLLMClient
 
     db_path = str(tmp_path / "factory_init_kw.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -510,10 +502,9 @@ async def test_agent_create_initializes_sub_agent_manager(monkeypatch, tmp_path)
     from merco.core.config import MercoConfig
     from merco.agents.subagent import SubAgentManager
     from merco.todo.manager import TodoManager
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "factory_subagent.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -534,10 +525,9 @@ async def test_agent_create_injects_managers_into_task_tool(monkeypatch, tmp_pat
     """Agent.create injects todo_manager and sub_agent_manager into the task tool."""
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "factory_tasktool.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -571,10 +561,9 @@ async def test_builtin_plugins_activate_in_priority_order(monkeypatch, tmp_path)
     """
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "priority_order.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -605,10 +594,9 @@ async def test_observer_available_before_restore(monkeypatch, tmp_path):
     """
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "boot_semantic.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -676,10 +664,9 @@ async def test_agent_boots_with_observability_disabled(monkeypatch, tmp_path):
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
     from merco.observability.observer import Observer
-    from tests.conftest import MockLLMClient, make_test_registry
+    from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "no_observability.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -700,3 +687,34 @@ async def test_agent_boots_with_observability_disabled(monkeypatch, tmp_path):
     assert "observability" not in agent.plugin_manager.active_plugins
     # 占位符即为最终 observer（boot 阶段未产出新实例）
     assert agent.observer is placeholder
+
+
+@pytest.mark.asyncio
+async def test_agent_has_provider_property_and_model_registry(monkeypatch, tmp_path):
+    """Task 9 rewiring: Agent has a lazy `provider` property backed by
+    ModelRegistry, a settable `provider` slot, and a `model_registry` seeded
+    with builtin providers. The legacy `llm` alias returns the same provider."""
+    from tests.conftest import MockModelProvider, make_test_registry
+
+    db_path = str(tmp_path / "provider_prop.db")
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    agent = await Agent.create(
+        config=cfg, tool_registry=make_test_registry())
+
+    # provider is settable
+    mock = MockModelProvider([{"content": "hi", "finish_reason": "stop"}])
+    agent.provider = mock
+    assert agent.provider is mock
+
+    # model_registry exists and is seeded with builtin providers
+    assert agent.model_registry.get("openai").name == "openai"
+
+    # legacy llm alias (scaffolding, removed in Task 16) returns same provider
+    assert agent.llm is mock

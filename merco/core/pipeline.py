@@ -137,7 +137,7 @@ class RecoveryContext:
 
     # ── 诊断（Agent 填入）────────────────
     error: Exception
-    status_code: int = 0                  # HTTP 状态码（APIStatusError 自动提取）
+    status_code: int = 0                  # HTTP 状态码（ProviderError 自动提取）
     context_tokens: int = 0               # 当前上下文 token 估算
     tool_count: int = 0                   # 请求中的工具数量
     attempt_count: int = 0                # 本轮已尝试恢复次数（跨策略累计）

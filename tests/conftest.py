@@ -10,6 +10,7 @@ if _merco not in sys.path:
 
 from merco.core.config import MercoConfig      # noqa: E402
 from merco.core.agent import Agent              # noqa: E402
+from merco.core.llm.base import ModelProvider   # noqa: E402
 
 from merco.memory.session_store import SessionStore  # noqa: E402
 from merco.tools.registry import ToolRegistry    # noqa: E402
@@ -95,10 +96,12 @@ def make_test_registry() -> ToolRegistry:
     return reg
 
 
-# ── Mock LLM ─────────────────────────────────────────────
+# ── Mock ModelProvider ─────────────────────────────────────
 
-class MockLLMClient:
-    """按顺序消费预设响应，记录每次 LLM 调用"""
+class MockModelProvider(ModelProvider):
+    """按顺序消费预设响应，记录每次调用。替代旧 MockLLMClient（Task 9 rewiring）。"""
+
+    name = "mock"
 
     def __init__(self, responses: list[dict] | None = None, **kwargs):
         self.responses = list(responses or [])
@@ -120,15 +123,18 @@ class MockLLMClient:
         yield resp
 
 
+# TEMPORARY scaffolding (removed in Task 16): keep old test imports working.
+MockLLMClient = MockModelProvider
+
+
 # ── Test Agent Factory ────────────────────────────────────
 
 @pytest.fixture
 async def test_agent(monkeypatch, tmp_path):
-    """创建带有 mock LLM + 测试工具 + 临时 session store 的 Agent"""
+    """创建带有 mock provider + 测试工具 + 临时 session store 的 Agent"""
     db_path = str(tmp_path / "test.db")
 
-    # Mock LLMClient + _get_db_path，让 Agent 使用临时目录
-    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    # Mock _get_db_path，让 Agent 使用临时目录（agent 不再构造 LLMClient）
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -139,4 +145,6 @@ async def test_agent(monkeypatch, tmp_path):
 
     reg = make_test_registry()
     agent = await Agent.create(config=cfg, tool_registry=reg)
+    # 注入默认空 mock provider，避免触发真实 registry 解析
+    agent.provider = MockModelProvider()
     return agent

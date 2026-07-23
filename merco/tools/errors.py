@@ -1,6 +1,6 @@
 """工具执行错误处理 — 把异常转为 LLM 可消费的结构化 dict。
 
-边界：错误分类 + 公共消息脱敏。LLM 错误（APIStatusError 等）由 core.llm.errors 处理。
+边界：错误分类 + 公共消息脱敏。LLM 错误（ProviderError 等）由 core.llm.errors 处理。
 """
 from __future__ import annotations
 

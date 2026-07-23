@@ -37,7 +37,7 @@ class NonStreamingProvider(ResponseProvider):
 
     async def get_response(self, agent: "Agent", messages: list,
                            tools: list | None) -> dict:
-        response = await agent.llm.chat(
+        response = await agent.provider.chat(
             messages, tools=tools, tool_choice="auto")
         reasoning = response.get("reasoning", "")
         if reasoning and reasoning.strip():
@@ -99,7 +99,7 @@ class StreamingProvider(ResponseProvider):
         stream_error: Exception | None = None
 
         try:
-            stream = agent.llm.chat_stream(messages, tools=tools)
+            stream = agent.provider.chat_stream(messages, tools=tools)
             async for chunk in stream:
                 # 取消检查点：如果任务被取消，立即退出
                 current = asyncio.current_task()

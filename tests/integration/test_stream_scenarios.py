@@ -107,7 +107,6 @@ def stream_agent(monkeypatch, tmp_path):
     """Create an Agent configured for streaming with mock LLM."""
     db_path = str(tmp_path / "test.db")
 
-    monkeypatch.setattr("merco.core.agent.LLMClient", StreamingMockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     cfg = MercoConfig()
@@ -391,7 +390,6 @@ async def test_interrupt_preserves_partial_content(stream_agent, quiet_console):
 async def test_stream_thinking_transient_true(monkeypatch, tmp_path):
     """When stream_thinking_transient=True, thinking panel should be transient."""
     db_path = str(tmp_path / "test.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", StreamingMockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     from rich.console import Console
@@ -429,7 +427,6 @@ async def test_stream_thinking_transient_true(monkeypatch, tmp_path):
 async def test_stream_thinking_transient_false_preserves_panel(monkeypatch, tmp_path):
     """When stream_thinking_transient=False (default), thinking panel should be preserved."""
     db_path = str(tmp_path / "test.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", StreamingMockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     from rich.console import Console
@@ -469,7 +466,6 @@ async def test_stream_thinking_transient_false_preserves_panel(monkeypatch, tmp_
 async def test_stream_content_false(monkeypatch, tmp_path):
     """When stream_content=False, content Live panel should not be created."""
     db_path = str(tmp_path / "test.db")
-    monkeypatch.setattr("merco.core.agent.LLMClient", StreamingMockLLMClient)
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     from rich.console import Console
