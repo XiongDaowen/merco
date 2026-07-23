@@ -168,7 +168,12 @@ class PluginDiscovery:
 
 
 def _load_class_from_dir(pdir: Path, entry: str) -> type:
-    """从目录加载 module:Class，不污染 sys.path。"""
+    """从目录加载 module:Class，不污染 sys.path。
+
+    注意：通过 spec_from_file_location 仅加载单个 module.py，不触碰 sys.path，
+    故多文件外部插件里的相对导入（如 `from helpers import X`）无法解析--
+    外部插件应保持单文件，或自行 vendor 其依赖。
+    """
     module_name, _, class_name = entry.partition(":")
     if not class_name:
         raise ImportError(f"entry '{entry}' must be 'module:Class'")

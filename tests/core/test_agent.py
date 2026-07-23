@@ -667,3 +667,36 @@ async def test_agent_no_hardcoded_plugin_imports():
         "WebPlugin", "SchedulerPlugin", "SuperpowerPlugin",
     ]:
         assert f".register({cls}()" not in src, f"硬编码 register {cls}"
+
+
+@pytest.mark.asyncio
+async def test_agent_boots_with_observability_disabled(monkeypatch, tmp_path):
+    """observability 在 config 中禁用：discovery 不发现它，agent 仍能启动，
+    observer 回退到 __init__ 占位符（agent.py:344 的 Observer(self.hooks)）。"""
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from merco.observability.observer import Observer
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "no_observability.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+    cfg.plugins["observability"] = {"enabled": False}
+
+    agent = Agent(config=cfg, tool_registry=make_test_registry())
+    placeholder = agent.observer  # __init__ 占位 Observer
+    await agent._initialize_async_plugins()
+
+    # 未崩溃 + observer 非 None（占位符回退，ObservabilityPlugin 未替换它）
+    assert agent.observer is not None
+    assert isinstance(agent.observer, Observer)
+    # observability 未激活（discovery 阶段即被 enabled=False 过滤，未进 _specs）
+    assert "observability" not in agent.plugin_manager.active_plugins
+    # 占位符即为最终 observer（boot 阶段未产出新实例）
+    assert agent.observer is placeholder

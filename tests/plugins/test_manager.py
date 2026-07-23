@@ -397,3 +397,58 @@ class TestPluginManager:
         await manager.activate_boot()
         await manager.activate_all()
         assert calls["n"] == 1  # boot.activate 只调一次
+
+    @pytest.mark.asyncio
+    async def test_activate_boot_respects_config_disabled(self, mock_context):
+        """activate_boot 遵守 config.plugins.<boot>.enabled=False：禁用的 boot 插件不激活。"""
+        from merco.plugins.base import PluginSpec, Plugin
+
+        class Boot(Plugin):
+            name = "boot"
+            priority = 100
+            async def activate(self, ctx): ...
+
+        mock_context.config.plugins = {"boot": {"enabled": False}}
+        manager = PluginManager(mock_context)
+        manager.register_all([PluginSpec(name="boot", source="dir", priority=100, loader=lambda: Boot)])
+
+        await manager.activate_boot()
+
+        # 禁用的 boot 插件既不在 _active 也不在 active_plugins
+        assert "boot" not in manager._active
+        assert "boot" not in manager.active_plugins
+
+    @pytest.mark.asyncio
+    async def test_activate_boot_failure_degrades_gracefully(self, mock_context):
+        """boot 插件 activate 抛异常：捕获 + emit plugin.error，兄弟 boot 插件仍激活。"""
+        from merco.plugins.base import PluginSpec, Plugin
+
+        class BadBoot(Plugin):
+            name = "bad-boot"
+            priority = 100
+            async def activate(self, ctx):
+                raise RuntimeError("boot boom")
+
+        class GoodBoot(Plugin):
+            name = "good-boot"
+            priority = 100
+            async def activate(self, ctx): ...
+
+        manager = PluginManager(mock_context)
+        manager.register_all([
+            PluginSpec(name="bad-boot", source="dir", priority=100, loader=lambda: BadBoot),
+            PluginSpec(name="good-boot", source="dir", priority=100, loader=lambda: GoodBoot),
+        ])
+
+        await manager.activate_boot()
+
+        # 失败的 boot 插件未进 _active
+        assert "bad-boot" not in manager._active
+        # 兄弟 boot 插件仍激活（bad-boot 名次在前，先失败；good-boot 不受影响）
+        assert "good-boot" in manager._active
+        # 错误事件已 emit
+        mock_context.hooks.emit.assert_any_call(
+            "plugin.error",
+            plugin_name="bad-boot",
+            error="boot boom",
+        )

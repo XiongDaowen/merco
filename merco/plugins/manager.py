@@ -26,7 +26,7 @@ class PluginManager:
         """Register a plugin instance"""
         self._plugins[plugin.name] = plugin
 
-    def register_all(self, specs: list) -> None:
+    def register_all(self, specs: list["PluginSpec"]) -> None:
         """注册一批 PluginSpec（discovery 产出）"""
         for spec in specs:
             self._specs[spec.name] = spec
@@ -44,8 +44,14 @@ class PluginManager:
 
     def _resolve_order(self, names: list[str], boot_only: bool = False) -> list[str]:
         """返回激活顺序：拓扑(depends_on) + priority 降序 + name 升序。循环/缺依赖排除。"""
+        # 注意：discovery（PluginDiscovery._finalize）是权威的循环/依赖校验器；
+        # 这里的存在性剪枝 + Kahn 循环排除是防御性兜底，保证即便绕过 discovery
+        # 直接 register/register_all 也不会让 activate 陷入死循环或激活悬空依赖。
         pool = set(names)
         if boot_only:
+            # boot_only 在依赖解析前先按 priority>=100 过滤：若一个 boot 插件依赖
+            # 非 boot 插件，该依赖不在 boot 池内 -> 此 boot 插件被剪枝出 boot 阶段，
+            # 改由 activate_all 在 restore 后激活（boot 依赖非 boot 是潜在限制）。
             pool = {n for n in pool if self._meta(n)[0] >= self.BOOT_PRIORITY}
 
         # 存在性剪枝（迭代到稳定：移除依赖不在池内的，级联）
@@ -75,7 +81,12 @@ class PluginManager:
         return result
 
     async def activate(self, name: str) -> None:
-        """Activate a single plugin (lazy-instantiate from spec if needed)."""
+        """Activate a single plugin (lazy-instantiate from spec if needed).
+
+        强制激活：直接调用 activate(name) 不检查 config.plugins.<name>.enabled
+        （enabled 检查在 activate_all / activate_boot 内做）。本方法用于显式/强制
+        激活单个插件（测试也依赖此语义），需自行确保依赖已激活。
+        """
         if name in self._active:
             return
         # Resolve plugin (existing instance OR from spec)
