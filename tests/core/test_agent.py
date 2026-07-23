@@ -556,28 +556,114 @@ async def test_agent_create_injects_managers_into_task_tool(monkeypatch, tmp_pat
 
 # ── Task 12: plugin dynamic loading regression tests ─────────
 
-
-@pytest.mark.asyncio
-async def test_builtin_plugins_activate_in_priority_order(test_agent):
-    """7 个 builtin 按 priority 激活，observability(boot) 最先"""
-    active = test_agent.plugin_manager.active_plugins
-    for name in ["observability", "skills", "mcp", "subagent", "web", "scheduler", "superpower"]:
-        assert name in active, f"{name} 未激活"
+# 7 个 builtin 的期望激活序：boot(observability) 先于 restore，其余按 priority 降序
+_EXPECTED_ACTIVATION_ORDER = [
+    "observability", "skills", "mcp", "subagent", "web", "scheduler", "superpower",
+]
 
 
 @pytest.mark.asyncio
-async def test_observer_available_before_restore(test_agent):
-    """observer 在 restore 后可用（boot 语义保留）"""
-    assert test_agent.observer is not None
+async def test_builtin_plugins_activate_in_priority_order(monkeypatch, tmp_path):
+    """7 个 builtin 按 priority 真实激活序：observability(boot) 最先，其余 priority 降序。
+
+    用 plugin.activated 钩子记录真实激活顺序——active_plugins 返回 list(set)，
+    无法体现顺序，所以必须订阅钩子并在 _initialize_async_plugins 之前注册回调。
+    """
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "priority_order.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    # __init__ 已创建 self.hooks；在异步初始化前订阅才能捕获每次激活事件
+    agent = Agent(config=cfg, tool_registry=make_test_registry())
+    activated = []
+    agent.hooks.on(
+        "plugin.activated",
+        lambda plugin_name, version=None: activated.append(plugin_name),
+    )
+    await agent._initialize_async_plugins()
+
+    assert activated == _EXPECTED_ACTIVATION_ORDER, f"真实激活序错误: {activated}"
+
+
+@pytest.mark.asyncio
+async def test_observer_available_before_restore(monkeypatch, tmp_path):
+    """observer 在 restore 前已可用：boot 阶段先于 restore，其余插件后于 restore。
+
+    在 _restore_context 入口快照激活状态与 observer 实例，直接验证两阶段语义——
+    boot 插件(observability)必须先于 restore 激活，非-boot 插件(superpower)必须后于
+    restore 激活，且 observer 此时已是 boot 阶段产物而非 __init__ 占位符。
+    """
+    from merco.core.agent import Agent
+    from merco.core.config import MercoConfig
+    from tests.conftest import MockLLMClient, make_test_registry
+
+    db_path = str(tmp_path / "boot_semantic.db")
+    monkeypatch.setattr("merco.core.agent.LLMClient", MockLLMClient)
+    monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
+
+    cfg = MercoConfig()
+    cfg.model.api_key = "test-key"
+    cfg.model.model = "test-model"
+    cfg.sandbox_mode = "auto"
+    cfg.memory_path = str(tmp_path / "memory")
+
+    agent = Agent(config=cfg, tool_registry=make_test_registry())
+    # __init__ 占位 observer；ObservabilityPlugin 应在 boot 阶段替换它
+    placeholder_observer = agent.observer
+
+    activated = []
+    agent.hooks.on(
+        "plugin.activated",
+        lambda plugin_name, version=None: activated.append(plugin_name),
+    )
+
+    # 在 _restore_context 入口快照：此刻哪些插件已激活、observer 是哪个实例
+    restore_snapshot: dict = {}
+    original_restore = agent._restore_context
+
+    def spy_restore():
+        restore_snapshot["active_at_restore"] = list(activated)
+        restore_snapshot["observer_at_restore"] = agent.observer
+        original_restore()
+
+    agent._restore_context = spy_restore
+
+    await agent._initialize_async_plugins()
+
+    # boot 插件(observability)必须在 restore 之前激活
+    assert "observability" in restore_snapshot["active_at_restore"], \
+        f"observability 未在 restore 前激活: {restore_snapshot['active_at_restore']}"
+    # 非-boot 插件(superpower)必须在 restore 之后激活（两阶段语义）
+    assert "superpower" not in restore_snapshot["active_at_restore"], \
+        f"superpower 不应在 restore 前激活: {restore_snapshot['active_at_restore']}"
+    # observer 在 restore 时已可用，且是 boot 阶段产物（非 __init__ 占位符）
+    assert restore_snapshot["observer_at_restore"] is not None
+    assert restore_snapshot["observer_at_restore"] is not placeholder_observer, \
+        "restore 时 observer 仍是 __init__ 占位符，boot 阶段未产出 observer"
 
 
 @pytest.mark.asyncio
 async def test_agent_no_hardcoded_plugin_imports():
-    """agent.py 不再硬编码 import builtin 插件"""
+    """agent.py 不再硬编码 import / register 任何 builtin 插件"""
     import inspect
     from merco.core import agent as agent_mod
     src = inspect.getsource(agent_mod)
     for name in ["observability", "skills", "mcp", "subagent", "web", "scheduler", "superpower"]:
         assert f"from merco.plugins.builtin.{name}.plugin import" not in src, \
             f"硬编码 import {name}"
-    assert ".register(ObservabilityPlugin()" not in src
+    # 不应手动 register 任何 builtin 插件实例（与 import-grep 互补，覆盖非 .plugin 路径的导入）
+    for cls in [
+        "ObservabilityPlugin", "SkillPlugin", "MCPPlugin", "SubAgentPlugin",
+        "WebPlugin", "SchedulerPlugin", "SuperpowerPlugin",
+    ]:
+        assert f".register({cls}()" not in src, f"硬编码 register {cls}"
