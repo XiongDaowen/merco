@@ -78,12 +78,21 @@ class PluginManager:
         """Activate a single plugin (lazy-instantiate from spec if needed)."""
         if name in self._active:
             return
+        # Resolve plugin (existing instance OR from spec)
         plugin = self._plugins.get(name)
-        if plugin is None:
-            spec = self._specs.get(name)
-            if spec is None:
-                logger.warning("Plugin '%s' not registered", name)
+        spec = self._specs.get(name) if plugin is None else None
+        if plugin is None and spec is None:
+            logger.warning("Plugin '%s' not registered", name)
+            return
+        # dep-active 检查（先于实例化，避免对注定跳过的插件跑 __init__）
+        for dep in self._meta(name)[1]:
+            if dep not in self._active:
+                msg = f"dependency '{dep}' not active"
+                logger.warning("Plugin '%s' skipped: %s", name, msg)
+                await self._emit_error(name, msg)
                 return
+        # Lazy-instantiate if needed
+        if plugin is None:
             try:
                 plugin = spec.instantiate()
             except Exception as e:
@@ -91,11 +100,7 @@ class PluginManager:
                 await self._emit_error(name, str(e))
                 return
             self._plugins[name] = plugin
-        # dep-active 检查
-        for dep in self._meta(name)[1]:
-            if dep not in self._active:
-                logger.warning("Plugin '%s' skipped: dependency '%s' not active", name, dep)
-                return
+        # Activate
         try:
             if name not in self._ever_activated:
                 await plugin.activate(self._ctx)
@@ -137,7 +142,10 @@ class PluginManager:
 
     async def activate_boot(self) -> None:
         """Activate boot-phase plugins (priority >= BOOT_PRIORITY) before context restore."""
+        plugins_config = getattr(self._ctx.config, "plugins", {})
         for name in self._resolve_order(self._all_names(), boot_only=True):
+            if not plugins_config.get(name, {}).get("enabled", True):
+                continue
             await self.activate(name)
 
     async def deactivate_all(self) -> None:
