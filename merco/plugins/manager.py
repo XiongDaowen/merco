@@ -13,6 +13,8 @@ logger = logging.getLogger("merco.plugins.manager")
 class PluginManager:
     """Plugin discovery, loading, activation, and deactivation"""
 
+    BOOT_PRIORITY = 100
+
     def __init__(self, ctx: "PluginContext"):
         self._ctx = ctx
         self._plugins: dict[str, "Plugin"] = {}
@@ -39,6 +41,38 @@ class PluginManager:
         if spec is None:
             return (50, [])
         return (spec.priority, list(spec.depends_on))
+
+    def _resolve_order(self, names: list[str], boot_only: bool = False) -> list[str]:
+        """返回激活顺序：拓扑(depends_on) + priority 降序 + name 升序。循环/缺依赖排除。"""
+        pool = set(names)
+        if boot_only:
+            pool = {n for n in pool if self._meta(n)[0] >= self.BOOT_PRIORITY}
+
+        # 存在性剪枝（迭代到稳定：移除依赖不在池内的，级联）
+        pruned: set[str] = set()
+        changed = True
+        while changed:
+            changed = False
+            for n in pool - pruned:
+                deps = self._meta(n)[1]
+                if any(d not in (pool - pruned) for d in deps):
+                    logger.warning("plugin '%s' skipped: dependency not present", n)
+                    pruned.add(n)
+                    changed = True
+        active_pool = pool - pruned
+
+        # Kahn 拓扑排序，同层按 priority 降序、name 升序
+        result: list[str] = []
+        remaining = set(active_pool)
+        while remaining:
+            ready = [n for n in remaining if all(d in result for d in self._meta(n)[1])]
+            if not ready:
+                logger.warning("circular dependency among: %s", sorted(remaining))
+                break  # 剩余为循环依赖，排除
+            ready.sort(key=lambda n: (-self._meta(n)[0], n))
+            result.extend(ready)
+            remaining -= set(ready)
+        return result
 
     async def activate(self, name: str) -> None:
         """Activate a single plugin"""

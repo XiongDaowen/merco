@@ -258,3 +258,58 @@ class TestPluginManager:
         manager.register_all([PluginSpec(name="spec-only", source="dir", loader=lambda: MagicMock)])
         names = set(manager._all_names())
         assert names == {mock_plugin.name, "spec-only"}
+
+    def test_resolve_order_priority_then_name(self, manager):
+        """同无依赖，按 priority 降序、name 升序"""
+        from merco.plugins.base import PluginSpec
+        manager.register_all([
+            PluginSpec(name="low", source="dir", priority=10, loader=lambda: MagicMock),
+            PluginSpec(name="high", source="dir", priority=90, loader=lambda: MagicMock),
+            PluginSpec(name="mid", source="dir", priority=50, loader=lambda: MagicMock),
+        ])
+        order = manager._resolve_order(manager._all_names())
+        assert order == ["high", "mid", "low"]
+
+    def test_resolve_order_topological(self, manager):
+        """depends_on 决定拓扑序：b 依赖 a，a 先"""
+        from merco.plugins.base import PluginSpec
+        manager.register_all([
+            PluginSpec(name="b", source="dir", priority=99, depends_on=["a"], loader=lambda: MagicMock),
+            PluginSpec(name="a", source="dir", priority=1, loader=lambda: MagicMock),
+        ])
+        order = manager._resolve_order(manager._all_names())
+        assert order.index("a") < order.index("b")  # a 在 b 前（尽管 b priority 更高）
+
+    def test_resolve_order_boot_only(self, manager):
+        """boot_only=True 只返回 priority>=100"""
+        from merco.plugins.base import PluginSpec
+        manager.register_all([
+            PluginSpec(name="boot", source="dir", priority=100, loader=lambda: MagicMock),
+            PluginSpec(name="normal", source="dir", priority=50, loader=lambda: MagicMock),
+        ])
+        assert manager._resolve_order(manager._all_names(), boot_only=True) == ["boot"]
+
+    def test_resolve_order_cycle_excluded(self, manager, caplog):
+        """循环依赖节点被排除"""
+        from merco.plugins.base import PluginSpec
+        manager.register_all([
+            PluginSpec(name="x", source="dir", depends_on=["y"], loader=lambda: MagicMock),
+            PluginSpec(name="y", source="dir", depends_on=["x"], loader=lambda: MagicMock),
+            PluginSpec(name="z", source="dir", loader=lambda: MagicMock),
+        ])
+        with caplog.at_level("WARNING"):
+            order = manager._resolve_order(manager._all_names())
+        assert "z" in order
+        assert "x" not in order and "y" not in order
+
+    def test_resolve_order_missing_dep_pruned(self, manager, caplog):
+        """depends_on 引用不在池内的名字 -> 该节点剪枝"""
+        from merco.plugins.base import PluginSpec
+        manager.register_all([
+            PluginSpec(name="needs_ghost", source="dir", depends_on=["ghost"], loader=lambda: MagicMock),
+            PluginSpec(name="ok", source="dir", loader=lambda: MagicMock),
+        ])
+        with caplog.at_level("WARNING"):
+            order = manager._resolve_order(manager._all_names())
+        assert "ok" in order
+        assert "needs_ghost" not in order
