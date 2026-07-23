@@ -71,9 +71,10 @@ class AgentRuntime:
     def agent(self) -> Agent: ...          # 懒解析；若未传入则 start() 时 Agent.create()
 
     async def start(self) -> None:
-        # 1. 确保 agent 已构造（Agent.create -> 触发插件两阶段激活：activate_boot -> restore -> activate_all）
-        #    激活后 ctx.scheduler（SchedulerPlugin 提供）与 ctx.gateway_registry（GatewayPlugin 注册的内置网关 + 第三方）已就位
-        # 2. 取 ctx 引用（Runtime 持有；Agent 暴露 ctx 或 Runtime 构造时传入 -- 见 §12），读：
+        # 1. 若 agent 未传入：self._agent = await Agent.create(self.config, self._tool_registry)
+        #    （触发插件两阶段激活：activate_boot -> restore -> activate_all）
+        #    激活后 ctx.scheduler（SchedulerPlugin 提供）与 ctx.gateway_registry（GatewayPlugin 注册内置 + 第三方）已就位
+        # 2. ctx = agent.plugin_ctx（Agent 新增 @property，见 §12）；读：
         #    self.scheduler = ctx.scheduler; self.gateway_registry = ctx.gateway_registry
         # 3. self.gateway_registry.set_inbound_handler(self.handle_inbound)
         # 4. await self.gateway_registry.start_all()   # 先绑 handler 再 start
@@ -86,17 +87,18 @@ class AgentRuntime:
         # 3. agent 收尾（emit agent.stop hook 等）
         # 幂等
 
-    async def submit(self, prompt: str, *, session_id: str | None = None) -> str:
-        # 编程式 / cron job 入口 -> agent.run(prompt, session_id=session_id)
+    async def submit(self, prompt: str) -> str:
+        # 编程式 / cron job 入口 -> agent.run(prompt)
 
     async def handle_inbound(self, source: str, chat_id: str, message: str) -> str:
-        # gateway 入口：按 (source, chat_id) 解析/创建 session -> agent.run(message, session_id) -> reply
+        # gateway 入口 -> agent.run(message) -> reply
+        # chat_id 保留为前向兼容参数；Wave 3 单 session（见 §6），不做 per-chat_id 隔离
 ```
 
 **关键不变量**：
 - `start()/stop()` 幂等、可重入。
 - 某 gateway `start()` 失败：记日志 + emit hook，不影响其他 gateway 和 scheduler（隔离）。
-- `handle_inbound` 的 session 路由：`session_key = f"{source}:{chat_id}"` -> 查/建 session_id（Wave 3 内存 map；持久化留待将来）。
+- `handle_inbound` 路由到 agent 默认 session（Wave 3 单 session，见 §6）；`chat_id` 保留前向兼容但不隔离。
 
 ### 4.2 `GatewayAdapter` ABC（`merco/gateway/base.py`，重命名自 `BaseGateway`）
 
@@ -129,11 +131,11 @@ class GatewayRegistry:
     async def stop_all(self) -> None:    # 每个 adapter：adapter.stop()
 ```
 
-`get()` 语义选 **KeyError**（对齐最新的 ModelRegistry，而非多数派的 None-return）。其余 6 个 registry 的 `get()` 不一致是 pre-existing，**不在 Wave 3 改**（orthogonal，记为已知项）。
+`get()` 语义选 **KeyError**（对齐最新的 ModelRegistry，而非多数派的 None-return）。`register()` **重复名 raise**（有意改进：`ModelRegistry.register` 是静默覆盖；此处"对齐 ModelRegistry"仅指 `get()`=KeyError，`register()` dup-raise 是有意 divergence）。其余 6 个 registry 的 `get()` 不一致是 pre-existing，**不在 Wave 3 改**（orthogonal，记为已知项）。
 
 ### 4.4 `WebhookGateway`（`merco/gateway/webhook.py`，新）—— 参考实现
 
-用 **FastAPI + uvicorn**（已是依赖，声明未用；本波把闲置依赖用起来，无新依赖）。
+用 **FastAPI + uvicorn**（均已是依赖）。`uvicorn` 此前声明未用、本波首次启用；`fastapi` 已被 `web/app.py` 使用。无新依赖。
 
 ```python
 class WebhookGateway(GatewayAdapter):
@@ -165,26 +167,24 @@ class WebhookGateway(GatewayAdapter):
 
 **关键约束**：scheduler/gateway 是 async 长任务，必须与 REPL **同一事件循环**。当前 `main()` 用 `asyncio.run(_setup_agent)`（一次性 loop 构造 agent）+ `run_repl` 内 `asyncio.run(repl())`（另一个 loop）—— **两套 loop**。Runtime 改造必须把 agent 构造 + 生命周期并入 REPL 的长生命周期 loop。
 
-- `_setup_agent` -> 改为返回 `AgentRuntime`（构造 Runtime，**不在此时 start**）。
-- `run_repl(runtime, ...)`：在 `repl()` 协程内 `await runtime.start()`（与 REPL 同 loop）-> REPL 循环（**不变**，继续直连 `runtime.agent`）-> `finally: await runtime.stop()`。
+- `_setup_agent` -> 改为返回 `(AgentRuntime 未启动, config_source)`（构造 Runtime，**不 start**、也不 `Agent.create`--那移入 `runtime.start()`）。dashboard 构造依赖 agent，移入 `repl()`。
+- `run_repl(runtime, ...)`：在 `repl()` 协程内 `await runtime.start()`（与 REPL 同 loop，内含 `Agent.create` + 插件激活 + scheduler/gateway 启动）-> dashboard 构造 -> REPL 循环（**不变**，继续直连 `runtime.agent`）-> `finally: await runtime.stop()`。
 - 信号处理（SIGINT/SIGTERM，`:462-525`）保留，stop 时确保 `runtime.stop()`。
 - REPL 的流式/中断/todo 显示逻辑**不动**——Runtime 不复制 REPL 的丰富逻辑，只包生命周期。
 
 ## 5. 数据流
 
 - **CLI**：用户输入 -> REPL（不变）-> `agent.run`。Runtime 只管 REPL 前后的 scheduler/gateway 生命周期。
-- **Gateway inbound**：webhook 收 `POST /message {chat_id, message}` -> adapter 调 `handler(chat_id, msg)` -> `runtime.handle_inbound("webhook", chat_id, msg)` -> 解析/建 session -> `agent.run(msg, session_id)` -> reply -> HTTP 响应 `{reply}`。
+- **Gateway inbound**：webhook 收 `POST /message {chat_id, message}` -> adapter 调 `handler(chat_id, msg)` -> `runtime.handle_inbound("webhook", chat_id, msg)` -> `agent.run(msg)` -> reply -> HTTP 响应 `{reply}`（Wave 3 单 session，见 §6）。
 - **Cron job**：scheduler 触发 -> job handler（闭包持 ctx）-> `ctx.agent.run(...)`（或 `runtime.submit`）-> agent.run。
 
-## 6. Session 路由（P5 消息路由）
+## 6. Session 路由（P5 消息路由）-- Wave 3 单 session
 
-`runtime.handle_inbound(source, chat_id, message)`：
-1. `session_key = f"{source}:{chat_id}"`。
-2. 查 `self._sessions`（Wave 3 内存 dict）；miss 则建新 session（复用 Agent 现有 session 机制 / SessionStore）。
-3. `agent.run(message, session_id=session_id)` -> reply。
-4. 返回 reply（gateway 负责发回）。
+`runtime.handle_inbound(source, chat_id, message)` -> `agent.run(message)` -> reply。
 
-**Wave 3 内存 map 足够**；跨进程/持久化 session 留待将来（OUT）。
+**Wave 3 范围：单 session。** Agent 当前是单 session 架构（`agent.session` 在 `__init__` 一次性设定，`agent.run(prompt)` 无 session_id 参数）。per-chat_id session 隔离需要 agent 侧多 session 支持（session+context 切换），是对已验证核心的较大改动，且 Wave 3 网关是参考 webhook 适配器（单用户测试场景），非生产多用户网关。
+
+按 YAGNI + 不留债：Wave 3 `handle_inbound` 路由到 agent 默认 session；`chat_id` 参数保留为前向兼容（签名稳定），但**不做** per-chat_id 隔离，也**不留**半成品 `_sessions` map stub。per-chat_id 隔离明确列为 OUT，待首个真实多用户网关（Telegram/Discord 插件）落地时连同 agent 侧多 session 支持一起做。
 
 ## 7. 去债（一并清理，不留并行结构）
 
@@ -192,7 +192,8 @@ class WebhookGateway(GatewayAdapter):
 |---|---|---|
 | `DeliveryManager`（telegram/discord/email 频道注册，与 gateway 概念重复） | **删**，概念并入 GatewayRegistry | `merco/scheduler/delivery.py` |
 | `TaskManager`（死代码，无调用方） | **删** | `merco/scheduler/jobs.py` |
-| cron 解析器 stub + `except Exception: pass` 吞异常 | **修**：解析器做对（或诚实标简化版）+ 异常记日志 + emit hook，不吞 | `merco/scheduler/cron.py:75-81` |
+| cron `_run_job` `except Exception: pass` 吞异常 | **修**：记日志 + emit hook，不吞 job 异常 | `merco/scheduler/cron.py:75-76` |
+| cron `_is_due` 解析器：weekday 用错约定（Mon=0，cron 应 Sun=0）+ 无 ranges/lists/steps | **修**：weekday 改 Sun=0 约定 + 诚实 docstring（明示仅支持 `*` 与精确值，不支持 ranges/lists/steps）；完整 cron 支持或引入库 = OUT（YAGNI） | `merco/scheduler/cron.py:78-100` |
 | `BaseGateway` 命名 | **重命名** -> `GatewayAdapter`（对齐文档） | `merco/gateway/base.py` |
 | `TelegramGateway`/`DiscordGateway`（`pass` stub） | **删** core 内 stub，改为插件提供 | `merco/gateway/telegram.py`、`discord.py` |
 
@@ -207,7 +208,7 @@ class WebhookGateway(GatewayAdapter):
 
 - **WebhookGateway**：`port=0` 起服务，读 `actual_port`，`httpx` `POST /message {chat_id, message}`，断言 `{reply}`。`send_message` 配/不配 `outbound_url` 两条路径。无外部依赖、无凭据。
 - **GatewayRegistry**：`register`（含重复名 raise）/`get`（含 KeyError）/`list` + `start_all/stop_all` 生命周期顺序 + handler 绑定正确。
-- **AgentRuntime**：`start/stop` 顺序与幂等、`handle_inbound` 的 session 路由（同 chat_id 复用 session、不同 chat_id 隔离）、`submit`、单 gateway 失败隔离。
+- **AgentRuntime**：`start/stop` 顺序与幂等、`handle_inbound` 路由到 `agent.run`（单 session，见 §6）、`submit`、单 gateway 失败隔离。
 - **Scheduler wiring**：`runtime.start()` 后 CronScheduler 真启动；用极短间隔或手动 `_check_jobs()` 证 job 真触发并路由到 agent。
 - **CLI**：`run_repl` 在单 loop 内 `start/stop` Runtime（不再两套 loop）；REPL 行为不回归。
 - **去债验证**：grep 证实 `DeliveryManager`/`TaskManager`/`BaseGateway`/telegram.py/discord.py 全删；`pass` stub 零残留。
@@ -237,13 +238,18 @@ class WebhookGateway(GatewayAdapter):
 - **统一所有 7 个 registry 的 `get()` 语义**：orthogonal 一致性重构，超 Wave 3 范围 -> 不做（GatewayRegistry 对齐 ModelRegistry=KeyError，其余记已知项）。
 - **两个 Runtime（GatewayRuntime + CronScheduler Runtime）**：路线图原子非实现要求，统一一个 Runtime 更清爽 -> 拒。
 
-## 12. 留待实现计划确认的细节
+## 12. 计划期已决定的细节（plan-research 校正）
 
-- `agent.run(...)` 的确切签名（session_id 参数）—— 计划期确认。
-- `AgentRuntime` 如何从 agent 取 `ctx.scheduler`（ctx 是否可从 agent 访问）—— 计划期确认；若不可达，Runtime 持 scheduler 引用由 SchedulerPlugin 注入或 Runtime 自建。
-- `WebhookGateway` 的 uvicorn 启停 API（`uvicorn.Config` + `Server.serve()` + `should_exit`）—— 计划期定具体实现。
-- cron 解析器：做完整 cron 还是诚实简化版（当前 stub 仅支持基础）—— 计划期定；倾向用现成轻量库或明确支持子集并文档化。
-- 是否加 `ctx.runtime`（让 job handler 走 `runtime.submit`）—— 倾向不加（`ctx.agent` 已够），计划期定。
+> 以下原为"留待确认"，经实现计划研究的代码核实已定：
+
+- **ctx 访问**：Agent 新增 `@property def plugin_ctx(self) -> PluginContext: return self._plugin_ctx`（当前 `_plugin_ctx` 私有、无 accessor）。Runtime 读 `agent.plugin_ctx.scheduler` / `agent.plugin_ctx.gateway_registry`。
+- **session_id**：**去作用域**。`agent.run(prompt)` 无 session_id；Wave 3 单 session（见 §6）。`submit(prompt)`、`handle_inbound(source, chat_id, message)` 均路由到 `agent.run(message)`。
+- **WebhookGateway 启停**：`uvicorn.Config(app, host=..., port=0, log_level=...)` + `Server(config)`；`start()` 用 `asyncio.create_task(server.serve())`，`stop()` 设 `server.should_exit = True`。`port=0` -> OS 分配，启动后读 `actual_port`（从 server sockets）。
+- **cron 解析器**：修异常吞 + weekday 约定（Sun=0）+ 诚实 docstring；完整 cron/库 = OUT。
+- **ctx.runtime**：不加。job handler 走 `ctx.agent.run(...)`（`agent` 已在 PluginContext）。
+- **CLI 单 loop 合并**：`Agent.create` 移入 `runtime.start()`；`_setup_agent` 返回未启动 Runtime（+ config_source），`repl()` 协程内 `await runtime.start()` -> dashboard 构造 -> REPL -> `finally: await runtime.stop()`。
+- **GatewayRegistry 容器归属**：Agent 构造并挂 ctx（仿 `loop_policies`）；与 scheduler（SchedulerPlugin 构造）模式相反但两者已在 codebase 共存。
+- **§4.4 事实校正**：`fastapi` 已被 `web/app.py` 使用（非"声明未用"）；仅 `uvicorn` 此前未用。
 
 ## 13. 验收标准
 
