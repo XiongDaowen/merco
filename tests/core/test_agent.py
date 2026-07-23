@@ -693,7 +693,7 @@ async def test_agent_boots_with_observability_disabled(monkeypatch, tmp_path):
 async def test_agent_has_provider_property_and_model_registry(monkeypatch, tmp_path):
     """Task 9 rewiring: Agent has a lazy `provider` property backed by
     ModelRegistry, a settable `provider` slot, and a `model_registry` seeded
-    with builtin providers. The legacy `llm` alias returns the same provider."""
+    with builtin providers."""
     from tests.conftest import MockModelProvider, make_test_registry
 
     db_path = str(tmp_path / "provider_prop.db")
@@ -716,5 +716,4 @@ async def test_agent_has_provider_property_and_model_registry(monkeypatch, tmp_p
     # model_registry exists and is seeded with builtin providers
     assert agent.model_registry.get("openai").name == "openai"
 
-    # legacy llm alias (scaffolding, removed in Task 16) returns same provider
-    assert agent.llm is mock
+    # provider is the canonical interface (legacy llm alias removed in Task 16)
