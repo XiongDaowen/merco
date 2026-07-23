@@ -313,3 +313,87 @@ class TestPluginManager:
             order = manager._resolve_order(manager._all_names())
         assert "ok" in order
         assert "needs_ghost" not in order
+
+    @pytest.mark.asyncio
+    async def test_activate_from_spec_lazy(self, mock_context):
+        """register_all 后 activate 能从 spec 懒实例化并激活"""
+        from merco.plugins.base import PluginSpec, Plugin
+
+        class P(Plugin):
+            name = "lazy"
+            version = "1.0.0"
+            activated = False
+            async def activate(self, ctx):
+                type(P).activated = True
+
+        manager = PluginManager(mock_context)
+        manager.register_all([PluginSpec(name="lazy", source="entrypoint", loader=lambda: P)])
+        await manager.activate("lazy")
+        assert "lazy" in manager._active
+        assert manager._plugins["lazy"].__class__ is P
+
+    @pytest.mark.asyncio
+    async def test_dep_active_check_skips(self, mock_context, caplog):
+        """dep 未激活时跳过依赖它的插件"""
+        from merco.plugins.base import PluginSpec, Plugin
+
+        class Dep(Plugin):
+            name = "dep"
+            async def activate(self, ctx): ...
+
+        class Need(Plugin):
+            name = "need"
+            async def activate(self, ctx): ...
+
+        manager = PluginManager(mock_context)
+        manager.register_all([
+            PluginSpec(name="dep", source="dir", loader=lambda: Dep),
+            PluginSpec(name="need", source="dir", depends_on=["dep"], loader=lambda: Need),
+        ])
+        # 不激活 dep，直接激活 need -> 应被跳过
+        with caplog.at_level("WARNING"):
+            await manager.activate("need")
+        assert "need" not in manager._active
+
+    @pytest.mark.asyncio
+    async def test_activate_boot_only_high_priority(self, mock_context):
+        """activate_boot 只激活 priority>=100"""
+        from merco.plugins.base import PluginSpec, Plugin
+
+        class Boot(Plugin):
+            name = "boot"
+            priority = 100
+            async def activate(self, ctx): ...
+
+        class Normal(Plugin):
+            name = "normal"
+            priority = 50
+            async def activate(self, ctx): ...
+
+        manager = PluginManager(mock_context)
+        manager.register_all([
+            PluginSpec(name="boot", source="dir", priority=100, loader=lambda: Boot),
+            PluginSpec(name="normal", source="dir", priority=50, loader=lambda: Normal),
+        ])
+        await manager.activate_boot()
+        assert "boot" in manager._active
+        assert "normal" not in manager._active
+
+    @pytest.mark.asyncio
+    async def test_activate_all_idempotent_for_boot(self, mock_context):
+        """activate_all 对已激活的 boot 插件幂等"""
+        from merco.plugins.base import PluginSpec, Plugin
+
+        calls = {"n": 0}
+
+        class Boot(Plugin):
+            name = "boot"
+            priority = 100
+            async def activate(self, ctx):
+                calls["n"] += 1
+
+        manager = PluginManager(mock_context)
+        manager.register_all([PluginSpec(name="boot", source="dir", priority=100, loader=lambda: Boot)])
+        await manager.activate_boot()
+        await manager.activate_all()
+        assert calls["n"] == 1  # boot.activate 只调一次

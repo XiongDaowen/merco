@@ -75,13 +75,27 @@ class PluginManager:
         return result
 
     async def activate(self, name: str) -> None:
-        """Activate a single plugin"""
+        """Activate a single plugin (lazy-instantiate from spec if needed)."""
         if name in self._active:
             return
         plugin = self._plugins.get(name)
-        if not plugin:
-            logger.warning("Plugin '%s' not registered", name)
-            return
+        if plugin is None:
+            spec = self._specs.get(name)
+            if spec is None:
+                logger.warning("Plugin '%s' not registered", name)
+                return
+            try:
+                plugin = spec.instantiate()
+            except Exception as e:
+                logger.warning("Plugin '%s' instantiation failed: %s", name, e)
+                await self._emit_error(name, str(e))
+                return
+            self._plugins[name] = plugin
+        # dep-active 检查
+        for dep in self._meta(name)[1]:
+            if dep not in self._active:
+                logger.warning("Plugin '%s' skipped: dependency '%s' not active", name, dep)
+                return
         try:
             if name not in self._ever_activated:
                 await plugin.activate(self._ctx)
@@ -90,10 +104,13 @@ class PluginManager:
             await self._ctx.hooks.emit("plugin.activated", plugin_name=name, version=plugin.version)
         except Exception as e:
             logger.warning("Plugin '%s' activation failed: %s", name, e)
-            try:
-                await self._ctx.hooks.emit("plugin.error", plugin_name=name, error=str(e))
-            except Exception:
-                pass
+            await self._emit_error(name, str(e))
+
+    async def _emit_error(self, name: str, error: str) -> None:
+        try:
+            await self._ctx.hooks.emit("plugin.error", plugin_name=name, error=error)
+        except Exception:
+            pass
 
     async def deactivate(self, name: str) -> None:
         """Deactivate a single plugin"""
@@ -111,12 +128,17 @@ class PluginManager:
             pass
 
     async def activate_all(self) -> None:
-        """Activate all enabled plugins at startup"""
+        """Activate all enabled plugins in topo+priority order."""
         plugins_config = getattr(self._ctx.config, "plugins", {})
-        for name in self._plugins:
-            plugin_cfg = plugins_config.get(name, {})
-            if plugin_cfg.get("enabled", True):
-                await self.activate(name)
+        for name in self._resolve_order(self._all_names()):
+            if not plugins_config.get(name, {}).get("enabled", True):
+                continue
+            await self.activate(name)
+
+    async def activate_boot(self) -> None:
+        """Activate boot-phase plugins (priority >= BOOT_PRIORITY) before context restore."""
+        for name in self._resolve_order(self._all_names(), boot_only=True):
+            await self.activate(name)
 
     async def deactivate_all(self) -> None:
         """Deactivate all active plugins"""
