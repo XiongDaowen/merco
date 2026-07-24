@@ -40,7 +40,7 @@ class TestSubAgentManager:
                 run=AsyncMock(return_value=mock_result),
             ))
 
-            subagent_id = await manager.dispatch(todo.id, "执行任务")
+            await manager.dispatch(todo.id, "执行任务")
 
             # 验证 Todo 更新
             updated = todo_manager.get(todo.id)

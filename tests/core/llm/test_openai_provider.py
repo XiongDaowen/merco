@@ -11,7 +11,6 @@ from merco.core.llm.errors import ProviderError, RateLimitError
 
 
 def _fake_choice(content="hi", finish="stop", tool_calls=None, reasoning=""):
-    delta = MagicMock()
     message = MagicMock()
     message.role = "assistant"
     message.content = content

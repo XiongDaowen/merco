@@ -839,7 +839,7 @@ class Agent:
         # Note: DB-level backup and session-level auto-fork are independent
         # safeguards, not fallbacks for each other. Backup covers any DB
         # corruption/restore; auto-fork preserves the full session history.
-        backup_ok = self._session_store.backup()
+        self._session_store.backup()
 
         # Auto-fork: save complete copy before compressing
         if self.config.fork_enabled and self.config.fork_auto_on_compress:

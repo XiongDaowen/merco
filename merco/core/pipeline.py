@@ -13,6 +13,10 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from merco.core.config import ModelConfig
 
 logger = logging.getLogger("merco.pipeline")
 
@@ -146,7 +150,7 @@ class RecoveryContext:
     # ── 意图标志位（策略设置，Agent 执行）──
     compress: bool = False                # 需要压缩上下文
     reduce_tools: bool = False            # 需要精简工具列表
-    switch_model: "ModelConfig | None" = None   # 跨 provider 切换（provider+model 全 spec）
+    switch_model: ModelConfig | None = None   # 跨 provider 切换（provider+model 全 spec）
     reduce_history: bool = False          # 需要裁剪对话历史
     extra_wait: float = 0.0               # 额外等待时间（秒），0 = 不等
 

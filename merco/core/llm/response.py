@@ -3,11 +3,14 @@
 Extracted from agent.py. Uses agent.config (StreamingConfig), agent.context,
 agent.session, agent.provider.
 """
+from __future__ import annotations
+
 import asyncio
 import json as _json
 import logging
 import time
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from rich.live import Live
 from rich.panel import Panel
@@ -15,6 +18,9 @@ from rich.console import Group
 from rich.markdown import Markdown
 
 from merco.core.llm.error_ui import classify_error, build_error_panel
+
+if TYPE_CHECKING:
+    from merco.core.agent import Agent
 
 logger = logging.getLogger("merco.agent")
 
@@ -28,14 +34,14 @@ class ResponseProvider(ABC):
     """响应策略基类 — 工厂模式，Agent 不感知流/非流"""
 
     @abstractmethod
-    async def get_response(self, agent: "Agent", messages: list,
+    async def get_response(self, agent: Agent, messages: list,
                            tools: list | None) -> dict:
         ...
 
 class NonStreamingProvider(ResponseProvider):
     """非流式：一次 chat 返回完整响应"""
 
-    async def get_response(self, agent: "Agent", messages: list,
+    async def get_response(self, agent: Agent, messages: list,
                            tools: list | None) -> dict:
         response = await agent.provider.chat(
             messages, tools=tools, tool_choice="auto")
@@ -47,11 +53,8 @@ class NonStreamingProvider(ResponseProvider):
 class StreamingProvider(ResponseProvider):
     """流式：thinking 用 Live Panel 逐 token 显示，content 不流"""
 
-    async def get_response(self, agent: "Agent", messages: list,
+    async def get_response(self, agent: Agent, messages: list,
                            tools: list | None) -> dict:
-        import sys, json as _json
-        from rich.live import Live
-        from rich.console import Group
         from merco.core.agent import console
 
         assembled: dict = {
