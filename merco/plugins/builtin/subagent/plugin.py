@@ -20,7 +20,7 @@ class SubAgentPlugin(Plugin):
     description = "Creates sub-agent dispatch and todo manager"
     priority = 40
 
-    async def activate(self, ctx: "PluginContext") -> None:
+    async def activate(self, ctx: PluginContext) -> None:
         from merco.agents.subagent import SubAgentManager
         from merco.todo.manager import TodoManager
 

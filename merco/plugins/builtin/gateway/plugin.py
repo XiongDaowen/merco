@@ -20,7 +20,7 @@ class GatewayPlugin(Plugin):
     description = "Registers the built-in webhook gateway"
     priority = 25
 
-    async def activate(self, ctx: "PluginContext") -> None:
+    async def activate(self, ctx: PluginContext) -> None:
         from merco.gateway.webhook import WebhookGateway
 
         ctx.register_gateway(WebhookGateway())

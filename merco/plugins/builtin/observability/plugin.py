@@ -20,7 +20,7 @@ class ObservabilityPlugin(Plugin):
     description = "Creates the observability observer"
     priority = 100
 
-    async def activate(self, ctx: "PluginContext") -> None:
+    async def activate(self, ctx: PluginContext) -> None:
         from merco.observability.observer import Observer
 
         ctx.observer = Observer(ctx.hooks)

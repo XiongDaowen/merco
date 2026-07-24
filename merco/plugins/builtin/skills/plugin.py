@@ -20,7 +20,7 @@ class SkillPlugin(Plugin):
     description = "Loads skills and injects the skill registry"
     priority = 60
 
-    async def activate(self, ctx: "PluginContext") -> None:
+    async def activate(self, ctx: PluginContext) -> None:
         from merco.skills.registry import SkillRegistry
 
         registry = SkillRegistry()

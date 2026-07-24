@@ -24,7 +24,7 @@ class MCPPlugin(Plugin):
     description = "Creates the MCP server manager"
     priority = 50
 
-    async def activate(self, ctx: "PluginContext") -> None:
+    async def activate(self, ctx: PluginContext) -> None:
         from merco.mcp.manager import MCPServerManager
 
         manager = MCPServerManager(

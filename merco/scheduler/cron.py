@@ -2,8 +2,8 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable
 
 logger = logging.getLogger("merco.scheduler.cron")
 

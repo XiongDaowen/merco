@@ -14,10 +14,10 @@ logger = logging.getLogger("merco.agents.subagent")
 class SubAgentManager:
     """子代理派发管理器"""
 
-    def __init__(self, parent: "Agent", profile_registry: "AgentProfileRegistry" = None):
+    def __init__(self, parent: Agent, profile_registry: AgentProfileRegistry = None):
         self._parent = parent
         self._profiles = profile_registry
-        self._active: dict[str, "Agent"] = {}
+        self._active: dict[str, Agent] = {}
 
     async def dispatch(self, todo_id: str, prompt: str, agent_name: str = "default") -> str:
         """派发子代理执行任务，返回 subagent_id"""
@@ -45,7 +45,7 @@ class SubAgentManager:
 
         return sub_agent.session.id
 
-    async def _create_sub_agent(self, agent_name: str) -> "Agent":
+    async def _create_sub_agent(self, agent_name: str) -> Agent:
         """创建子代理，根据 profile 配置 prompt/tools/model/limits"""
         from merco.agents.profile import ProfilePromptChunk
         from merco.core.agent import Agent

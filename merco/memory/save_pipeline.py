@@ -92,7 +92,7 @@ class MemorySavePipeline:
             DedupProcessor(store),
         ]
 
-    def use(self, processor: MemorySaveProcessor) -> "MemorySavePipeline":
+    def use(self, processor: MemorySaveProcessor) -> MemorySavePipeline:
         self._processors.append(processor)
         return self
 

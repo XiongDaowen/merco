@@ -6,7 +6,8 @@ import json
 import logging
 import re
 import time
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from typing import Optional
 
 from merco.core.llm.base import ModelProvider
 from merco.core.llm.errors import (

@@ -20,7 +20,7 @@ class WebPlugin(Plugin):
     description = "Registers web tools (fetch and search)"
     priority = 30
 
-    async def activate(self, ctx: "PluginContext") -> None:
+    async def activate(self, ctx: PluginContext) -> None:
         from merco.tools.web_tools import WebFetch, WebSearch
 
         ctx.register_tool(WebFetch())

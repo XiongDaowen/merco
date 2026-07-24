@@ -47,7 +47,7 @@ class ToolMiddlewareChain:
     def __init__(self):
         self._middlewares: list[ToolMiddleware] = []
 
-    def use(self, middleware: ToolMiddleware) -> "ToolMiddlewareChain":
+    def use(self, middleware: ToolMiddleware) -> ToolMiddlewareChain:
         self._middlewares.append(middleware)
         return self
 

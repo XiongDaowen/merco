@@ -1,7 +1,7 @@
 """命令注册表 — 可拓展、UI 无关的命令定义与查询"""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 
 @dataclass

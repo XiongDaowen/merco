@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Callable
+from collections.abc import Callable
 
 from merco.core.llm.base import ModelProvider
 
@@ -25,13 +25,13 @@ class Response:
         self.delay = delay
 
     @classmethod
-    def content(cls, text: str, *, delay: float = 0.0) -> "Response":
+    def content(cls, text: str, *, delay: float = 0.0) -> Response:
         return cls(content=text, delay=delay)
 
     @classmethod
     def tool_call(
         cls, name: str, arguments: dict, *, id: str | None = None
-    ) -> "Response":
+    ) -> Response:
         if id is None:
             _counter[0] += 1
             id = f"manual_{_counter[0] - 1}"
@@ -46,7 +46,7 @@ class Response:
         )
 
     @classmethod
-    def error(cls, exc: Exception) -> "Response":
+    def error(cls, exc: Exception) -> Response:
         return cls(error=exc)
 
 
@@ -61,21 +61,21 @@ class ProgrammableModelProvider(ModelProvider):
         self._conditions: list[tuple[Callable, Response]] = []
         self.calls: list[dict] = []
 
-    def expect(self, responses: list[Response]) -> "ProgrammableModelProvider":
+    def expect(self, responses: list[Response]) -> ProgrammableModelProvider:
         self._queue = list(responses)
         self._sequence_fn = None
         return self
 
     def expect_sequence(
         self, fn: Callable[[int], Response]
-    ) -> "ProgrammableModelProvider":
+    ) -> ProgrammableModelProvider:
         self._sequence_fn = fn
         self._queue = []
         return self
 
     def when(
         self, condition: Callable, response: Response
-    ) -> "ProgrammableModelProvider":
+    ) -> ProgrammableModelProvider:
         self._conditions.append((condition, response))
         return self
 

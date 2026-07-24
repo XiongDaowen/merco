@@ -16,8 +16,9 @@ thinking.py; Anthropic via native thinking blocks).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 
 class ModelProvider(ABC):

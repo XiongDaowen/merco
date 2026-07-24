@@ -60,7 +60,7 @@ class ResultPipeline:
         self._by_name: dict[str, Processor] = {}
         self._disabled: set[str] = set()
 
-    def use(self, processor: Processor) -> "ResultPipeline":
+    def use(self, processor: Processor) -> ResultPipeline:
         """注册处理器。按注册顺序执行。"""
         self._processors.append(processor)
         self._by_name[processor.name] = processor
@@ -187,7 +187,7 @@ class RecoveryPipeline:
         self._recoveries: list[Recovery] = []
         self._disabled: set[str] = set()
 
-    def use(self, recovery: Recovery) -> "RecoveryPipeline":
+    def use(self, recovery: Recovery) -> RecoveryPipeline:
         self._recoveries.append(recovery)
         return self
 
@@ -245,7 +245,7 @@ class EmptyResponsePipeline:
         self._strategies: list[EmptyResponseStrategy] = []
         self._disabled: set[str] = set()
 
-    def use(self, strategy: EmptyResponseStrategy) -> "EmptyResponsePipeline":
+    def use(self, strategy: EmptyResponseStrategy) -> EmptyResponsePipeline:
         self._strategies.append(strategy)
         return self
 

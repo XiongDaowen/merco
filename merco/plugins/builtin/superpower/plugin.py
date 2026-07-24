@@ -32,7 +32,7 @@ class SuperpowerPlugin(Plugin):
     description = "Extends merco with superpower capabilities"
     priority = 10
 
-    async def activate(self, ctx: "PluginContext") -> None:
+    async def activate(self, ctx: PluginContext) -> None:
         # 1. Register prompt chunk
         ctx.add_prompt_chunk(SuperpowerHintChunk())
 

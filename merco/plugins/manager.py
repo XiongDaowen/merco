@@ -15,18 +15,18 @@ class PluginManager:
 
     BOOT_PRIORITY = 100
 
-    def __init__(self, ctx: "PluginContext"):
+    def __init__(self, ctx: PluginContext):
         self._ctx = ctx
-        self._plugins: dict[str, "Plugin"] = {}
-        self._specs: dict[str, "PluginSpec"] = {}
+        self._plugins: dict[str, Plugin] = {}
+        self._specs: dict[str, PluginSpec] = {}
         self._active: set[str] = set()
         self._ever_activated: set[str] = set()
 
-    def register(self, plugin: "Plugin") -> None:
+    def register(self, plugin: Plugin) -> None:
         """Register a plugin instance"""
         self._plugins[plugin.name] = plugin
 
-    def register_all(self, specs: list["PluginSpec"]) -> None:
+    def register_all(self, specs: list[PluginSpec]) -> None:
         """注册一批 PluginSpec（discovery 产出）"""
         for spec in specs:
             self._specs[spec.name] = spec

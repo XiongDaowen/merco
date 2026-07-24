@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from merco.agents.profile import AgentProfileRegistry
@@ -48,7 +49,7 @@ class Plugin(ABC):
     depends_on: list[str] = []  # 必须先激活的插件名
 
     @abstractmethod
-    async def activate(self, ctx: "PluginContext") -> None:
+    async def activate(self, ctx: PluginContext) -> None:
         """Called on activation; ctx provides all extension points"""
         ...
 
@@ -62,28 +63,28 @@ class PluginContext:
 
     def __init__(
         self,
-        hooks: "HookRegistry",
-        tool_registry: "ToolRegistry",
-        prompt_builder: "PromptBuilder",
-        recovery_pipeline: "RecoveryPipeline",
-        result_pipeline: "ResultPipeline",
-        memory_save_pipeline: "MemorySavePipeline",
-        recaller: "HybridRecaller",
-        config: "MercoConfig",
-        observer: "Observer" = None,
-        todo_manager: "TodoManager" = None,
-        sub_agent_manager: "SubAgentManager" = None,
-        context_pipeline: "ContextPipeline" = None,
-        agent_profiles: "AgentProfileRegistry" = None,
-        memory_backends: "MemoryBackendRegistry" = None,
-        loop_policies: "LoopPolicyRegistry" = None,
-        agent: "Agent" = None,
-        skill_registry: "SkillRegistry" = None,
-        mcp_manager: "MCPServerManager" = None,
-        scheduler: "CronScheduler" = None,
-        security_pipeline: "PermissionPipeline" = None,
-        model_registry: "ModelRegistry" = None,
-        gateway_registry: "GatewayRegistry" = None,
+        hooks: HookRegistry,
+        tool_registry: ToolRegistry,
+        prompt_builder: PromptBuilder,
+        recovery_pipeline: RecoveryPipeline,
+        result_pipeline: ResultPipeline,
+        memory_save_pipeline: MemorySavePipeline,
+        recaller: HybridRecaller,
+        config: MercoConfig,
+        observer: Observer = None,
+        todo_manager: TodoManager = None,
+        sub_agent_manager: SubAgentManager = None,
+        context_pipeline: ContextPipeline = None,
+        agent_profiles: AgentProfileRegistry = None,
+        memory_backends: MemoryBackendRegistry = None,
+        loop_policies: LoopPolicyRegistry = None,
+        agent: Agent = None,
+        skill_registry: SkillRegistry = None,
+        mcp_manager: MCPServerManager = None,
+        scheduler: CronScheduler = None,
+        security_pipeline: PermissionPipeline = None,
+        model_registry: ModelRegistry = None,
+        gateway_registry: GatewayRegistry = None,
         metadata: dict = None,
     ):
         self.hooks = hooks
@@ -110,15 +111,15 @@ class PluginContext:
         self.gateway_registry = gateway_registry
         self.metadata = metadata if metadata is not None else {}
 
-    def on(self, event: str, handler: "Callable") -> None:
+    def on(self, event: str, handler: Callable) -> None:
         """Subscribe to event (convenience method)"""
         self.hooks.on(event, handler)
 
-    def register_tool(self, tool: "BaseTool") -> None:
+    def register_tool(self, tool: BaseTool) -> None:
         """Register a tool"""
         self.tool_registry.register(tool)
 
-    def add_prompt_chunk(self, chunk: "PromptChunk") -> None:
+    def add_prompt_chunk(self, chunk: PromptChunk) -> None:
         """Inject a system prompt chunk"""
         self.prompt_builder.use(chunk)
 
@@ -130,7 +131,7 @@ class PluginContext:
         if pipeline and hasattr(pipeline, 'use'):
             pipeline.use(processor)
 
-    def add_recaller(self, recaller: "BaseRecaller") -> None:
+    def add_recaller(self, recaller: BaseRecaller) -> None:
         """Add a memory recaller"""
         self.recaller.add(recaller)
 
@@ -152,13 +153,13 @@ class PluginContext:
             raise RuntimeError("security_pipeline not available on this context")
         self.security_pipeline.use(policy)
 
-    def register_model_provider(self, info: "ModelProviderInfo") -> None:
+    def register_model_provider(self, info: ModelProviderInfo) -> None:
         """注册一个 ModelProvider（第三方插件用）。"""
         if self.model_registry is None:
             raise RuntimeError("model_registry not available on this context")
         self.model_registry.register(info)
 
-    def register_gateway(self, adapter: "GatewayAdapter") -> None:
+    def register_gateway(self, adapter: GatewayAdapter) -> None:
         """注册一个 GatewayAdapter（第三方插件用）。"""
         if self.gateway_registry is None:
             raise RuntimeError("gateway_registry not available on this context")
@@ -178,7 +179,7 @@ class PluginSpec:
     depends_on: list[str] = field(default_factory=list)
 
     _cls: type | None = field(default=None, init=False, repr=False, compare=False)
-    _instance: "Plugin | None" = field(default=None, init=False, repr=False, compare=False)
+    _instance: Plugin | None = field(default=None, init=False, repr=False, compare=False)
 
     def load_cls(self) -> type:
         """导入并返回 Plugin 子类，缓存到 _cls。"""
@@ -188,7 +189,7 @@ class PluginSpec:
             self._cls = self.loader()
         return self._cls
 
-    def instantiate(self) -> "Plugin":
+    def instantiate(self) -> Plugin:
         """返回 Plugin 实例，缓存到 _instance。"""
         if self._instance is None:
             self._instance = self.load_cls()()
