@@ -67,15 +67,19 @@ class TestBashTool:
         assert result["returncode"] != 0
         assert "not found" in result["stderr"].lower()
 
-    @pytest.mark.skip(reason="Shell escaping issue, non-critical test")
     @pytest.mark.asyncio
-    async def test_execute_command_with_non_utf8_output(self, bash_tool):
-        """测试处理非UTF-8输出"""
-        # 使用printf命令输出二进制数据，更可靠
-        result = await bash_tool.execute("printf '\\xff\\xfe\\xfd'")
+    async def test_execute_command_with_non_utf8_output(self, bash_tool, tmp_path):
+        """测试处理非UTF-8输出：二进制字节经 decode(errors='replace') 替换为 �。
+
+        用 cat 二进制文件而非 printf 十六进制转义：/bin/sh（dash）的 printf
+        不支持 \\x 转义，跨 shell 不稳；cat 文件不经 shell 转义，最可靠。
+        """
+        binary_file = tmp_path / "bin.dat"
+        binary_file.write_bytes(b"\xff\xfe\xfd")  # 3 个无效 UTF-8 起始字节
+        result = await bash_tool.execute(f"cat '{binary_file}'")
         assert "error" not in result
         assert result["returncode"] == 0
-        # 无效字节会被替换为�
+        # 0xff/0xfe/0xfd 均非合法 UTF-8 起始字节 -> decode(errors="replace") 产生 �
         assert "�" in result["stdout"]
 
     def test_kill_all_processes(self, bash_tool):
