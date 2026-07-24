@@ -9,6 +9,7 @@ from cli.interrupt import InterruptContext, InterruptPipeline, InterruptState, I
 
 class MockStrategy(InterruptStrategy):
     """模拟策略，记录调用。"""
+
     name = "mock"
 
     def __init__(self, should_handle: bool = False):
@@ -192,6 +193,7 @@ async def test_exit_with_hooks_strategy_second_press():
 
 
 # ── 同步方法测试 ─────────────────────────────────────────────────────
+
 
 def test_cancel_task_strategy_sync():
     """CancelTaskStrategy.handle_sync 同步取消任务。"""

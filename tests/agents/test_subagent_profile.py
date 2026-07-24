@@ -1,4 +1,5 @@
 """SubAgentManager profile 单测"""
+
 import pytest
 
 from merco.agents.profile import AgentProfile
@@ -60,12 +61,14 @@ class TestSubAgentProfile:
         from merco.agents.subagent import SubAgentManager
 
         reg = AgentProfileRegistry()
-        reg.register(AgentProfile(
-            name="gpt4",
-            description="GPT-4 sub",
-            prompt="you are gpt4",
-            model={"provider": "openai", "model": "gpt-4o"},
-        ))
+        reg.register(
+            AgentProfile(
+                name="gpt4",
+                description="GPT-4 sub",
+                prompt="you are gpt4",
+                model={"provider": "openai", "model": "gpt-4o"},
+            )
+        )
 
         manager = SubAgentManager(test_agent, reg)
         sub_agent = await manager._create_sub_agent("gpt4")
@@ -81,12 +84,14 @@ class TestSubAgentProfile:
         from merco.agents.subagent import SubAgentManager
 
         reg = AgentProfileRegistry()
-        reg.register(AgentProfile(
-            name="limited",
-            description="limited agent",
-            prompt="you are limited",
-            limits={"max_tool_calls": 10},
-        ))
+        reg.register(
+            AgentProfile(
+                name="limited",
+                description="limited agent",
+                prompt="you are limited",
+                limits={"max_tool_calls": 10},
+            )
+        )
 
         manager = SubAgentManager(test_agent, reg)
         sub_agent = await manager._create_sub_agent("limited")

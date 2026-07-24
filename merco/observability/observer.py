@@ -32,9 +32,15 @@ class Observer:
 
     # ── 事件处理 ──────────────────────────────────────────
 
-    def _on_llm(self, duration: float = 0, tokens_in: int = 0,
-                tokens_out: int = 0, cached_tokens: int = 0,
-                cache_read_tokens: int = 0, **kwargs):
+    def _on_llm(
+        self,
+        duration: float = 0,
+        tokens_in: int = 0,
+        tokens_out: int = 0,
+        cached_tokens: int = 0,
+        cache_read_tokens: int = 0,
+        **kwargs,
+    ):
         self._live.increment("llm_calls")
         self._live.record_timing("llm", duration)
         if tokens_in:

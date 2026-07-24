@@ -1,4 +1,5 @@
 """CompressProcessor — 替代 ContextCompressor"""
+
 from __future__ import annotations
 
 import logging
@@ -11,6 +12,7 @@ logger = logging.getLogger("merco.context.compress")
 
 class CompressProcessor(ContextProcessor):
     """压缩：超过阈值时摘要旧消息"""
+
     name = "compress"
 
     def __init__(self, max_tokens: int = 64000, threshold: float = 0.75):

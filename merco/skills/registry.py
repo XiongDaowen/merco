@@ -1,6 +1,5 @@
 """技能注册与管理"""
 
-from typing import Optional
 
 
 class SkillRegistry:
@@ -17,7 +16,7 @@ class SkillRegistry:
         """注销技能"""
         self._skills.pop(name, None)
 
-    def get(self, name: str) -> Optional[dict]:
+    def get(self, name: str) -> dict | None:
         """获取技能"""
         return self._skills.get(name)
 

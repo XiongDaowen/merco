@@ -1,4 +1,5 @@
 """AgentProfile data model and registry"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -7,6 +8,7 @@ from dataclasses import dataclass, field
 @dataclass
 class AgentProfile:
     """Professional role configuration for sub-agents"""
+
     name: str
     description: str
     prompt: str
@@ -33,6 +35,7 @@ class AgentProfileRegistry:
 
 class ProfilePromptChunk:
     """Prompt chunk that injects agent role from profile"""
+
     name = "agent_profile"
 
     def __init__(self, profile: AgentProfile):

@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class MessageRole(str, Enum):
@@ -15,10 +14,11 @@ class MessageRole(str, Enum):
 @dataclass
 class Message:
     """标准消息结构"""
+
     role: MessageRole
     content: str
     tool_calls: list = field(default_factory=list)
-    tool_result: Optional[dict] = None
+    tool_result: dict | None = None
     metadata: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:

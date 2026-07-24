@@ -23,8 +23,7 @@ class Session:
         """添加消息。不立即写磁盘（由 agent 循环结束时统一 save）"""
         r = kwargs.get("reasoning", "")
         if r:
-            _logger.debug("add_message(%s): reasoning=%d chars, content=%d chars",
-                         role, len(r), len(content))
+            _logger.debug("add_message(%s): reasoning=%d chars, content=%d chars", role, len(r), len(content))
         msg = {"role": role, "content": content}
         msg.update(kwargs)
         self.messages.append(msg)

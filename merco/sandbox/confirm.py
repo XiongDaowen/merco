@@ -37,10 +37,8 @@ def _read_config() -> str:
 
 def _render_unified(diff_text: str, title: str) -> Panel:
     """行内对照（unified diff）"""
-    syntax = Syntax(diff_text, "diff", theme="monokai",
-                    line_numbers=False, word_wrap=True)
-    return Panel(syntax, title=title, border_style="yellow",
-                 subtitle="行内对照（- 删除  + 添加）")
+    syntax = Syntax(diff_text, "diff", theme="monokai", line_numbers=False, word_wrap=True)
+    return Panel(syntax, title=title, border_style="yellow", subtitle="行内对照（- 删除  + 添加）")
 
 
 _CONTEXT = 3  # 变更块前后保留的上下文行数
@@ -72,21 +70,17 @@ def _render_split(old_content: str, new_content: str, title: str, filepath: str)
                 # 夹在两个变更块之间
                 if n <= 2 * _CONTEXT + 1:
                     for k in range(n):
-                        rows.append((str(i1 + k + 1), old_lines[i1 + k],
-                                     str(j1 + k + 1), new_lines[j1 + k], "equal"))
+                        rows.append((str(i1 + k + 1), old_lines[i1 + k], str(j1 + k + 1), new_lines[j1 + k], "equal"))
                 else:
                     for k in range(_CONTEXT):
-                        rows.append((str(i1 + k + 1), old_lines[i1 + k],
-                                     str(j1 + k + 1), new_lines[j1 + k], "equal"))
+                        rows.append((str(i1 + k + 1), old_lines[i1 + k], str(j1 + k + 1), new_lines[j1 + k], "equal"))
                     rows.append(("", "···", "", "···", "gap"))
                     for k in range(n - _CONTEXT, n):
-                        rows.append((str(i1 + k + 1), old_lines[i1 + k],
-                                     str(j1 + k + 1), new_lines[j1 + k], "equal"))
+                        rows.append((str(i1 + k + 1), old_lines[i1 + k], str(j1 + k + 1), new_lines[j1 + k], "equal"))
             elif has_prev_change:
                 show_n = min(n, _CONTEXT + 1)
                 for k in range(show_n):
-                    rows.append((str(i1 + k + 1), old_lines[i1 + k],
-                                 str(j1 + k + 1), new_lines[j1 + k], "equal"))
+                    rows.append((str(i1 + k + 1), old_lines[i1 + k], str(j1 + k + 1), new_lines[j1 + k], "equal"))
                 if n > show_n:
                     rows.append(("", "···", "", "···", "gap"))
             elif has_next_change:
@@ -94,8 +88,7 @@ def _render_split(old_content: str, new_content: str, title: str, filepath: str)
                 if n > show_n:
                     rows.append(("", "···", "", "···", "gap"))
                 for k in range(n - show_n, n):
-                    rows.append((str(i1 + k + 1), old_lines[i1 + k],
-                                 str(j1 + k + 1), new_lines[j1 + k], "equal"))
+                    rows.append((str(i1 + k + 1), old_lines[i1 + k], str(j1 + k + 1), new_lines[j1 + k], "equal"))
             # 孤立的 equal 块（无相邻变更）→ 跳过
         elif tag == "replace":
             for k in range(max(i2 - i1, j2 - j1)):
@@ -125,13 +118,12 @@ def _render_split(old_content: str, new_content: str, title: str, filepath: str)
         return
 
     # ── 阶段 2：渲染 Rich Table ──
-    table = Table(show_header=False, box=None, padding=(0, 1),
-                  show_edge=False, expand=False, highlight=False)
-    table.add_column(width=5, justify="right")   # 旧行号
-    table.add_column(width=half, no_wrap=True)    # 旧内容
-    table.add_column(width=1, justify="center")   # │
-    table.add_column(width=5, justify="right")   # 新行号
-    table.add_column(width=half, no_wrap=True)    # 新内容
+    table = Table(show_header=False, box=None, padding=(0, 1), show_edge=False, expand=False, highlight=False)
+    table.add_column(width=5, justify="right")  # 旧行号
+    table.add_column(width=half, no_wrap=True)  # 旧内容
+    table.add_column(width=1, justify="center")  # │
+    table.add_column(width=5, justify="right")  # 新行号
+    table.add_column(width=half, no_wrap=True)  # 新内容
 
     for old_ln, old_text, new_ln, new_text, change_type in rows:
         old_t = _trunc(old_text, half)
@@ -157,7 +149,8 @@ def _render_split(old_content: str, new_content: str, title: str, filepath: str)
             )
         elif change_type == "insert":
             table.add_row(
-                "", "",
+                "",
+                "",
                 Text("│", style="dim"),
                 Text(new_ln, style="bold green"),
                 Text(new_t, style="green"),
@@ -179,7 +172,7 @@ def _trunc(s: str, width: int) -> str:
     """截断到 width 宽度，超长加 …"""
     if len(s) <= width:
         return s
-    return s[:width - 1] + "\u2026"
+    return s[: width - 1] + "\u2026"
 
 
 async def confirm_edit(
@@ -231,8 +224,7 @@ async def confirm_edit(
             console.print("[dim]  ✓ 自动应用修改[/dim]")
             return True
         elif sandbox_mode == "ask":
-            console.print("[bold yellow]确认修改？[/bold yellow] "
-                          "[dim]按 y 确认 / 其他任意键取消 [/dim]", end="")
+            console.print("[bold yellow]确认修改？[/bold yellow] [dim]按 y 确认 / 其他任意键取消 [/dim]", end="")
             resp = await asyncio.to_thread(input, "")
             return resp.strip().lower() in ("y", "yes")
         else:

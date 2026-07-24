@@ -1,4 +1,5 @@
 """PermissionPolicy end-to-end integration tests"""
+
 from merco.sandbox.guard import (
     BuiltinDefaultPolicy,
     GuardAction,

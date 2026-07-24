@@ -1,4 +1,5 @@
 """插件系统端到端集成测试"""
+
 import pytest
 
 from merco.plugins.base import Plugin, PluginContext
@@ -23,6 +24,7 @@ class TestPlugin(Plugin):
             name = "test_plugin_tool"
             description = "插件注册的工具"
             parameters = {"type": "object", "properties": {}}
+
             async def execute(self, **kwargs):
                 return {"result": "from plugin"}
 
@@ -46,8 +48,10 @@ async def test_plugin_activates_and_registers_tool(test_agent):
 async def test_plugin_emits_events(test_agent):
     """插件激活触发事件"""
     events = []
+
     async def on_activated(plugin_name, **kwargs):
         events.append(plugin_name)
+
     test_agent.hooks.on("plugin.activated", on_activated)
 
     plugin = TestPlugin()
@@ -59,6 +63,7 @@ async def test_plugin_emits_events(test_agent):
 
 async def test_plugin_failure_isolated(test_agent):
     """插件失败不影响 Agent"""
+
     class FailingPlugin(Plugin):
         name = "failing"
         version = "1.0.0"
@@ -139,12 +144,21 @@ async def test_external_dir_plugin_registers_via_convenience_methods(tmp_path, m
 
     # 2. 构造 PluginContext（mock 各 registry/pipeline）
     ctx = PluginContext(
-        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
-        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
-        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
-        observer=MagicMock(), todo_manager=MagicMock(), sub_agent_manager=MagicMock(),
-        context_pipeline=MagicMock(), agent_profiles=MagicMock(),
-        memory_backends=MagicMock(), loop_policies=MagicMock(),
+        hooks=MagicMock(),
+        tool_registry=MagicMock(),
+        prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(),
+        result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(),
+        recaller=MagicMock(),
+        config=MagicMock(),
+        observer=MagicMock(),
+        todo_manager=MagicMock(),
+        sub_agent_manager=MagicMock(),
+        context_pipeline=MagicMock(),
+        agent_profiles=MagicMock(),
+        memory_backends=MagicMock(),
+        loop_policies=MagicMock(),
         security_pipeline=MagicMock(),
     )
     ctx.config.plugins = {}
@@ -183,20 +197,23 @@ async def test_plugin_can_register_model_provider(test_agent):
 
     class FakeProvider(ModelProvider):
         name = "fake"
+
         async def chat(self, messages, tools=None, tool_choice=None):
             return {"content": "fake", "finish_reason": "stop"}
+
         async def chat_stream(self, messages, tools=None, tool_choice=None):
             yield {"content": "fake"}
 
     class FakePlugin(Plugin):
         name = "fake_provider"
+
         async def activate(self, ctx):
-            ctx.register_model_provider(ModelProviderInfo(
-                name="fake", provider_class=FakeProvider, display_name="Fake"))
+            ctx.register_model_provider(
+                ModelProviderInfo(name="fake", provider_class=FakeProvider, display_name="Fake")
+            )
 
     assert test_agent.model_registry is not None
     # simulate plugin activation
-    test_agent.model_registry.register(ModelProviderInfo(
-        name="fake", provider_class=FakeProvider, display_name="Fake"))
+    test_agent.model_registry.register(ModelProviderInfo(name="fake", provider_class=FakeProvider, display_name="Fake"))
     info = test_agent.model_registry.get("fake")
     assert info.provider_class is FakeProvider

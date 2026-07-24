@@ -1,4 +1,5 @@
 """GatewayRegistry - 网关适配器注册表（entries 是活的，需生命周期管理）。"""
+
 from __future__ import annotations
 
 import logging
@@ -50,10 +51,12 @@ class GatewayRegistry:
             raise RuntimeError("inbound_handler not set before start_all()")
         for adapter in self._adapters.values():
             name = adapter.name
+
             # _name=name 默认参在 def 时求值，捕获本轮 adapter 名；
             # 若直接闭包 name 会在循环结束后晚绑定到最后一个 adapter（bug）。
             async def _bound(chat_id: str, message: str, _name=name):
                 return await self._inbound_handler(_name, chat_id, message)
+
             adapter.set_message_handler(_bound)
             try:
                 await adapter.start()

@@ -1,7 +1,6 @@
 """记忆存储引擎 — facade，委托给 MemoryBackend"""
-from __future__ import annotations
 
-from typing import Optional
+from __future__ import annotations
 
 from .backend import MemoryBackend
 from .backends.json_backend import JSONBackend
@@ -19,7 +18,7 @@ class MemoryStore:
     def save(self, key: str, value, tags: list = None):
         return self.backend.save(key, value, tags)
 
-    def load(self, key: str) -> Optional[dict]:
+    def load(self, key: str) -> dict | None:
         return self.backend.load(key)
 
     def delete(self, key: str):

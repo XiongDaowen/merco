@@ -1,4 +1,5 @@
 """ToolMiddleware + Chain 单测"""
+
 import pytest
 
 from merco.tools.middleware import ToolContext, ToolMiddleware, ToolMiddlewareChain
@@ -52,6 +53,7 @@ async def test_chain_empty_executes_tool():
 
 class ShortCircuitMiddleware(ToolMiddleware):
     name = "short"
+
     async def before(self, ctx):
         return {"short_circuit": True}
 
@@ -159,6 +161,7 @@ async def test_chain_after_can_replace_result():
 
     class ReplaceAfter(ToolMiddleware):
         name = "replace"
+
         async def before(self, ctx):
             return None
 
@@ -180,6 +183,7 @@ async def test_chain_before_returns_context_continues():
 
     class Mutator(ToolMiddleware):
         name = "mutate"
+
         async def before(self, ctx):
             ctx.metadata["x"] = 1
             return ctx
@@ -246,6 +250,7 @@ async def test_error_handling_returns_tool_error():
     """ErrorHandlingMiddleware on_error 返回结构化结果"""
     mw = ErrorHandlingMiddleware()
     from unittest.mock import MagicMock
+
     tool = MagicMock()
     tool.parameters = {"type": "object"}
     ctx = ToolContext(tool_name="bash", arguments={"cmd": "x"}, tool=tool, error=RuntimeError("boom"))
@@ -256,6 +261,7 @@ async def test_error_handling_returns_tool_error():
 
 def test_tools_errors_module_imports():
     from merco.tools.errors import classify_error, empty_response, tool_error
+
     assert tool_error.__name__ == "tool_error"
     assert classify_error.__name__ == "classify_error"
     assert empty_response.__name__ == "empty_response"

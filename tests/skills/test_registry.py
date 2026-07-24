@@ -1,4 +1,5 @@
 """技能注册表单元测试"""
+
 import os
 import tempfile
 from unittest.mock import patch
@@ -20,21 +21,9 @@ class TestSkillRegistry:
     def sample_skills(self):
         """示例技能数据"""
         return [
-            {
-                "name": "project-vision",
-                "description": "项目愿景规划与文档生成",
-                "content": "# 项目愿景\n..."
-            },
-            {
-                "name": "debug-code",
-                "description": "代码调试与错误修复",
-                "content": "# 调试指南\n..."
-            },
-            {
-                "name": "code-review",
-                "description": "代码审查与质量评估",
-                "content": "# 审查标准\n..."
-            }
+            {"name": "project-vision", "description": "项目愿景规划与文档生成", "content": "# 项目愿景\n..."},
+            {"name": "debug-code", "description": "代码调试与错误修复", "content": "# 调试指南\n..."},
+            {"name": "code-review", "description": "代码审查与质量评估", "content": "# 审查标准\n..."},
         ]
 
     def test_register_and_get_skill(self, registry, sample_skills):
@@ -150,7 +139,7 @@ class TestSkillRegistry:
             with patch("merco.skills.loader.SkillLoader") as mock_loader_class:
                 mock_loader_class.load_from_directory.side_effect = [
                     [{"name": "skill1"}],
-                    [{"name": "skill2"}, {"name": "skill3"}]
+                    [{"name": "skill2"}, {"name": "skill3"}],
                 ]
 
                 registry.load_from_paths([tmpdir1, tmpdir2])

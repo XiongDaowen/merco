@@ -36,15 +36,13 @@ class BashTool(BaseTool):
             self._active_processes.add(process)
 
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(), timeout=timeout
-                )
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
                 return {
                     "stdout": stdout.decode("utf-8", errors="replace") if stdout else "",
                     "stderr": stderr.decode("utf-8", errors="replace") if stderr else "",
                     "returncode": process.returncode,
                 }
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 return {"error": f"Command timed out after {timeout}s"}
             finally:

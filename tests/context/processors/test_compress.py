@@ -1,4 +1,5 @@
 """上下文压缩处理器单元测试"""
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -17,9 +18,11 @@ class TestCompressProcessor:
     @pytest.fixture
     def mock_msg_tokens(self, monkeypatch):
         """Mock msg_tokens 函数"""
+
         def mock_tokens(msg):
             # 简单模拟：每条消息固定 100 tokens
             return 100
+
         monkeypatch.setattr("merco.context.processors.compress.msg_tokens", mock_tokens)
 
     @pytest.mark.asyncio
@@ -40,9 +43,11 @@ class TestCompressProcessor:
         """测试消息太少时不压缩（<=4条）"""
         # 4 条消息，即使 token 超过阈值也不压缩
         messages = [{"role": "user", "content": f"msg {i}"} for i in range(4)]
+
         # Mock 每条消息 300 tokens，总 1200 > 750
         def mock_large_tokens(msg):
             return 300
+
         monkeypatch.setattr("merco.context.processors.compress.msg_tokens", mock_large_tokens)
 
         result = await processor.process(messages)
@@ -106,11 +111,19 @@ class TestCompressProcessor:
         # 创建消息链，其中工具消息在截断边界
         messages = [
             {"role": "user", "content": "msg 0"},
-            {"role": "assistant", "content": "msg 1", "tool_calls": [{"id": "1", "function": {"name": "tool1", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "msg 1",
+                "tool_calls": [{"id": "1", "function": {"name": "tool1", "arguments": "{}"}}],
+            },
             {"role": "tool", "content": "tool result 1", "tool_call_id": "1"},
             {"role": "assistant", "content": "msg 3"},
             {"role": "user", "content": "msg 4"},
-            {"role": "assistant", "content": "msg 5", "tool_calls": [{"id": "2", "function": {"name": "tool2", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "msg 5",
+                "tool_calls": [{"id": "2", "function": {"name": "tool2", "arguments": "{}"}}],
+            },
             {"role": "tool", "content": "tool result 2", "tool_call_id": "2"},
             {"role": "assistant", "content": "msg 7"},
         ]

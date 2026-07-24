@@ -1,6 +1,5 @@
 """工具注册中心 — 管理所有可用工具，支持 toolset 过滤、可用性检查、动态描述"""
 
-from typing import Optional
 
 from merco.tools.middleware import ToolContext, ToolMiddlewareChain
 
@@ -35,7 +34,7 @@ class ToolRegistry:
         """注销一个工具"""
         self._tools.pop(name, None)
 
-    def get(self, name: str) -> Optional[BaseTool]:
+    def get(self, name: str) -> BaseTool | None:
         """获取工具"""
         return self._tools.get(name)
 

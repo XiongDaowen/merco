@@ -1,4 +1,5 @@
 """GatewayPlugin 测试：激活后注册内置 WebhookGateway。"""
+
 from unittest.mock import MagicMock
 
 from merco.gateway.registry import GatewayRegistry
@@ -10,9 +11,14 @@ from merco.plugins.builtin.gateway.plugin import GatewayPlugin
 def _make_ctx() -> PluginContext:
     """最小 ctx：gateway_registry 是真 registry，其余 MagicMock。"""
     return PluginContext(
-        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
-        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
-        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
+        hooks=MagicMock(),
+        tool_registry=MagicMock(),
+        prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(),
+        result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(),
+        recaller=MagicMock(),
+        config=MagicMock(),
         gateway_registry=GatewayRegistry(),
     )
 

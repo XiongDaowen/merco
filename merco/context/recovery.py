@@ -1,4 +1,5 @@
 """ContextCompressRecovery — compresses context when request body is too large."""
+
 from __future__ import annotations
 
 import logging
@@ -33,12 +34,10 @@ class ContextCompressRecovery(Recovery):
         )
 
         if not force:
-            if ctx.context_tokens > 0 and \
-                    ctx.context_tokens * 4 < self.min_context_bytes:
+            if ctx.context_tokens > 0 and ctx.context_tokens * 4 < self.min_context_bytes:
                 return False
 
-        logger.info("→ 压缩上下文后重试 LLM（第 %d/%d 次）",
-                     ctx.compress_count + 1, ctx.max_compress)
+        logger.info("→ 压缩上下文后重试 LLM（第 %d/%d 次）", ctx.compress_count + 1, ctx.max_compress)
         ctx.compress = True
         ctx.extra_wait = max(ctx.extra_wait, 0.5)
         return True

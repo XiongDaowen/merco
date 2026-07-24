@@ -21,6 +21,7 @@ from merco.tools.task_tools import TaskTool  # noqa: E402
 
 # ── 内置测试工具 ──────────────────────────────────────────
 
+
 class MockEchoTool(BaseTool):
     name = "echo"
     description = "回显参数"
@@ -96,6 +97,7 @@ def make_test_registry() -> ToolRegistry:
 
 # ── Mock ModelProvider ─────────────────────────────────────
 
+
 class MockModelProvider(ModelProvider):
     """按顺序消费预设响应，记录每次调用。"""
 
@@ -105,8 +107,7 @@ class MockModelProvider(ModelProvider):
         self.responses = list(responses or [])
         self.calls: list[dict] = []  # {messages, tools} per call
 
-    async def chat(self, messages: list[dict], tools: list[dict] = None,
-                   tool_choice: str = "auto") -> dict:
+    async def chat(self, messages: list[dict], tools: list[dict] = None, tool_choice: str = "auto") -> dict:
         self.calls.append({"messages": messages, "tools": tools})
         if not self.responses:
             return {"content": "", "finish_reason": "stop"}
@@ -115,13 +116,13 @@ class MockModelProvider(ModelProvider):
             resp["content"] = ""
         return resp
 
-    async def chat_stream(self, messages: list[dict], tools: list[dict] = None,
-                          tool_choice: str = "auto"):
+    async def chat_stream(self, messages: list[dict], tools: list[dict] = None, tool_choice: str = "auto"):
         resp = await self.chat(messages, tools, tool_choice)
         yield resp
 
 
 # ── Test Agent Factory ────────────────────────────────────
+
 
 @pytest.fixture
 async def test_agent(monkeypatch, tmp_path):

@@ -1,4 +1,5 @@
 """ToolMiddleware 集成测试"""
+
 import pytest
 
 from merco.tools.base import BaseTool
@@ -42,10 +43,13 @@ async def test_registry_plugin_can_inject_middleware():
 
     class Trace(ToolMiddleware):
         name = "trace"
+
         async def before(self, ctx):
             seen.append(("before", ctx.tool_name))
+
         async def after(self, ctx):
             seen.append(("after", ctx.tool_name))
+
         async def on_error(self, ctx):
             seen.append(("error", ctx.tool_name))
 
@@ -63,10 +67,13 @@ async def test_registry_plugin_can_short_circuit():
 
     class Deny(ToolMiddleware):
         name = "deny"
+
         async def before(self, ctx):
             return {"error": "blocked by plugin"}
+
         async def after(self, ctx):
             return None
+
         async def on_error(self, ctx):
             return None
 

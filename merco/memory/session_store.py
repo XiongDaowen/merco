@@ -14,6 +14,7 @@ logger = logging.getLogger("merco.session_store")
 
 class SessionWriteError(Exception):
     """Session 写入失败（重试 N 次后仍失败）"""
+
     pass
 
 
@@ -156,16 +157,21 @@ class SessionStore:
         now = _now()
         with self._conn() as conn:
             conn.execute(
-                "INSERT OR IGNORE INTO sessions (id, title, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO sessions (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
                 (session_id, title or "", now, now),
             )
             conn.commit()
         return {"id": session_id, "title": title, "created_at": now}
 
-    def save_message(self, session_id: str, role: str, content: str = "",
-                     tool_call_id: str = "", tool_calls: list | None = None,
-                     reasoning: str = "") -> int:
+    def save_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str = "",
+        tool_call_id: str = "",
+        tool_calls: list | None = None,
+        reasoning: str = "",
+    ) -> int:
         """保存消息，支持重试"""
         now = _now()
         tc_json = json.dumps(tool_calls or [], ensure_ascii=False)
@@ -181,9 +187,7 @@ class SessionStore:
                         (session_id, role, content, tool_call_id, tc_json, reasoning, now),
                     )
                     conn.execute(
-                        "UPDATE sessions SET updated_at = ?, "
-                        "message_count = message_count + 1 "
-                        "WHERE id = ?",
+                        "UPDATE sessions SET updated_at = ?, message_count = message_count + 1 WHERE id = ?",
                         (now, session_id),
                     )
                     conn.commit()
@@ -197,18 +201,12 @@ class SessionStore:
                 raise SessionWriteError(f"写入失败（非重试错误）: {e}") from e
 
         # 3 次全部失败
-        logger.warning(
-            "⚠️ Session 写入失败（已重试 3 次）\n"
-            "   可能是磁盘满或权限问题\n"
-            "   建议：检查 ~/.merco/ 目录"
-        )
+        logger.warning("⚠️ Session 写入失败（已重试 3 次）\n   可能是磁盘满或权限问题\n   建议：检查 ~/.merco/ 目录")
         raise SessionWriteError(f"写入失败: {last_error}")
 
     def load_session(self, session_id: str) -> dict | None:
         with self._conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM sessions WHERE id = ?", (session_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
             if not row:
                 return None
 
@@ -257,6 +255,7 @@ class SessionStore:
 
     def save_metadata(self, session_id: str, metadata: dict):
         import json
+
         with self._conn() as conn:
             conn.execute(
                 "UPDATE sessions SET metadata = ? WHERE id = ?",
@@ -336,9 +335,7 @@ class SessionStore:
 
             # Update message_count atomically
             conn.execute(
-                "UPDATE sessions SET message_count = ("
-                "SELECT COUNT(*) FROM messages WHERE session_id = ?"
-                ") WHERE id = ?",
+                "UPDATE sessions SET message_count = (SELECT COUNT(*) FROM messages WHERE session_id = ?) WHERE id = ?",
                 (new_id, new_id),
             )
             conn.commit()
@@ -350,7 +347,7 @@ class SessionStore:
             rows = conn.execute(
                 "SELECT id, title, created_at, message_count "
                 "FROM sessions WHERE parent_id = ? ORDER BY created_at DESC",
-                (session_id,)
+                (session_id,),
             ).fetchall()
             return [dict(r) for r in rows]
 

@@ -1,4 +1,5 @@
 """MCP server configuration dataclass."""
+
 from dataclasses import dataclass, field
 
 

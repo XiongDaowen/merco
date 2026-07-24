@@ -1,4 +1,5 @@
 """OpenAICompatibleProvider transport tests."""
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -44,6 +45,7 @@ async def test_chat_returns_normalized_dict():
 async def test_chat_translates_rate_limit_to_provider_error():
     import httpx
     import openai
+
     provider = OpenAICompatibleProvider(api_key="k", model="gpt-4o")
     provider.client = MagicMock()
     req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
@@ -59,15 +61,18 @@ async def test_chat_translates_rate_limit_to_provider_error():
 async def test_chat_stream_yields_chunks():
     provider = OpenAICompatibleProvider(api_key="k", model="gpt-4o")
     chunk = MagicMock()
-    ch = MagicMock(); ch.delta = MagicMock(content="to", tool_calls=None)
+    ch = MagicMock()
+    ch.delta = MagicMock(content="to", tool_calls=None)
     ch.delta.model_extra = {}
     ch.finish_reason = None
     chunk.choices = [ch]
     chunk.usage = None
     provider.client = MagicMock()
+
     async def _async_iter(items):
         for x in items:
             yield x
+
     provider.client.chat.completions.create = AsyncMock(return_value=_async_iter([chunk]))
     out = []
     async for c in provider.chat_stream([{"role": "user", "content": "hi"}]):
@@ -76,6 +81,7 @@ async def test_chat_stream_yields_chunks():
 
 
 # ── helpers for direct _parse_chunk / _parse_response tests ────────────────
+
 
 def _fake_tool_call(id="call_1", name="bash", arguments=None, index=None):
     """Build a tool_call object with the .id / .function.{name,arguments} / .index
@@ -95,6 +101,7 @@ def _fake_chunk(content=None, tool_calls=None, finish_reason=None, usage=None):
 
 
 # ── surrogate cleaning ───────────
+
 
 class TestSurrogateCleaning:
     """代理对字符清理测试 - _clean_surrogates 现在住在 openai_provider.py。"""
@@ -126,14 +133,13 @@ class TestSurrogateCleaning:
 
 # ── usage extraction (OpenAI-only) ───
 
+
 class TestUsageExtraction:
     """Token 用量提取测试 - _extract_usage 现在是 OpenAI-only，仅吐 cached_tokens。"""
 
     def test_extract_usage_basic(self):
         """基础用量提取。"""
-        response = SimpleNamespace(
-            usage=SimpleNamespace(prompt_tokens=100, completion_tokens=200, total_tokens=300)
-        )
+        response = SimpleNamespace(usage=SimpleNamespace(prompt_tokens=100, completion_tokens=200, total_tokens=300))
         usage = _extract_usage(response)
         assert usage["prompt_tokens"] == 100
         assert usage["completion_tokens"] == 200
@@ -162,6 +168,7 @@ class TestUsageExtraction:
 
 
 # ── _parse_chunk edge cases ────────────────────
+
 
 def test_parse_chunk_handles_none_arguments():
     """_parse_chunk 处理 tool_call 首 chunk 的 arguments=None 时不抛 TypeError，落地为 ""。"""
@@ -192,6 +199,7 @@ def test_parse_chunk_handles_none_id_and_name():
 
 
 # ── _parse_response edge cases ─────────────────
+
 
 def test_parse_response_handles_empty_choices():
     """_parse_response 中 response.choices 为空时不抛 IndexError，返回空 content + None finish。"""
@@ -224,9 +232,7 @@ async def test_chat_parses_tool_calls():
     规范化后是扁平结构（见 _normalize_tool_calls / _parse_response）。
     """
     provider = OpenAICompatibleProvider(api_key="k", model="gpt-4o")
-    tc = _fake_tool_call(
-        id="tc1", name="search", arguments='{"q":"x"}', index=0
-    )
+    tc = _fake_tool_call(id="tc1", name="search", arguments='{"q":"x"}', index=0)
     resp = _fake_choice(content="", finish="tool_calls", tool_calls=[tc])
     provider.client = MagicMock()
     provider.client.chat.completions.create = AsyncMock(return_value=resp)

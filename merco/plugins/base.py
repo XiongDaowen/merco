@@ -1,4 +1,5 @@
 """Plugin base class + PluginContext"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -42,10 +43,11 @@ _PIPELINE_WHITELIST = {
 
 class Plugin(ABC):
     """merco plugin base class"""
-    name: str = ""           # unique identifier
-    version: str = ""        # semantic version
-    description: str = ""    # one-line description
-    priority: int = 50       # 越大越早激活；>= BOOT_PRIORITY(100) 在 boot 阶段激活
+
+    name: str = ""  # unique identifier
+    version: str = ""  # semantic version
+    description: str = ""  # one-line description
+    priority: int = 50  # 越大越早激活；>= BOOT_PRIORITY(100) 在 boot 阶段激活
     depends_on: list[str] = []  # 必须先激活的插件名
 
     @abstractmethod
@@ -128,7 +130,7 @@ class PluginContext:
         if pipeline_name not in _PIPELINE_WHITELIST:
             raise ValueError(f"Pipeline '{pipeline_name}' not extensible")
         pipeline = getattr(self, pipeline_name, None)
-        if pipeline and hasattr(pipeline, 'use'):
+        if pipeline and hasattr(pipeline, "use"):
             pipeline.use(processor)
 
     def add_recaller(self, recaller: BaseRecaller) -> None:
@@ -171,7 +173,7 @@ class PluginSpec:
     """已发现插件的元数据 + 懒加载器。discovery 产出、manager 消费。"""
 
     name: str
-    source: str                            # "entrypoint" | "dir" | "manual"
+    source: str  # "entrypoint" | "dir" | "manual"
     loader: Callable[[], type] | None = None  # 返回 Plugin 子类（懒加载）
     version: str = ""
     description: str = ""

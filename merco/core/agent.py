@@ -40,22 +40,35 @@ logger = logging.getLogger("merco.agent")
 
 # ── System Prompt 构建器 ─────────────────────────────
 
+
 class PromptChunk:
     name: str = ""
-    def enabled(self, agent) -> bool: return True
-    def build(self, agent) -> str: raise NotImplementedError
+
+    def enabled(self, agent) -> bool:
+        return True
+
+    def build(self, agent) -> str:
+        raise NotImplementedError
+
 
 class PromptBuilder:
     def __init__(self):
         self._chunks: list[PromptChunk] = []
         self._disabled: set[str] = set()
+
     def use(self, chunk: PromptChunk) -> "PromptBuilder":
-        self._chunks.append(chunk); return self
-    def disable(self, name: str) -> None: self._disabled.add(name)
-    def enable(self, name: str) -> None: self._disabled.discard(name)
+        self._chunks.append(chunk)
+        return self
+
+    def disable(self, name: str) -> None:
+        self._disabled.add(name)
+
+    def enable(self, name: str) -> None:
+        self._disabled.discard(name)
+
     def build(self, agent) -> str:
-        return "\n\n".join(c.build(agent) for c in self._chunks
-                          if c.name not in self._disabled and c.enabled(agent))
+        return "\n\n".join(c.build(agent) for c in self._chunks if c.name not in self._disabled and c.enabled(agent))
+
 
 class BasePromptChunk(PromptChunk):
     name = "base"
@@ -67,10 +80,14 @@ class BasePromptChunk(PromptChunk):
 
 When you need to perform actions, use the available tools.
 Always be concise and helpful."""
-    def build(self, agent) -> str: return self.PROMPT
+
+    def build(self, agent) -> str:
+        return self.PROMPT
+
 
 class SkillsHintChunk(PromptChunk):
     """skill 自动注入：根据当前对话内容匹配相关 skill，注入提示到 system prompt"""
+
     name = "skills_hint"
 
     def enabled(self, agent) -> bool:
@@ -91,33 +108,33 @@ class SkillsHintChunk(PromptChunk):
         parts = []
         for skill in relevant:
             parts.append(
-                f"## 相关技能: {skill['name']}\n"
-                f"{skill['content']}\n"
-                f"（已自动加载。更多技能用 skill_view 查看。）"
+                f"## 相关技能: {skill['name']}\n{skill['content']}\n（已自动加载。更多技能用 skill_view 查看。）"
             )
         return "\n\n".join(parts)
 
 
 class TimeContextChunk(PromptChunk):
     name = "time_context"
+
     def build(self, agent) -> str:
         import datetime
+
         now = datetime.datetime.now()
         return (
             f"当前时间: {now.strftime('%Y-%m-%d %H:%M:%S')} "
             f"{now.astimezone().tzinfo or 'local'}  "
-            f"星期{['一','二','三','四','五','六','日'][now.weekday()]}"
+            f"星期{['一', '二', '三', '四', '五', '六', '日'][now.weekday()]}"
         )
 
 
 class Agent:
     """AI Agent 核心类，负责对话循环与工具调度"""
 
-
     def __init__(self, config: MercoConfig, tool_registry=None):
         self.config = config
         self.session = Session()
         from merco.sandbox import snapshot
+
         snapshot.set_current_session(self.session.id)
         self.context = ContextManager(max_tokens=config.max_input_tokens)
         self.tool_registry = tool_registry
@@ -125,6 +142,7 @@ class Agent:
 
         # 模型层：registry + 懒 provider property
         from merco.core.llm.registry import ModelRegistry
+
         self.model_registry = ModelRegistry()
         self._model_provider = None  # lazy cache; resolved by `provider` property
 
@@ -139,20 +157,25 @@ class Agent:
         # ── 可观察性 ──
         from merco.hooks.registry import HookRegistry
         from merco.observability.observer import Observer
+
         self.hooks = HookRegistry()
         self.observer = Observer(self.hooks)
 
         # ── 守卫：敏感命令执行前确认 ──
         from merco.sandbox.guard import BuiltinDefaultPolicy, PolicyPipeline, ToolGuard
+
         self._security_pipeline = PolicyPipeline()
-        self._security_pipeline.use(BuiltinDefaultPolicy(
-            mode=config.sandbox_mode,
-            user_rules=config.sandbox_rules,
-        ))
+        self._security_pipeline.use(
+            BuiltinDefaultPolicy(
+                mode=config.sandbox_mode,
+                user_rules=config.sandbox_rules,
+            )
+        )
         self.guard = ToolGuard(pipeline=self._security_pipeline)
 
         # ── Middleware：Guard + EditApply + ErrorHandling 装配到 ToolRegistry ──
         from merco.tools.middleware import EditApplyMiddleware, ErrorHandlingMiddleware, GuardMiddleware
+
         self.tool_registry.use(GuardMiddleware(self.guard))
         self.tool_registry.use(EditApplyMiddleware(diff_view=config.diff_view))
         self.tool_registry.use(ErrorHandlingMiddleware())
@@ -160,6 +183,7 @@ class Agent:
         # ── 会话持久化 ──
         from merco.memory.session_search import SessionSearch
         from merco.memory.session_store import SessionStore
+
         self._session_store = SessionStore(_get_db_path())
         self._search = SessionSearch(self._session_store)
         self.session = Session.resume_or_create(self._session_store)
@@ -179,6 +203,7 @@ class Agent:
         from merco.tools.processors.truncation import TruncationProcessor
 
         from .pipeline import EmptyResponsePipeline, RecoveryPipeline, ResultPipeline
+
         self.result_pipeline = ResultPipeline()
         self.result_pipeline.use(TruncationProcessor(max_bytes=16000))
         self.result_pipeline.use(SkillViewProcessor())
@@ -186,6 +211,7 @@ class Agent:
         self.recovery_pipeline.use(WaitRecovery(delay=3.0))
         self.recovery_pipeline.use(ContextCompressRecovery())
         from merco.core.recovery.model_fallback import ModelFallbackRecovery
+
         if self.config.model.fallbacks:
             self.recovery_pipeline.use(ModelFallbackRecovery(fallbacks=self.config.model.fallbacks))
         self.empty_response_pipeline = EmptyResponsePipeline()
@@ -235,7 +261,8 @@ class Agent:
         if self.config.memory_auto_extract_on_session_end:
             self.memory_strategies.append(
                 SessionEndExtractStrategy(
-                    self.memory_save_pipeline, lambda: self.provider,
+                    self.memory_save_pipeline,
+                    lambda: self.provider,
                     session_store=self._session_store,
                     max_per_session=self.config.memory_extract_max_per_session,
                     min_messages=self.config.memory_extract_min_messages,
@@ -255,10 +282,12 @@ class Agent:
 
         self.context_pipeline = ContextPipeline()
         self.context_pipeline.use(CacheOptimizeProcessor())
-        self.context_pipeline.use(CompressProcessor(
-            max_tokens=config.max_input_tokens,
-            threshold=config.compression_threshold,
-        ))
+        self.context_pipeline.use(
+            CompressProcessor(
+                max_tokens=config.max_input_tokens,
+                threshold=config.compression_threshold,
+            )
+        )
 
         # ── AgentProfile Registry ──
         from merco.agents.profile import BUILTIN_PROFILES, AgentProfileRegistry
@@ -270,17 +299,20 @@ class Agent:
         # Todo + SubAgent 由 SubAgentPlugin 激活时接管
         from merco.agents.subagent import SubAgentManager
         from merco.todo.manager import TodoManager
+
         self.todo_manager = TodoManager(f"{config.memory_path}/../todos.db")
         self.sub_agent_manager = SubAgentManager(self, self.agent_profiles)
 
         # ── Loop Policy ──
         from merco.core.loop_policy import DefaultLoopPolicy, LoopPolicyRegistry
+
         self.loop_policies = LoopPolicyRegistry()
         self.loop_policies.register(DefaultLoopPolicy())
         self.loop_policies.set_active("default")
 
         # ── Gateway Registry ──
         from merco.gateway.registry import GatewayRegistry
+
         self.gateway_registry = GatewayRegistry()
 
         self._plugin_ctx = PluginContext(
@@ -313,12 +345,14 @@ class Agent:
         self.mcp_manager = None
 
         # ── 中断清理管线 ──
-        self._cleanup_pipeline = (InterruptCleanupPipeline()
+        self._cleanup_pipeline = (
+            InterruptCleanupPipeline()
             .use(InjectCancelMessages())
             .use(TerminateSubprocesses())
             .use(CloseMCPConnections())
             .use(EmitInterruptHooks())
-            .use(SavePartialState()))
+            .use(SavePartialState())
+        )
 
     @property
     def provider(self):
@@ -416,12 +450,13 @@ class Agent:
 
             # 如果之后新增了大量消息，checkpoint 已过时 → 全量恢复后重新压缩
             if original_count > 0 and len(all_msgs) > original_count + 20:
-                logger.debug("_restore_context: checkpoint 过时 (original=%d now=%d)，全量恢复",
-                            original_count, len(all_msgs))
+                logger.debug(
+                    "_restore_context: checkpoint 过时 (original=%d now=%d)，全量恢复", original_count, len(all_msgs)
+                )
                 del self.session.metadata["compress_checkpoint"]
                 # fall through to full restore below
             else:
-                tail = all_msgs[-tail_count * 2:] if len(all_msgs) > tail_count * 2 else all_msgs
+                tail = all_msgs[-tail_count * 2 :] if len(all_msgs) > tail_count * 2 else all_msgs
 
                 if summary:
                     self.context.add({"role": "system", "content": summary})
@@ -437,8 +472,7 @@ class Agent:
         for msg in self.session.messages:
             r = msg.get("reasoning", "")
             if r:
-                logger.debug("_restore_context: session 消息含 reasoning (%d chars, 已丢弃)",
-                            len(r))
+                logger.debug("_restore_context: session 消息含 reasoning (%d chars, 已丢弃)", len(r))
             entry = {"role": msg["role"], "content": msg.get("content", "")}
             if "tool_call_id" in msg:
                 entry["tool_call_id"] = msg["tool_call_id"]
@@ -456,10 +490,9 @@ class Agent:
 
     def _wrap_up_messages(self, messages):
         """构造收尾消息列表：追加总结请求。"""
-        return messages + [{
-            "role": "user",
-            "content": "已达到最大工具调用次数。请基于已有信息给出最终回复，不要再调用工具。"
-        }]
+        return messages + [
+            {"role": "user", "content": "已达到最大工具调用次数。请基于已有信息给出最终回复，不要再调用工具。"}
+        ]
 
     async def _wrap_up_call(self, messages):
         """收尾调用：无工具文字回应。"""
@@ -471,7 +504,6 @@ class Agent:
         self.session.add_message("assistant", content)
         self.context.add({"role": "assistant", "content": content})
         return content
-
 
     async def _agent_loop(self) -> str:
         """Agent 主循环。工具预算耗尽时直接收尾。"""
@@ -498,22 +530,24 @@ class Agent:
                     if before.stop:
                         response = before.data["response"]
                     else:
-                        response = await self._response_provider.get_response(
-                            self, messages, tools or None)
+                        response = await self._response_provider.get_response(self, messages, tools or None)
                 else:
-                    response = await self._response_provider.get_response(
-                        self, messages, tools or None)
+                    response = await self._response_provider.get_response(self, messages, tools or None)
             except Exception as e:
                 _recovery_attempts += 1
                 if _recovery_attempts > 3:
                     from merco.core.llm.errors import llm_error
+
                     return llm_error(e)
                 from .pipeline import RecoveryContext
+
                 ctx = RecoveryContext(
                     error=e,
                     status_code=e.status_code if isinstance(e, ProviderError) else 0,
                     context_tokens=self.context.current_tokens,
-                    tool_count=len(tools), model=self.config.model.model)
+                    tool_count=len(tools),
+                    model=self.config.model.model,
+                )
                 if await self.recovery_pipeline.attempt(ctx):
                     if ctx.extra_wait > 0:
                         await asyncio.sleep(ctx.extra_wait)
@@ -525,6 +559,7 @@ class Agent:
                         self._model_provider = None  # invalidate -> re-resolve on next access
                     continue
                 from merco.core.llm.errors import llm_error
+
                 return llm_error(e)
 
             after = await self.hooks.emit("llm.after_chat", response=response)
@@ -537,23 +572,31 @@ class Agent:
                 self.context.last_actual_tokens = usage["prompt_tokens"]
 
             tokens_in = usage.get("prompt_tokens") if usage else self.context.total_tokens
-            tokens_out = usage.get("completion_tokens") if usage else est_tk(
-                (response.get("content") or "") + (response.get("reasoning") or ""))
+            tokens_out = (
+                usage.get("completion_tokens")
+                if usage
+                else est_tk((response.get("content") or "") + (response.get("reasoning") or ""))
+            )
 
-            await self.hooks.emit("llm.chat",
-                                   duration=time.monotonic() - t0,
-                                   tokens_in=tokens_in,
-                                   tokens_out=tokens_out,
-                                   cached_tokens=usage.get("cached_tokens", 0) if usage else 0,
-                                   cache_read_tokens=usage.get("cache_read_tokens", 0) if usage else 0)
+            await self.hooks.emit(
+                "llm.chat",
+                duration=time.monotonic() - t0,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                cached_tokens=usage.get("cached_tokens", 0) if usage else 0,
+                cache_read_tokens=usage.get("cache_read_tokens", 0) if usage else 0,
+            )
 
             tool_calls = response.get("tool_calls")
             if tool_calls:
-                logger.debug("Agent 循环: 收到 %d 个 tool_calls: %s",
-                            len(tool_calls),
-                            [f"{tc['name']}({tc.get('id','?')[:8]})" for tc in tool_calls])
+                logger.debug(
+                    "Agent 循环: 收到 %d 个 tool_calls: %s",
+                    len(tool_calls),
+                    [f"{tc['name']}({tc.get('id', '?')[:8]})" for tc in tool_calls],
+                )
 
             from merco.core.loop_policy import LoopState
+
             state = LoopState(
                 iteration=self._tool_calls_count,
                 tool_calls_count=self._tool_calls_count,
@@ -565,17 +608,16 @@ class Agent:
 
             if decision.action == "exit":
                 content = response.get("content", "") or ""
-                content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL).strip()
+                content = re.sub(r"<\w+:tool_call[^>]*>.*?</\w+:tool_call>", "", content, flags=re.DOTALL).strip()
                 reasoning = response.get("reasoning", "")
                 if reasoning:
-                    logger.debug("Agent 循环: 收到 reasoning (%d chars)，丢弃（不存入 context）",
-                                len(reasoning))
+                    logger.debug("Agent 循环: 收到 reasoning (%d chars)，丢弃（不存入 context）", len(reasoning))
                 if not content:
                     _empty_retries += 1
                     if _empty_retries == 1 and reasoning:
                         from .pipeline import EmptyResponseContext
-                        ectx = EmptyResponseContext(
-                            reasoning=reasoning, retry_count=_empty_retries)
+
+                        ectx = EmptyResponseContext(reasoning=reasoning, retry_count=_empty_retries)
                         if await self.empty_response_pipeline.attempt(ectx):
                             if ectx.inject_error:
                                 self.context.add({"role": "user", "content": ectx.inject_error})
@@ -590,14 +632,16 @@ class Agent:
             valid_names = {t["function"]["name"] for t in tools} if tools else set()
             valid_calls = [tc for tc in tool_calls if tc["name"] in valid_names]
             if len(valid_calls) < len(tool_calls):
-                logger.debug("过滤 %d 个幻觉工具调用: %s",
-                            len(tool_calls) - len(valid_calls),
-                            [tc["name"] for tc in tool_calls if tc["name"] not in valid_names])
+                logger.debug(
+                    "过滤 %d 个幻觉工具调用: %s",
+                    len(tool_calls) - len(valid_calls),
+                    [tc["name"] for tc in tool_calls if tc["name"] not in valid_names],
+                )
             if not valid_calls:
                 # 全部是幻觉或无工具可用 → 当作文字回答
                 content = response.get("content", "") or ""
                 # 清理 LLM 幻觉的工具调用标签
-                content = re.sub(r'<\w+:tool_call[^>]*>.*?</\w+:tool_call>', '', content, flags=re.DOTALL)
+                content = re.sub(r"<\w+:tool_call[^>]*>.*?</\w+:tool_call>", "", content, flags=re.DOTALL)
                 content = content.strip()
                 if not content:
                     content = "已达到调用上限。"
@@ -608,8 +652,12 @@ class Agent:
 
             # 批量超上限 → 不执行工具，直接收尾
             if self._tool_calls_count + len(tool_calls) > self._max_tool_calls:
-                logger.debug("Agent 循环: 工具调用超上限 (%d + %d > %d)，跳过执行直接收尾",
-                            self._tool_calls_count, len(tool_calls), self._max_tool_calls)
+                logger.debug(
+                    "Agent 循环: 工具调用超上限 (%d + %d > %d)，跳过执行直接收尾",
+                    self._tool_calls_count,
+                    len(tool_calls),
+                    self._max_tool_calls,
+                )
                 console.print("[dim]  已截停，达到调用上限[/dim]")
                 return await self._wrap_up_call(self._wrap_up_messages(await self._build_messages()))
 
@@ -627,7 +675,7 @@ class Agent:
         for msg in reversed(self.context.messages):
             if msg.get("role") != "assistant":
                 continue
-            for tc in (msg.get("tool_calls") or []):
+            for tc in msg.get("tool_calls") or []:
                 tc_id = tc.get("id") if isinstance(tc, dict) else None
                 if tc_id and tc_id not in completed_ids:
                     orphans.append(tc)
@@ -641,14 +689,16 @@ class Agent:
             if not (self.config.streaming.enabled and self.config.streaming.content):
                 console.print(Panel(Markdown(assistant_content), border_style="dim"))
         api_tool_calls = [
-            {"id": tc["id"], "type": "function",
-             "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=True)}}
+            {
+                "id": tc["id"],
+                "type": "function",
+                "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=True)},
+            }
             for tc in tool_calls
         ]
         reasoning = response.get("reasoning", "")
         if reasoning:
-            logger.debug("_dispatch_tool_calls: response 有 reasoning (%d chars) 但未传入 context",
-                        len(reasoning))
+            logger.debug("_dispatch_tool_calls: response 有 reasoning (%d chars) 但未传入 context", len(reasoning))
         self.context.add({"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls})
         self.session.add_message("assistant", assistant_content, tool_calls=api_tool_calls)
         logger.debug("⚙ 执行 %d 个工具调用: %s", len(tool_calls), [tc["name"] for tc in tool_calls])
@@ -673,7 +723,7 @@ class Agent:
             final_line = f"[dim]  ✓ {tool_name} ({progress}) {arg_str}  99.9s[/dim]"
             if len(final_line) >= term_w:
                 avail = term_w - len(f"  ✓ {tool_name} ({progress}) ") - 3 - 7
-                arg_str = arg_str[:max(0, avail)] + "..."
+                arg_str = arg_str[: max(0, avail)] + "..."
 
             # ── 守卫检查 ──
             t0 = time.monotonic()
@@ -682,7 +732,6 @@ class Agent:
                 result = {"error": "操作已被拦截或取消"}
 
             elif self.tool_registry:
-
                 _INTERACTIVE_TOOLS = {"edit_file"}  # 会弹确认提示的工具，不能用 spinner（会覆盖终端）
                 if tool_name in _INTERACTIVE_TOOLS:
                     console.print(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]")
@@ -702,20 +751,32 @@ class Agent:
                                 await self.hooks.emit("tool.before_execute", tool_name=tool_name, args=arguments)
                                 result = await tool.execute(**arguments)
                     elapsed = time.monotonic() - t0
-                    console.print(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]")
+                    console.print(
+                        f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]"
+                    )
                 else:
                     import itertools
 
                     from rich.live import Live
                     from rich.text import Text
-                    with Live(Text.from_markup(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]"), refresh_per_second=8, transient=False) as live:
+
+                    with Live(
+                        Text.from_markup(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]"),
+                        refresh_per_second=8,
+                        transient=False,
+                    ) as live:
                         spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+
                         async def _run_with_spinner():
                             try:
                                 await self.hooks.emit("tool.before_execute", tool_name=tool_name, args=arguments)
                                 task = asyncio.create_task(self.tool_registry.execute(tool_name, **arguments))
                                 while not task.done():
-                                    live.update(Text.from_markup(f"[bright_black]  {next(spinner)} {tool_name} ({progress}) {arg_str}[/bright_black]"))
+                                    live.update(
+                                        Text.from_markup(
+                                            f"[bright_black]  {next(spinner)} {tool_name} ({progress}) {arg_str}[/bright_black]"
+                                        )
+                                    )
                                     await asyncio.sleep(0.1)
                                 return await task
                             except GuardConfirmationRequired as e:
@@ -729,30 +790,35 @@ class Agent:
                                     return {"error": f"工具 '{tool_name}' 不存在"}
                                 await self.hooks.emit("tool.before_execute", tool_name=tool_name, args=arguments)
                                 return await tool.execute(**arguments)
+
                         result = await _run_with_spinner()
                         elapsed = time.monotonic() - t0
-                        live.update(Text.from_markup(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]"))
+                        live.update(
+                            Text.from_markup(
+                                f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]"
+                            )
+                        )
             else:
                 result = {"error": f"Tool '{tool_name}' not available"}
 
-            logger.debug("  ◀ 工具 %s 返回: %s", tool_name, 
-                        str(result)[:500])
+            logger.debug("  ◀ 工具 %s 返回: %s", tool_name, str(result)[:500])
 
             # ── 可观察性 ──
             elapsed = time.monotonic() - t0
             if "error" in result:
-                await self.hooks.emit("tool.error", tool_name=tool_name,
-                                      error=result.get("error", ""))
+                await self.hooks.emit("tool.error", tool_name=tool_name, error=result.get("error", ""))
             else:
-                await self.hooks.emit("tool.after_execute", tool_name=tool_name,
-                                      duration=elapsed)
+                await self.hooks.emit("tool.after_execute", tool_name=tool_name, duration=elapsed)
 
             # ── Pipeline 处理 ──
             tool = self.tool_registry.get(tool_name) if self.tool_registry else None
             pctx = ProcessContext(
-                tool_name=tool_name, arguments=arguments, result=result,
-                tool_schema=getattr(tool, 'parameters', None),
-                tool_call_id=tool_call_id)
+                tool_name=tool_name,
+                arguments=arguments,
+                result=result,
+                tool_schema=getattr(tool, "parameters", None),
+                tool_call_id=tool_call_id,
+            )
             await self.result_pipeline.process(pctx)
             if isinstance(pctx.result, str):
                 content = pctx.result
@@ -761,18 +827,14 @@ class Agent:
                     content = json.dumps(pctx.result, ensure_ascii=False)
                 except (TypeError, ValueError):
                     content = str(pctx.result)
-            tool_results.append({
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": content})
+            tool_results.append({"role": "tool", "tool_call_id": tool_call_id, "content": content})
             exec_contexts.append(pctx)
             self._tool_calls_count += 1
 
         logger.debug("_execute_tool_calls: %d 个结果存入 context", len(tool_results))
         for tr in tool_results:
             self.context.add(tr)
-            self.session.add_message("tool", tr["content"],
-                                     tool_call_id=tr.get("tool_call_id", ""))
+            self.session.add_message("tool", tr["content"], tool_call_id=tr.get("tool_call_id", ""))
         for pctx in exec_contexts:
             for msg in pctx.extra_messages:
                 self.context.add(msg)
@@ -790,8 +852,12 @@ class Agent:
         for i, m in enumerate(messages):
             r = m.get("reasoning", "")
             if r:
-                logger.warning("_build_messages: messages[%d] 含有 reasoning (%d chars, 前 100=%s…)",
-                               i, len(r), r[:100].replace("\n", "\\n"))
+                logger.warning(
+                    "_build_messages: messages[%d] 含有 reasoning (%d chars, 前 100=%s…)",
+                    i,
+                    len(r),
+                    r[:100].replace("\n", "\\n"),
+                )
 
         return messages
 
@@ -831,9 +897,7 @@ class Agent:
             + "\n\nSummary:"
         )
         try:
-            response = await self.provider.chat(
-                [{"role": "user", "content": prompt}], tools=[]
-            )
+            response = await self.provider.chat([{"role": "user", "content": prompt}], tools=[])
             content = response.get("content", "").strip()
             return f"[Earlier conversation summary]: {content}"
         except Exception as e:
@@ -875,9 +939,7 @@ class Agent:
                 compress_strategy="sliding",
             )
             self.context.messages = compressed
-            self.context.current_tokens = sum(
-                msg_tokens(m) for m in compressed
-            )
+            self.context.current_tokens = sum(msg_tokens(m) for m in compressed)
             # Store compression checkpoint so restart doesn't re-expand
             self.session.metadata["compress_checkpoint"] = {
                 "summary": summary_result or "",
@@ -906,16 +968,15 @@ class Agent:
         """
         rule = result.rule
 
-        console.print(Panel(
-            f"[yellow]{result.command}[/yellow]\n"
-            f"[dim]匹配规则: {rule.pattern if rule else '?'}[/dim]",
-            title="敏感命令",
-            border_style="yellow",
-        ))
-
         console.print(
-            "[bold yellow]确认执行？[/bold yellow] [dim]y/N [/dim]", end=""
+            Panel(
+                f"[yellow]{result.command}[/yellow]\n[dim]匹配规则: {rule.pattern if rule else '?'}[/dim]",
+                title="敏感命令",
+                border_style="yellow",
+            )
         )
+
+        console.print("[bold yellow]确认执行？[/bold yellow] [dim]y/N [/dim]", end="")
         resp = await asyncio.to_thread(input, "")
         return resp.strip().lower() in ("y", "yes")
 
@@ -934,7 +995,9 @@ class Agent:
         current = actual if actual > 0 else self.context.total_tokens
         ratio = min(current / max_tokens, 1.0) if max_tokens > 0 else 0
         return {
-            "current": current, "max": max_tokens, "ratio": ratio,
+            "current": current,
+            "max": max_tokens,
+            "ratio": ratio,
             "threshold": self.config.compression_threshold,
             "is_estimate": actual == 0,
             "tool_count": self._tool_calls_count,
@@ -949,6 +1012,7 @@ class Agent:
         self._tool_calls_count = 0
         self._current_prompt = ""
         self._error_displayed_in_stream = False
+
 
 def _get_db_path() -> str:
     """跟随配置路径确定 sessions.db 位置"""

@@ -1,4 +1,5 @@
 """Superpower plugin — example builtin plugin for merco"""
+
 from __future__ import annotations
 
 import logging
@@ -14,6 +15,7 @@ logger = logging.getLogger("merco.plugins.superpower")
 
 class SuperpowerHintChunk:
     """Prompt chunk that informs the LLM about available superpowers"""
+
     name = "superpower_hint"
 
     def enabled(self, agent) -> bool:
@@ -27,6 +29,7 @@ Use them when appropriate to help the user."""
 
 class SuperpowerPlugin(Plugin):
     """Example builtin plugin demonstrating merco's plugin system"""
+
     name = "superpower"
     version = "1.0.0"
     description = "Extends merco with superpower capabilities"

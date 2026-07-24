@@ -1,4 +1,5 @@
 """TruncationProcessor — truncates large tool results."""
+
 from __future__ import annotations
 
 import json
@@ -32,13 +33,17 @@ class TruncationProcessor(Processor):
     """
 
     name = "truncation"
-    _last_cleanup = 0.0          # 上次清理时间戳（类级，所有实例共享）
-    _cleanup_interval = 3600     # 清理间隔（秒），1 小时
+    _last_cleanup = 0.0  # 上次清理时间戳（类级，所有实例共享）
+    _cleanup_interval = 3600  # 清理间隔（秒），1 小时
 
-    def __init__(self, max_bytes: int = 4000, *,
-                 retention_days: int = 7,
-                 max_file_bytes: int = 50 * 1024 * 1024,
-                 trunc_dir: str | None = None):
+    def __init__(
+        self,
+        max_bytes: int = 4000,
+        *,
+        retention_days: int = 7,
+        max_file_bytes: int = 50 * 1024 * 1024,
+        trunc_dir: str | None = None,
+    ):
         self.max_bytes = max_bytes
         self.retention_days = retention_days
         self.max_file_bytes = max_file_bytes
@@ -100,8 +105,7 @@ class TruncationProcessor(Processor):
                 f"这是截断缓存文件，请用 read_file 的 offset/limit 翻页，"
                 f"或用 bash grep 搜索关键信息。"
             )
-            ctx.result = _walk_truncate(ctx.result, per_value,
-                                        "[截断缓存文件]", pagination)
+            ctx.result = _walk_truncate(ctx.result, per_value, "[截断缓存文件]", pagination)
             return False
 
         # 正常截断：写缓存文件 + 分页

@@ -1,4 +1,5 @@
 """TodoItem 数据模型单测"""
+
 from merco.todo.models import TodoItem
 
 

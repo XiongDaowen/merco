@@ -55,9 +55,7 @@ async def test_llm_after_chat_can_replace_response(test_agent):
 
     async def after_chat(response, **kwargs):
         assert response["content"] == "original"
-        return HookResult(
-            data={"response": {"content": "modified", "finish_reason": "stop"}}
-        )
+        return HookResult(data={"response": {"content": "modified", "finish_reason": "stop"}})
 
     agent.hooks.on("llm.after_chat", after_chat)
 

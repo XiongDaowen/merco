@@ -1,4 +1,5 @@
 """OpenAI-compatible ModelProvider transport."""
+
 from __future__ import annotations
 
 import asyncio
@@ -7,7 +8,6 @@ import logging
 import re
 import time
 from collections.abc import AsyncIterator
-from typing import Optional
 
 from merco.core.llm.base import ModelProvider
 from merco.core.llm.errors import (
@@ -25,12 +25,12 @@ from merco.core.llm.thinking import (
 
 logger = logging.getLogger("merco.llm.openai")
 
-_SURROGATE_RE = re.compile(r'[\ud800-\udfff]')
+_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
 
 
 def _clean_surrogates(obj):  # recursive surrogate cleaning
     if isinstance(obj, str):
-        return _SURROGATE_RE.sub('', obj)
+        return _SURROGATE_RE.sub("", obj)
     if isinstance(obj, list):
         return [_clean_surrogates(x) for x in obj]
     if isinstance(obj, dict):
@@ -58,6 +58,7 @@ def _extract_usage(response) -> dict:  # OpenAI-only usage extraction
 def translate_openai_error(exc: Exception) -> ProviderError:
     """Translate an openai SDK exception into a merco ProviderError subclass."""
     import openai
+
     status = getattr(exc, "status_code", None) or 0
     if isinstance(exc, openai.AuthenticationError):
         return AuthError(str(exc), status_code=status or 401)
@@ -81,12 +82,12 @@ class OpenAICompatibleProvider(ModelProvider):
         self,
         api_key: str,
         model: str = "gpt-4",
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         cooldown: float = 0,
-        extra_params: Optional[dict] = None,
-        headers: Optional[dict] = None,
+        extra_params: dict | None = None,
+        headers: dict | None = None,
     ):
         self.model = model
         self.temperature = temperature
@@ -99,6 +100,7 @@ class OpenAICompatibleProvider(ModelProvider):
 
         import httpx
         from openai import AsyncOpenAI
+
         client_kwargs: dict = {
             "api_key": api_key,
             "max_retries": 0,
@@ -201,8 +203,7 @@ class OpenAICompatibleProvider(ModelProvider):
         if message.tool_calls:
             normalized = self._normalize_tool_calls(message.tool_calls)
             result["tool_calls"] = [
-                {**tc, "arguments": json.loads(tc["arguments"]) if tc["arguments"] else {}}
-                for tc in normalized
+                {**tc, "arguments": json.loads(tc["arguments"]) if tc["arguments"] else {}} for tc in normalized
             ]
         return result
 

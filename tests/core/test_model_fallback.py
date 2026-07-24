@@ -1,4 +1,5 @@
 """ModelFallbackRecovery - cross-provider fallback via ModelConfig."""
+
 import pytest
 
 from merco.core.config import ModelConfig

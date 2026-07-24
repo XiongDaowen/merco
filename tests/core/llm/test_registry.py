@@ -1,4 +1,5 @@
 """ModelRegistry - sole source of truth for providers + credential resolution."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,6 +18,7 @@ def test_builtin_providers_seeded():
 def test_builtin_anthropic_uses_native_provider_class():
     reg = ModelRegistry()
     from merco.core.llm.anthropic_provider import AnthropicNativeProvider
+
     info = reg.get("anthropic")
     assert info.provider_class is AnthropicNativeProvider
     assert info.base_url == "https://api.anthropic.com"
@@ -52,6 +54,7 @@ def test_select_unknown_provider_with_base_url_falls_back_to_openai_compatible()
     is a custom OpenAI-compatible endpoint, not a typo -> select() falls back
     to OpenAICompatibleProvider instead of raising KeyError."""
     from merco.core.llm.openai_provider import OpenAICompatibleProvider
+
     reg = ModelRegistry()
     cfg = ModelConfig(
         provider="scnet",  # novel name, NOT in _BUILTIN_PROVIDERS
@@ -70,6 +73,7 @@ def test_select_known_builtin_still_works():
     """Regression guard: the try/except refactor in select() must not break the
     normal builtin path."""
     from merco.core.llm.openai_provider import OpenAICompatibleProvider
+
     reg = ModelRegistry()
     cfg = ModelConfig(provider="openai", model="gpt-4o", api_key="sk-test")
     provider = reg.select(cfg)

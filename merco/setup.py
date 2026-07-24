@@ -21,14 +21,16 @@ def run_setup_wizard() -> None:
     """交互式配置 API provider、key、model，写入 merco.json"""
 
     # ── 欢迎 ──
-    console.print(Panel(
-        "[bold]🚀 欢迎使用 Merco！[/bold]\n\n"
-        "首次使用需要配置 AI 模型接口。\n"
-        "已有 API key？一分钟搞定。\n\n"
-        "[dim]按 Ctrl+C 随时退出[/dim]",
-        title="Merco Setup",
-        border_style="green",
-    ))
+    console.print(
+        Panel(
+            "[bold]🚀 欢迎使用 Merco！[/bold]\n\n"
+            "首次使用需要配置 AI 模型接口。\n"
+            "已有 API key？一分钟搞定。\n\n"
+            "[dim]按 Ctrl+C 随时退出[/dim]",
+            title="Merco Setup",
+            border_style="green",
+        )
+    )
 
     # ── 步骤 1：选平台 ──
     provider = _pick_provider(ModelRegistry().list())
@@ -102,7 +104,11 @@ def _ask_api_key(provider: ModelProviderInfo) -> str:
         if env_val:
             masked = env_val[:8] + "..." if len(env_val) > 8 else env_val
             console.print(f"[dim]环境变量 {provider.key_env} 已设置 ({masked})[/dim]")
-            use_env = console.input("[bold yellow]使用环境变量？按 Enter 确认，输入 n 手动填写[/bold yellow]: ").strip().lower()
+            use_env = (
+                console.input("[bold yellow]使用环境变量？按 Enter 确认，输入 n 手动填写[/bold yellow]: ")
+                .strip()
+                .lower()
+            )
             if use_env != "n":
                 return ""  # 空字符串 = 用环境变量
 
@@ -140,8 +146,7 @@ def _ask_model(provider: ModelProviderInfo) -> str:
         return choice  # 用户自定义输入
     else:
         default = provider.default_model or "gpt-4o"
-        choice = console.input(
-            f"[bold yellow]模型名 (按 Enter 使用 {default})[/bold yellow]: ").strip()
+        choice = console.input(f"[bold yellow]模型名 (按 Enter 使用 {default})[/bold yellow]: ").strip()
         return choice or default
 
 
@@ -165,7 +170,9 @@ def _confirm_and_save(provider: ModelProviderInfo, api_key: str, model: str, bas
     console.print("\n[bold]确认配置[/bold]")
     console.print(f"  平台:     {provider.display_name}")
     console.print(f"  模型:     {model}")
-    console.print(f"  API Key:  {'(环境变量)' if not api_key else api_key[:8] + '...' if len(api_key) > 8 else api_key}")
+    console.print(
+        f"  API Key:  {'(环境变量)' if not api_key else api_key[:8] + '...' if len(api_key) > 8 else api_key}"
+    )
     console.print(f"  base_url: {base_url}")
     console.print(f"  配置文件: {OUTPUT_PATH}")
 
@@ -191,6 +198,7 @@ def _confirm_and_save(provider: ModelProviderInfo, api_key: str, model: str, bas
 
     # ── 安装内置技能 ──
     from merco.skills.builtin import install_builtin_skills
+
     installed = install_builtin_skills()
     if installed:
         console.print(f"[green]✅ 已安装内置技能: {', '.join(installed)}[/green]")

@@ -1,4 +1,5 @@
 """ToolContext + ToolMiddleware + ToolMiddlewareChain"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -13,6 +14,7 @@ from merco.sandbox.guard import GuardAction
 @dataclass
 class ToolContext:
     """工具执行上下文，贯穿 before/during/after"""
+
     tool_name: str
     arguments: dict
     tool: object | None = None
@@ -23,6 +25,7 @@ class ToolContext:
 
 class ToolMiddleware(ABC):
     """工具中间件基类"""
+
     name: str = ""
 
     @abstractmethod
@@ -83,6 +86,7 @@ class ToolMiddlewareChain:
 
 class GuardMiddleware(ToolMiddleware):
     """包装 ToolGuard — DENY 返回错误，ASK 抛异常，ALLOW 继续"""
+
     name = "guard"
 
     def __init__(self, guard):
@@ -94,6 +98,7 @@ class GuardMiddleware(ToolMiddleware):
             return {"error": f"操作被安全守卫拒绝: {result.reason}", "tool": ctx.tool_name}
         if result.action == GuardAction.ASK:
             from merco.sandbox.guard import GuardConfirmationRequired
+
             raise GuardConfirmationRequired(result)
         return None
 
@@ -106,6 +111,7 @@ class GuardMiddleware(ToolMiddleware):
 
 class ErrorHandlingMiddleware(ToolMiddleware):
     """工具异常 → 结构化 tool_error 结果"""
+
     name = "error_handling"
 
     async def before(self, ctx: ToolContext):
@@ -116,15 +122,17 @@ class ErrorHandlingMiddleware(ToolMiddleware):
 
     async def on_error(self, ctx: ToolContext):
         from merco.tools.errors import tool_error
+
         return tool_error(
             ctx.error,
             ctx.tool_name,
-            getattr(ctx.tool, 'parameters', None) if ctx.tool else None,
+            getattr(ctx.tool, "parameters", None) if ctx.tool else None,
         )
 
 
 class EditApplyMiddleware(ToolMiddleware):
     """应用 EditFile planned_edit：确认、快照、写入"""
+
     name = "edit_apply"
 
     def __init__(self, diff_view: str = "unified"):

@@ -1,4 +1,5 @@
 """可编程 LLM Mock + Response DSL"""
+
 from __future__ import annotations
 
 import asyncio
@@ -29,9 +30,7 @@ class Response:
         return cls(content=text, delay=delay)
 
     @classmethod
-    def tool_call(
-        cls, name: str, arguments: dict, *, id: str | None = None
-    ) -> Response:
+    def tool_call(cls, name: str, arguments: dict, *, id: str | None = None) -> Response:
         if id is None:
             _counter[0] += 1
             id = f"manual_{_counter[0] - 1}"
@@ -66,16 +65,12 @@ class ProgrammableModelProvider(ModelProvider):
         self._sequence_fn = None
         return self
 
-    def expect_sequence(
-        self, fn: Callable[[int], Response]
-    ) -> ProgrammableModelProvider:
+    def expect_sequence(self, fn: Callable[[int], Response]) -> ProgrammableModelProvider:
         self._sequence_fn = fn
         self._queue = []
         return self
 
-    def when(
-        self, condition: Callable, response: Response
-    ) -> ProgrammableModelProvider:
+    def when(self, condition: Callable, response: Response) -> ProgrammableModelProvider:
         self._conditions.append((condition, response))
         return self
 

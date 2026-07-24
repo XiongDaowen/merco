@@ -1,4 +1,5 @@
 """ModelFallbackRecovery - cross-provider fallback on failure."""
+
 from __future__ import annotations
 
 from merco.core.pipeline import Recovery, RecoveryContext

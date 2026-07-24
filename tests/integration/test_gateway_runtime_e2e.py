@@ -4,6 +4,7 @@
 + _final_text_response（合法终态响应，无 tool_calls，loop 一轮退出）。
 手动注册 WebhookGateway（sync 构造未走插件激活），证明 Runtime 接线正确。
 """
+
 from unittest.mock import AsyncMock
 
 import httpx

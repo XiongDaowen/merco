@@ -1,4 +1,5 @@
 """Thinking 提取策略体系 — 从模型输出中分离思考内容（reasoning）与正文"""
+
 import re
 from abc import ABC, abstractmethod
 from typing import Any
@@ -8,9 +9,9 @@ from typing import Any
 # 统一的 think 标签对配置（开标签 → 闭标签）
 # 新增 provider 只需在此添加一对标签
 THINK_TAG_PAIRS: tuple[tuple[str, str], ...] = (
-    ("<think>", "[/think]"),      # MiniMax 等
-    ("<think>", "</think>"),       # 标准格式
-    ("<thinking>", "</thinking>"), # XML 格式
+    ("<think>", "[/think]"),  # MiniMax 等
+    ("<think>", "</think>"),  # 标准格式
+    ("<thinking>", "</thinking>"),  # XML 格式
 )
 
 
@@ -31,8 +32,8 @@ def _build_think_block_re() -> re.Pattern:
         eo = re.escape(open_tag)
         ec = re.escape(close_tag)
         raw_patterns.append(f"{eo}.*?{ec}")  # 完整块
-        raw_patterns.append(eo)              # 孤儿开标签
-        raw_patterns.append(ec)              # 孤儿闭标签
+        raw_patterns.append(eo)  # 孤儿开标签
+        raw_patterns.append(ec)  # 孤儿闭标签
     # 长度降序：块（最长）必须先于单标签
     raw_patterns.sort(key=len, reverse=True)
     return re.compile("|".join(f"(?:{p})" for p in raw_patterns), re.IGNORECASE | re.DOTALL)
@@ -180,10 +181,7 @@ class ThinkTagStrategy(ThinkingStrategy):
         content = getattr(message, "content", None) or ""
         for open_tag, close_tag in THINK_TAG_PAIRS:
             if open_tag in content:
-                pattern = re.compile(
-                    re.escape(open_tag) + r"(.*?)" + re.escape(close_tag),
-                    re.DOTALL
-                )
+                pattern = re.compile(re.escape(open_tag) + r"(.*?)" + re.escape(close_tag), re.DOTALL)
                 thinking_parts = pattern.findall(content)
                 if thinking_parts:
                     cleaned = pattern.sub("", content).strip()

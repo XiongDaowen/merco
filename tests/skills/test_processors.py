@@ -1,4 +1,5 @@
 """技能处理器单元测试"""
+
 import pytest
 
 from merco.core.pipeline import ProcessContext
@@ -19,12 +20,8 @@ class TestSkillViewProcessor:
         ctx = ProcessContext(
             tool_name="skill_view",
             arguments={"name": "project-vision"},
-            result={
-                "name": "project-vision",
-                "description": "项目愿景规划",
-                "content": "# 项目愿景\n这是技能内容..."
-            },
-            extra_messages=[]
+            result={"name": "project-vision", "description": "项目愿景规划", "content": "# 项目愿景\n这是技能内容..."},
+            extra_messages=[],
         )
         return ctx
 

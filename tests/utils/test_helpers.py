@@ -1,4 +1,5 @@
 """工具辅助函数单元测试"""
+
 from pathlib import Path
 
 from merco.utils.helpers import expand_path, extract_urls, format_bytes, slugify, truncate
@@ -154,11 +155,11 @@ class TestFormatBytes:
 
     def test_gigabytes(self):
         """测试 GB 单位"""
-        assert format_bytes(1024 ** 3) == "1.0 GB"
+        assert format_bytes(1024**3) == "1.0 GB"
 
     def test_terabytes(self):
         """测试 TB 单位"""
-        assert format_bytes(1024 ** 4) == "1.0 TB"
+        assert format_bytes(1024**4) == "1.0 TB"
 
     def test_zero_bytes(self):
         """测试零字节"""

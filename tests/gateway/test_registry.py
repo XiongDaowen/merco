@@ -1,4 +1,5 @@
 """GatewayRegistry 测试：register/get/list + 生命周期 + handler 绑定 + 失败隔离。"""
+
 import logging
 
 import pytest
@@ -9,15 +10,23 @@ from merco.gateway.registry import GatewayRegistry
 
 class _FakeGateway(GatewayAdapter):
     """记录 start/stop 调用的假网关。"""
+
     def __init__(self, name="fake"):
         super().__init__()
         self.name = name
         self.started = False
         self.stopped = False
         self.handler_bound = None
-    async def start(self): self.started = True
-    async def stop(self): self.stopped = True
-    async def send_message(self, chat_id, message): pass
+
+    async def start(self):
+        self.started = True
+
+    async def stop(self):
+        self.stopped = True
+
+    async def send_message(self, chat_id, message):
+        pass
+
     def set_message_handler(self, handler):
         self.handler_bound = handler
         super().set_message_handler(handler)
@@ -64,6 +73,7 @@ async def test_start_all_binds_handler_and_starts_each():
     reg.register(gw)
 
     received = []
+
     async def inbound(source, chat_id, message):
         received.append((source, chat_id, message))
         return "ok"
@@ -95,6 +105,7 @@ async def test_start_all_binds_per_adapter_name_no_late_binding():
         reg.register(gw)
 
     received = []
+
     async def inbound(source, chat_id, message):
         received.append(source)
         return "ok"
@@ -119,8 +130,10 @@ async def test_start_all_without_handler_raises():
 
 async def test_start_all_isolates_single_failure(caplog):
     """一个 gateway start 失败不影响其他，且失败被记 ERROR 日志。"""
+
     class _BoomGateway(_FakeGateway):
-        async def start(self): raise RuntimeError("boom")
+        async def start(self):
+            raise RuntimeError("boom")
 
     reg = GatewayRegistry()
     boom = _BoomGateway("boom")
@@ -128,7 +141,9 @@ async def test_start_all_isolates_single_failure(caplog):
     reg.register(boom)
     reg.register(good)
 
-    async def inbound(source, chat_id, message): return "ok"
+    async def inbound(source, chat_id, message):
+        return "ok"
+
     reg.set_inbound_handler(inbound)
 
     with caplog.at_level(logging.ERROR, logger="merco.gateway.registry"):

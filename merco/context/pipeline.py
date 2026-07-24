@@ -1,4 +1,5 @@
 """ContextProcessor ABC + ContextPipeline"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -6,6 +7,7 @@ from abc import ABC, abstractmethod
 
 class ContextProcessor(ABC):
     """上下文处理器基类"""
+
     name: str = ""
 
     @abstractmethod

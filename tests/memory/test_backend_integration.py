@@ -1,4 +1,5 @@
 """MemoryBackend backward compatibility integration tests"""
+
 import os
 
 from merco.memory.backends.json_backend import JSONBackend

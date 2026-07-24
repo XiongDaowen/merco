@@ -1,4 +1,5 @@
 """Memory 保存触发策略 — 监听 Hook 事件，构造 SaveItem 喂给 Pipeline"""
+
 from __future__ import annotations
 
 import hashlib
@@ -26,6 +27,7 @@ class MemorySaveStrategy(ABC):
 
 class ExplicitRememberStrategy(MemorySaveStrategy):
     """/remember <text> 显式存一条记忆"""
+
     name = "explicit_remember"
 
     def subscribe(self, hooks) -> None:
@@ -52,6 +54,7 @@ class ExplicitRememberStrategy(MemorySaveStrategy):
 
 class SessionEndExtractStrategy(MemorySaveStrategy):
     """session.destroy 时用 LLM 抽取 1-3 条 insight 记忆"""
+
     name = "session_end_extract"
 
     EXTRACT_PROMPT = """从以下对话中抽取 1-3 条值得长期记住的关键信息（用户偏好、事实、决策）。
@@ -62,9 +65,9 @@ class SessionEndExtractStrategy(MemorySaveStrategy):
 {messages}
 """
 
-    def __init__(self, pipeline, provider_getter, *,
-                 session_store=None, max_per_session: int = 3,
-                 min_messages: int = 5):
+    def __init__(
+        self, pipeline, provider_getter, *, session_store=None, max_per_session: int = 3, min_messages: int = 5
+    ):
         super().__init__(pipeline)
         self._provider_getter = provider_getter
         self._session_store = session_store
@@ -89,14 +92,13 @@ class SessionEndExtractStrategy(MemorySaveStrategy):
         if not messages or len(messages) < self.min_msgs:
             return
 
-        prompt = self.EXTRACT_PROMPT.format(
-            messages=self._format_messages(messages)
-        )
+        prompt = self.EXTRACT_PROMPT.format(messages=self._format_messages(messages))
         try:
             provider = self._provider_getter()
             response = await provider.chat(
                 [{"role": "user", "content": prompt}],
-                tools=None, tool_choice="none",
+                tools=None,
+                tool_choice="none",
             )
         except Exception as e:
             logger.warning("LLM 抽取失败，跳过: %s", e)
@@ -142,8 +144,13 @@ class SessionEndExtractStrategy(MemorySaveStrategy):
             tags = entry.get("tags", []) or []
             if not isinstance(tags, list):
                 tags = []
-            items.append(SaveItem(
-                key=key, value=value, source="extracted",
-                tags=[str(t) for t in tags], session_id=session_id,
-            ))
-        return items[:self.max]
+            items.append(
+                SaveItem(
+                    key=key,
+                    value=value,
+                    source="extracted",
+                    tags=[str(t) for t in tags],
+                    session_id=session_id,
+                )
+            )
+        return items[: self.max]

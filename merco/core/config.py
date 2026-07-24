@@ -12,6 +12,7 @@ logger = logging.getLogger("merco.config")
 @dataclass
 class ModelConfig:
     """模型配置 - 纯数据袋。凭证解析由 ModelRegistry.select() 负责。"""
+
     provider: str = "openai"
     model: str = "gpt-4"
     api_key: str | None = None
@@ -20,13 +21,14 @@ class ModelConfig:
     max_tokens: int = 4096
     extra_params: dict = field(default_factory=dict)
     headers: dict = field(default_factory=dict)
-    request_cooldown: float = 0.3          # 吸收 agent.py 硬编码 cooldown=0.3
-    fallbacks: list = field(default_factory=list)   # list[ModelConfig] for ModelFallbackRecovery
+    request_cooldown: float = 0.3  # 吸收 agent.py 硬编码 cooldown=0.3
+    fallbacks: list = field(default_factory=list)  # list[ModelConfig] for ModelFallbackRecovery
 
 
 @dataclass
 class StreamingConfig:
     """流式渲染配置（归组，替旧 5 扁平字段）。"""
+
     enabled: bool = False
     think: bool = True
     content: bool = True
@@ -37,6 +39,7 @@ class StreamingConfig:
 @dataclass
 class MercoConfig:
     """主配置类"""
+
     username: str = "user"
     model: ModelConfig = field(default_factory=ModelConfig)
     max_tool_calls: int = 50
@@ -114,7 +117,9 @@ class MercoConfig:
                         "request_cooldown": m.request_cooldown,
                     }
                     for m in self.model.fallbacks
-                ] if self.model.fallbacks else None,
+                ]
+                if self.model.fallbacks
+                else None,
             },
             "max_tool_calls": self.max_tool_calls,
             "max_input_tokens": self.max_input_tokens,
@@ -163,20 +168,24 @@ class MercoConfig:
         if not isinstance(model_data, dict):
             model_data = {}
         fallbacks_raw = model_data.get("fallbacks", [])
-        fallbacks = [
-            ModelConfig(
-                provider=f.get("provider", "openai"),
-                model=f.get("model", "gpt-4"),
-                api_key=f.get("api_key"),
-                base_url=f.get("base_url"),
-                temperature=f.get("temperature", 0.7),
-                max_tokens=f.get("max_tokens", 4096),
-                extra_params=f.get("extra_params", {}),
-                headers=f.get("headers", {}),
-                request_cooldown=f.get("request_cooldown", 0.3),
-            )
-            for f in fallbacks_raw
-        ] if isinstance(fallbacks_raw, list) and fallbacks_raw else []
+        fallbacks = (
+            [
+                ModelConfig(
+                    provider=f.get("provider", "openai"),
+                    model=f.get("model", "gpt-4"),
+                    api_key=f.get("api_key"),
+                    base_url=f.get("base_url"),
+                    temperature=f.get("temperature", 0.7),
+                    max_tokens=f.get("max_tokens", 4096),
+                    extra_params=f.get("extra_params", {}),
+                    headers=f.get("headers", {}),
+                    request_cooldown=f.get("request_cooldown", 0.3),
+                )
+                for f in fallbacks_raw
+            ]
+            if isinstance(fallbacks_raw, list) and fallbacks_raw
+            else []
+        )
         model = ModelConfig(
             provider=model_data.get("provider", "openai"),
             model=model_data.get("model", "gpt-4"),
@@ -228,7 +237,7 @@ class MercoConfig:
     @staticmethod
     def _streaming_from_dict(data: dict) -> StreamingConfig:
         raw = data.get("streaming")
-        if isinstance(raw, bool):        # one-time migration: old `streaming: true`
+        if isinstance(raw, bool):  # one-time migration: old `streaming: true`
             return StreamingConfig(
                 enabled=raw,
                 think=data.get("stream_thinking", True),

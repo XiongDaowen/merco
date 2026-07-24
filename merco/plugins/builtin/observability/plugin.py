@@ -1,4 +1,5 @@
 """Observability plugin — creates the Agent observer via plugin activation."""
+
 from __future__ import annotations
 
 import logging

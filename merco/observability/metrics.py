@@ -22,11 +22,13 @@ class MetricsCollector:
 
     def record_event(self, event_type: str, **kwargs):
         """记录事件"""
-        self._events.append({
-            "type": event_type,
-            "timestamp": time.time(),
-            **kwargs,
-        })
+        self._events.append(
+            {
+                "type": event_type,
+                "timestamp": time.time(),
+                **kwargs,
+            }
+        )
 
     def get_counter(self, name: str) -> int:
         """获取计数器值"""
@@ -52,10 +54,6 @@ class MetricsCollector:
         """获取指标摘要"""
         return {
             "counters": dict(self._counters),
-            "avg_timings": {
-                name: sum(vals) / len(vals)
-                for name, vals in self._timings.items()
-                if vals
-            },
+            "avg_timings": {name: sum(vals) / len(vals) for name, vals in self._timings.items() if vals},
             "total_events": len(self._events),
         }

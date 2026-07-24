@@ -13,6 +13,7 @@ from merco.core.interrupt import (
 
 class MockProcessor(CleanupProcessor):
     """模拟处理器，记录调用。"""
+
     name = "mock"
 
     def __init__(self, should_stop: bool = False):
@@ -84,11 +85,7 @@ async def test_inject_cancel_messages():
     ]
     agent.session = MagicMock()
 
-    ctx = CleanupContext(
-        agent=agent,
-        cancelled_tool_calls=[{"id": "tc_2"}],
-        session_id="test"
-    )
+    ctx = CleanupContext(agent=agent, cancelled_tool_calls=[{"id": "tc_2"}], session_id="test")
 
     processor = InjectCancelMessages()
     result = await processor.process(ctx)
@@ -148,21 +145,13 @@ async def test_emit_interrupt_hooks():
     agent = MagicMock()
     agent.hooks.emit = AsyncMock()
 
-    ctx = CleanupContext(
-        agent=agent,
-        cancelled_tool_calls=[{"id": "tc_1"}],
-        session_id="test"
-    )
+    ctx = CleanupContext(agent=agent, cancelled_tool_calls=[{"id": "tc_1"}], session_id="test")
 
     processor = EmitInterruptHooks()
     result = await processor.process(ctx)
 
     assert result is False
-    agent.hooks.emit.assert_called_with(
-        "agent.interrupted",
-        interrupted_tools=1,
-        session_id="test"
-    )
+    agent.hooks.emit.assert_called_with("agent.interrupted", interrupted_tools=1, session_id="test")
 
 
 @pytest.mark.asyncio

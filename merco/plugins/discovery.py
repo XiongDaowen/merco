@@ -1,4 +1,5 @@
 """PluginDiscovery - 从 entry_points + 目录扫描发现插件，产 PluginSpec 列表。"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -74,7 +75,7 @@ class PluginDiscovery:
             return None
         if not self._is_enabled(name):
             return None
-        loader = (lambda pd=pdir, en=entry: _load_class_from_dir(pd, en))
+        loader = lambda pd=pdir, en=entry: _load_class_from_dir(pd, en)
         spec = PluginSpec(
             name=name,
             source="dir",

@@ -1,4 +1,5 @@
 """GatewayAdapter ABC 测试。"""
+
 import pytest
 
 from merco.gateway import GatewayAdapter as ExportedGatewayAdapter  # 验证 __init__ 导出
@@ -21,9 +22,15 @@ def test_subclass_with_abstract_methods_is_concrete():
 
     class _Impl(GatewayAdapter):
         name = "impl"
-        async def start(self): pass
-        async def stop(self): pass
-        async def send_message(self, chat_id, message): pass
+
+        async def start(self):
+            pass
+
+        async def stop(self):
+            pass
+
+        async def send_message(self, chat_id, message):
+            pass
 
     adapter = _Impl()
     assert adapter.name == "impl"
@@ -38,16 +45,21 @@ def test_set_message_handler_renamed_from_set_handler():
 
 def test_handle_message_dropped():
     """concrete handle_message 已删除（inbound 由 adapter 内部直接回调）。"""
-    assert not hasattr(GatewayAdapter, "handle_message"), \
-        "handle_message 应已删除"
+    assert not hasattr(GatewayAdapter, "handle_message"), "handle_message 应已删除"
 
 
 def test_set_message_handler_stores_handler():
     class _Impl(GatewayAdapter):
         name = "impl"
-        async def start(self): pass
-        async def stop(self): pass
-        async def send_message(self, chat_id, message): pass
+
+        async def start(self):
+            pass
+
+        async def stop(self):
+            pass
+
+        async def send_message(self, chat_id, message):
+            pass
 
     adapter = _Impl()
 
@@ -61,9 +73,15 @@ def test_set_message_handler_stores_handler():
 def test_init_accepts_optional_config():
     class _Impl(GatewayAdapter):
         name = "impl"
-        async def start(self): pass
-        async def stop(self): pass
-        async def send_message(self, chat_id, message): pass
+
+        async def start(self):
+            pass
+
+        async def stop(self):
+            pass
+
+        async def send_message(self, chat_id, message):
+            pass
 
     a1 = _Impl()
     assert a1.config == {}

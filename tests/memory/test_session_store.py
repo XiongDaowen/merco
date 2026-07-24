@@ -128,9 +128,7 @@ class TestCloneSession:
         orig_id = "session-with-tools"
         store.create_session(orig_id, title="Tool Session")
 
-        tool_calls = [
-            {"id": "call_1", "name": "search_files", "arguments": {"pattern": "*.py"}}
-        ]
+        tool_calls = [{"id": "call_1", "name": "search_files", "arguments": {"pattern": "*.py"}}]
         store.save_message(
             orig_id,
             "assistant",
@@ -208,17 +206,13 @@ class TestSaveMessageRetry:
                 raise sqlite3.OperationalError("database is locked")
             return real_connect(*args, **kwargs)
 
-        monkeypatch.setattr(
-            "merco.memory.session_store.sqlite3.connect", flaky_connect
-        )
+        monkeypatch.setattr("merco.memory.session_store.sqlite3.connect", flaky_connect)
 
         msg_id = store.save_message("test-session", "user", "Hello")
         assert msg_id > 0
         assert call_count["n"] >= 2  # 至少重试了一次
 
-    def test_save_message_raises_session_write_error_after_max_retries(
-        self, monkeypatch, tmp_path
-    ):
+    def test_save_message_raises_session_write_error_after_max_retries(self, monkeypatch, tmp_path):
         """连续 OperationalError 超过 3 次后应抛出 SessionWriteError。"""
         import sqlite3
 
@@ -229,9 +223,7 @@ class TestSaveMessageRetry:
         def always_fail(*args, **kwargs):
             raise sqlite3.OperationalError("database is locked")
 
-        monkeypatch.setattr(
-            "merco.memory.session_store.sqlite3.connect", always_fail
-        )
+        monkeypatch.setattr("merco.memory.session_store.sqlite3.connect", always_fail)
 
         with pytest.raises(SessionWriteError):
             store.save_message("test-session", "user", "Hello")

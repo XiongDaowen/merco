@@ -27,20 +27,22 @@ class TestBuildSystemPromptRecall:
 
         # Mock the recaller to return results
         mock_recaller = MagicMock()
-        mock_recaller.recall = AsyncMock(return_value=[
-            RecallResult(
-                snippet="Used pytest with fixtures",
-                session_title="Testing Session",
-                score=0.9,
-                source="fts5",
-            ),
-            RecallResult(
-                snippet="Mock objects with unittest.mock",
-                session_title="Mocking Guide",
-                score=0.7,
-                source="memory",
-            ),
-        ])
+        mock_recaller.recall = AsyncMock(
+            return_value=[
+                RecallResult(
+                    snippet="Used pytest with fixtures",
+                    session_title="Testing Session",
+                    score=0.9,
+                    source="fts5",
+                ),
+                RecallResult(
+                    snippet="Mock objects with unittest.mock",
+                    session_title="Mocking Guide",
+                    score=0.7,
+                    source="memory",
+                ),
+            ]
+        )
         agent.recaller = mock_recaller
         agent.config.memory_recall_enabled = True
 
@@ -60,9 +62,11 @@ class TestBuildSystemPromptRecall:
         agent.config.memory_recall_enabled = False
 
         mock_recaller = MagicMock()
-        mock_recaller.recall = AsyncMock(return_value=[
-            RecallResult(snippet="some memory", session_title="T", score=0.5),
-        ])
+        mock_recaller.recall = AsyncMock(
+            return_value=[
+                RecallResult(snippet="some memory", session_title="T", score=0.5),
+            ]
+        )
         agent.recaller = mock_recaller
 
         prompt = await agent._build_system_prompt()
@@ -93,9 +97,11 @@ class TestBuildSystemPromptRecall:
         agent.config.memory_recall_enabled = True
 
         mock_recaller = MagicMock()
-        mock_recaller.recall = AsyncMock(return_value=[
-            RecallResult(snippet="some memory", session_title="T", score=0.5),
-        ])
+        mock_recaller.recall = AsyncMock(
+            return_value=[
+                RecallResult(snippet="some memory", session_title="T", score=0.5),
+            ]
+        )
         agent.recaller = mock_recaller
 
         prompt = await agent._build_system_prompt()
@@ -128,14 +134,16 @@ class TestBuildSystemPromptRecall:
         agent.config.memory_recall_enabled = True
 
         mock_recaller = MagicMock()
-        mock_recaller.recall = AsyncMock(return_value=[
-            RecallResult(
-                snippet="First memory snippet",
-                session_title="Session One",
-                score=0.9,
-                source="fts5",
-            ),
-        ])
+        mock_recaller.recall = AsyncMock(
+            return_value=[
+                RecallResult(
+                    snippet="First memory snippet",
+                    session_title="Session One",
+                    score=0.9,
+                    source="fts5",
+                ),
+            ]
+        )
         agent.recaller = mock_recaller
 
         prompt = await agent._build_system_prompt()
@@ -216,7 +224,9 @@ class TestRestoreWithCheckpoint:
         agent = test_agent
         agent.session.metadata["compress_checkpoint"] = {
             "summary": "[summary] user asked about X, agent did Y",
-            "tail_count": 2, "original_count": 100, "compressed_at": 12345,
+            "tail_count": 2,
+            "original_count": 100,
+            "compressed_at": 12345,
         }
         agent.session.add_message("user", "recent message 1")
         agent.session.add_message("assistant", "recent reply 1")
@@ -241,7 +251,9 @@ class TestRestoreWithCheckpoint:
         agent = test_agent
         agent.session.metadata["compress_checkpoint"] = {
             "summary": "",
-            "tail_count": 1, "original_count": 50, "compressed_at": 99999,
+            "tail_count": 1,
+            "original_count": 50,
+            "compressed_at": 99999,
         }
         agent.session.add_message("user", "msg1")
         agent.session.add_message("assistant", "msg2")
@@ -257,11 +269,15 @@ class TestRestoreWithCheckpoint:
         agent = test_agent
         agent.session.metadata["compress_checkpoint"] = {
             "summary": "[summary] did some work",
-            "tail_count": 1, "original_count": 20, "compressed_at": 555,
+            "tail_count": 1,
+            "original_count": 20,
+            "compressed_at": 555,
         }
-        agent.session.add_message("assistant", "calling tool", tool_calls=[
-            {"id": "tc1", "type": "function", "function": {"name": "echo", "arguments": "{}"}}
-        ])
+        agent.session.add_message(
+            "assistant",
+            "calling tool",
+            tool_calls=[{"id": "tc1", "type": "function", "function": {"name": "echo", "arguments": "{}"}}],
+        )
         agent._restore_context()
         msgs = agent.context.messages
         assert len(msgs) >= 1
@@ -269,7 +285,6 @@ class TestRestoreWithCheckpoint:
         assistant_msg = [m for m in msgs if m.get("role") == "assistant"]
         assert len(assistant_msg) >= 1
         assert "tool_calls" in assistant_msg[0]
-
 
 
 @pytest.mark.asyncio
@@ -332,8 +347,7 @@ class TestRestorePreservesEmptyToolCallId:
         agent.session.add_message(
             "assistant",
             "calling tool",
-            tool_calls=[{"id": "tc1", "type": "function",
-                         "function": {"name": "echo", "arguments": "{}"}}],
+            tool_calls=[{"id": "tc1", "type": "function", "function": {"name": "echo", "arguments": "{}"}}],
         )
         agent.session.add_message("tool", "tool result", tool_call_id="")
 
@@ -549,7 +563,14 @@ async def test_agent_create_injects_managers_into_task_tool(monkeypatch, tmp_pat
 
 # 8 个 builtin 的期望激活序：boot(observability) 先于 restore，其余按 priority 降序
 _EXPECTED_ACTIVATION_ORDER = [
-    "observability", "skills", "mcp", "subagent", "web", "gateway", "scheduler", "superpower",
+    "observability",
+    "skills",
+    "mcp",
+    "subagent",
+    "web",
+    "gateway",
+    "scheduler",
+    "superpower",
 ]
 
 
@@ -630,15 +651,18 @@ async def test_observer_available_before_restore(monkeypatch, tmp_path):
     await agent._initialize_async_plugins()
 
     # boot 插件(observability)必须在 restore 之前激活
-    assert "observability" in restore_snapshot["active_at_restore"], \
+    assert "observability" in restore_snapshot["active_at_restore"], (
         f"observability 未在 restore 前激活: {restore_snapshot['active_at_restore']}"
+    )
     # 非-boot 插件(superpower)必须在 restore 之后激活（两阶段语义）
-    assert "superpower" not in restore_snapshot["active_at_restore"], \
+    assert "superpower" not in restore_snapshot["active_at_restore"], (
         f"superpower 不应在 restore 前激活: {restore_snapshot['active_at_restore']}"
+    )
     # observer 在 restore 时已可用，且是 boot 阶段产物（非 __init__ 占位符）
     assert restore_snapshot["observer_at_restore"] is not None
-    assert restore_snapshot["observer_at_restore"] is not placeholder_observer, \
+    assert restore_snapshot["observer_at_restore"] is not placeholder_observer, (
         "restore 时 observer 仍是 __init__ 占位符，boot 阶段未产出 observer"
+    )
 
 
 @pytest.mark.asyncio
@@ -647,14 +671,20 @@ async def test_agent_no_hardcoded_plugin_imports():
     import inspect
 
     from merco.core import agent as agent_mod
+
     src = inspect.getsource(agent_mod)
     for name in ["observability", "skills", "mcp", "subagent", "web", "gateway", "scheduler", "superpower"]:
-        assert f"from merco.plugins.builtin.{name}.plugin import" not in src, \
-            f"硬编码 import {name}"
+        assert f"from merco.plugins.builtin.{name}.plugin import" not in src, f"硬编码 import {name}"
     # 不应手动 register 任何 builtin 插件实例（与 import-grep 互补，覆盖非 .plugin 路径的导入）
     for cls in [
-        "ObservabilityPlugin", "SkillPlugin", "MCPPlugin", "SubAgentPlugin",
-        "WebPlugin", "GatewayPlugin", "SchedulerPlugin", "SuperpowerPlugin",
+        "ObservabilityPlugin",
+        "SkillPlugin",
+        "MCPPlugin",
+        "SubAgentPlugin",
+        "WebPlugin",
+        "GatewayPlugin",
+        "SchedulerPlugin",
+        "SuperpowerPlugin",
     ]:
         assert f".register({cls}()" not in src, f"硬编码 register {cls}"
 
@@ -707,8 +737,7 @@ async def test_agent_has_provider_property_and_model_registry(monkeypatch, tmp_p
     cfg.sandbox_mode = "auto"
     cfg.memory_path = str(tmp_path / "memory")
 
-    agent = await Agent.create(
-        config=cfg, tool_registry=make_test_registry())
+    agent = await Agent.create(config=cfg, tool_registry=make_test_registry())
 
     # provider is settable
     mock = MockModelProvider([{"content": "hi", "finish_reason": "stop"}])

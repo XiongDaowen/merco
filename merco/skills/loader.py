@@ -2,7 +2,6 @@
 
 import re
 from pathlib import Path
-from typing import Optional
 
 
 class SkillLoader:
@@ -11,7 +10,7 @@ class SkillLoader:
     SKILL_FILE = "SKILL.md"
 
     @classmethod
-    def load_from_path(cls, path: str) -> Optional[dict]:
+    def load_from_path(cls, path: str) -> dict | None:
         """从路径加载单个技能"""
         skill_path = Path(path).expanduser() / cls.SKILL_FILE
         if not skill_path.exists():

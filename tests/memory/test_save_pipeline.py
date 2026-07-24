@@ -1,4 +1,5 @@
 """MemorySavePipeline 单测"""
+
 import pytest
 
 from merco.memory.save_pipeline import SOURCE_PRIORITY, SaveItem
@@ -21,7 +22,6 @@ def test_source_priority_ordering():
     assert SOURCE_PRIORITY["extracted"] > SOURCE_PRIORITY["system"]
 
 
-import pytest
 
 from merco.memory.save_pipeline import SourceEnricher
 
@@ -53,6 +53,7 @@ from merco.memory.save_pipeline import DedupProcessor
 
 class FakeStore:
     """最小 MemoryStore mock"""
+
     def __init__(self, existing=None):
         self._data = existing or {}
 
@@ -107,6 +108,7 @@ from merco.memory.save_pipeline import MemorySavePipeline, MemorySaveProcessor
 
 class FakeHooks:
     """最小 HookRegistry mock"""
+
     def __init__(self):
         self.events = []
 
@@ -116,6 +118,7 @@ class FakeHooks:
 
 class FakeMemoryStore:
     """最小 MemoryStore mock — save + load"""
+
     def __init__(self):
         self._data = {}
 
@@ -172,6 +175,7 @@ async def test_pipeline_use_adds_processor():
 
     class TagProcessor(MemorySaveProcessor):
         name = "test_tag"
+
         async def process(self, item):
             item.tags.append("from_test")
             return item
@@ -190,6 +194,7 @@ async def test_pipeline_processor_exception_returns_false():
 
     class FailingProcessor(MemorySaveProcessor):
         name = "failing"
+
         async def process(self, item):
             raise RuntimeError("boom")
 

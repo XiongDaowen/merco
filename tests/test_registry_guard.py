@@ -68,9 +68,13 @@ async def test_registry_blocks_when_guard_denies(registry):
     registry.register(MockTool())
 
     mock_guard = AsyncMock()
-    mock_guard.check = AsyncMock(return_value=GuardResult(
-        action=GuardAction.DENY, command="", reason="测试拒绝",
-    ))
+    mock_guard.check = AsyncMock(
+        return_value=GuardResult(
+            action=GuardAction.DENY,
+            command="",
+            reason="测试拒绝",
+        )
+    )
 
     mw = GuardMiddleware(mock_guard)
     registry._middleware.use(mw)
@@ -94,9 +98,13 @@ async def test_registry_dangerous_command_asks(registry):
     from unittest.mock import AsyncMock
 
     mock_guard = AsyncMock()
-    mock_guard.check = AsyncMock(return_value=GuardResult(
-        action=GuardAction.ASK, command="rm -rf /", reason="危险命令",
-    ))
+    mock_guard.check = AsyncMock(
+        return_value=GuardResult(
+            action=GuardAction.ASK,
+            command="rm -rf /",
+            reason="危险命令",
+        )
+    )
 
     mw = GuardMiddleware(mock_guard)
     registry._middleware.use(mw)
@@ -121,9 +129,13 @@ async def test_registry_path_traversal_blocked(registry):
     from unittest.mock import AsyncMock
 
     mock_guard = AsyncMock()
-    mock_guard.check = AsyncMock(return_value=GuardResult(
-        action=GuardAction.DENY, command="../../../etc/passwd", reason="路径穿越",
-    ))
+    mock_guard.check = AsyncMock(
+        return_value=GuardResult(
+            action=GuardAction.DENY,
+            command="../../../etc/passwd",
+            reason="路径穿越",
+        )
+    )
 
     mw = GuardMiddleware(mock_guard)
     registry._middleware.use(mw)
@@ -142,9 +154,13 @@ async def test_registry_system_path_blocked(registry):
     from unittest.mock import AsyncMock
 
     mock_guard = AsyncMock()
-    mock_guard.check = AsyncMock(return_value=GuardResult(
-        action=GuardAction.DENY, command="/proc/cpuinfo", reason="系统路径",
-    ))
+    mock_guard.check = AsyncMock(
+        return_value=GuardResult(
+            action=GuardAction.DENY,
+            command="/proc/cpuinfo",
+            reason="系统路径",
+        )
+    )
 
     mw = GuardMiddleware(mock_guard)
     registry._middleware.use(mw)

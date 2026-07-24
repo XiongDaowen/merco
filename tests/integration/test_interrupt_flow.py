@@ -38,11 +38,7 @@ async def test_full_interrupt_flow():
             cleanup_pipeline.use(InjectCancelMessages())
             cleanup_pipeline.use(EmitInterruptHooks())
 
-            ctx = CleanupContext(
-                agent=agent,
-                cancelled_tool_calls=[{"id": "tc_1"}],
-                session_id="test"
-            )
+            ctx = CleanupContext(agent=agent, cancelled_tool_calls=[{"id": "tc_1"}], session_id="test")
             await cleanup_pipeline.process(ctx)
             raise
 
@@ -61,8 +57,4 @@ async def test_full_interrupt_flow():
         pass
 
     agent.context.add.assert_called()
-    agent.hooks.emit.assert_called_with(
-        "agent.interrupted",
-        interrupted_tools=1,
-        session_id="test"
-    )
+    agent.hooks.emit.assert_called_with("agent.interrupted", interrupted_tools=1, session_id="test")

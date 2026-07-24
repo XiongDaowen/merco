@@ -1,4 +1,5 @@
 """Tests for MCPServerTool adapter."""
+
 import pytest
 
 from merco.mcp.tool import MCPServerTool
@@ -14,9 +15,7 @@ class TestMCPServerTool:
             "description": "Fetch a URL and return its content",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "URL to fetch"}
-                },
+                "properties": {"url": {"type": "string", "description": "URL to fetch"}},
                 "required": ["url"],
             },
         }
@@ -41,6 +40,7 @@ class TestMCPServerTool:
     @pytest.mark.asyncio
     async def test_mcp_tool_execute(self):
         """Mock handler returns result, verify execute() calls handler."""
+
         async def handler(tool_name, arguments):
             return {"result": f"ran {tool_name} with {arguments}"}
 
@@ -53,6 +53,7 @@ class TestMCPServerTool:
     @pytest.mark.asyncio
     async def test_mcp_tool_execute_error(self):
         """Handler raises, verify returns error dict."""
+
         async def handler(tool_name, arguments):
             raise ValueError("something went wrong")
 
@@ -78,9 +79,7 @@ class TestMCPServerTool:
             "description": "Search documentation",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "query": {"type": "string"}
-                },
+                "properties": {"query": {"type": "string"}},
             },
         }
         tool = MCPServerTool(spec, server_name="docs", handler=None)
@@ -126,6 +125,7 @@ class TestMCPServerTool:
     @pytest.mark.asyncio
     async def test_no_guard_allows_execution(self):
         """Guard is None, handler called normally."""
+
         async def handler(tool_name, arguments):
             return {"result": f"ok: {tool_name}"}
 

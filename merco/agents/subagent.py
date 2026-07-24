@@ -1,4 +1,5 @@
 """SubAgentManager — 子代理派发"""
+
 from __future__ import annotations
 
 import logging
@@ -64,6 +65,7 @@ class SubAgentManager:
             # model override
             if profile.model:
                 import copy
+
                 config = copy.deepcopy(config)
                 config.model.provider = profile.model.get("provider", config.model.provider)
                 config.model.model = profile.model.get("model", config.model.model)
@@ -92,8 +94,10 @@ class SubAgentManager:
 
     def _inject_result_to_parent(self, todo_id: str, result: str):
         """把子代理结果注入父代理的 context"""
-        self._parent.context.add({
-            "role": "tool",
-            "content": f"[Todo {todo_id}] 子代理结果:\n{result}",
-            "tool_call_id": f"todo_{todo_id}",
-        })
+        self._parent.context.add(
+            {
+                "role": "tool",
+                "content": f"[Todo {todo_id}] 子代理结果:\n{result}",
+                "tool_call_id": f"todo_{todo_id}",
+            }
+        )

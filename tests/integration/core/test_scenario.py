@@ -1,4 +1,5 @@
 """TestScenario上下文对象测试"""
+
 import pytest
 
 
@@ -6,10 +7,12 @@ class TestBuildScenarioAgent:
     @pytest.mark.asyncio
     async def test_returns_agent_with_programmable_provider(self, programmable_provider, tmp_path, monkeypatch):
         from tests.integration.core.scenario import build_scenario_agent
+
         agent = await build_scenario_agent(provider=programmable_provider, tmp_path=tmp_path, monkeypatch=monkeypatch)
         assert agent.provider is programmable_provider
         assert agent.tool_registry is not None
         assert agent.plugin_manager is not None
+
 
 class TestTestScenario:
     @pytest.mark.asyncio
@@ -40,6 +43,7 @@ class TestTestScenario:
     @pytest.mark.asyncio
     async def test_scenario_run_method_executes_agent(self, scenario):
         from tests.integration.core.programmable_mock import Response
+
         scenario.provider.expect([Response.content("hello")])
         result = await scenario.run("hi")
         assert result == "hello"

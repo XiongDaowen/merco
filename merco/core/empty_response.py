@@ -1,4 +1,5 @@
 """Empty response strategies."""
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +21,7 @@ class CallbackEmptyResponse(EmptyResponseStrategy):
         if ctx.retry_count >= ctx.max_retries:
             return False
         from merco.tools.errors import empty_response
+
         err = empty_response()
         ctx.inject_error = err["error"]
         return True

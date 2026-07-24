@@ -55,7 +55,7 @@ class SkillViewTool(BaseTool):
 
         skill = self._skill_registry.get(name)
         if not skill:
-            available = [s['name'] for s in self._skill_registry.list_skills()]
+            available = [s["name"] for s in self._skill_registry.list_skills()]
             return {
                 "error": f"未找到技能: {name}",
                 "available_skills": available,

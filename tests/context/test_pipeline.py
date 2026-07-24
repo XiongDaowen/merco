@@ -1,4 +1,5 @@
 """ContextPipeline 单测"""
+
 import pytest
 
 from merco.context.pipeline import ContextPipeline, ContextProcessor
@@ -6,6 +7,7 @@ from merco.context.pipeline import ContextPipeline, ContextProcessor
 
 class AppendProcessor(ContextProcessor):
     """测试用处理器：追加一条消息"""
+
     name = "append"
 
     def __init__(self, content: str):
@@ -17,6 +19,7 @@ class AppendProcessor(ContextProcessor):
 
 class DoubleProcessor(ContextProcessor):
     """测试用处理器：复制所有消息"""
+
     name = "double"
 
     async def process(self, messages, **kwargs):

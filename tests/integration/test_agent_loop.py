@@ -7,6 +7,7 @@ from merco.tools.registry import ToolRegistry
 
 class MockTool(BaseTool):
     """模拟工具用于测试"""
+
     name = "echo"
     description = "回显参数"
     parameters = {
@@ -40,16 +41,14 @@ class TestToolRegistry:
         registry.register(MockTool())
 
         import asyncio
-        result = asyncio.run(
-            registry.execute("echo", message="hello")
-        )
+
+        result = asyncio.run(registry.execute("echo", message="hello"))
         assert result["echo"] == "hello"
 
     def test_tool_not_found(self):
         registry = ToolRegistry()
 
         import asyncio
-        result = asyncio.run(
-            registry.execute("nonexistent")
-        )
+
+        result = asyncio.run(registry.execute("nonexistent"))
         assert "error" in result

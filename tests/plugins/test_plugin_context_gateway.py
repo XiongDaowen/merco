@@ -1,4 +1,5 @@
 """PluginContext.register_gateway 测试。"""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,17 +11,28 @@ from merco.plugins.base import PluginContext
 
 class _Gw(GatewayAdapter):
     name = "gw"
-    async def start(self): pass
-    async def stop(self): pass
-    async def send_message(self, chat_id, message): pass
+
+    async def start(self):
+        pass
+
+    async def stop(self):
+        pass
+
+    async def send_message(self, chat_id, message):
+        pass
 
 
 def _make_ctx(gateway_registry=None) -> PluginContext:
     """最小 PluginContext（其余依赖传 MagicMock）。"""
     return PluginContext(
-        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
-        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
-        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
+        hooks=MagicMock(),
+        tool_registry=MagicMock(),
+        prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(),
+        result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(),
+        recaller=MagicMock(),
+        config=MagicMock(),
         gateway_registry=gateway_registry,
     )
 

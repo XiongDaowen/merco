@@ -22,9 +22,11 @@ def test_isolation_services_are_independent_per_test(isolation_services):
 
 
 def test_isolation_services_can_register_skills(isolation_services):
-    isolation_services["skill_registry"].register({
-        "name": "test-skill",
-        "description": "test",
-        "content": "content",
-    })
+    isolation_services["skill_registry"].register(
+        {
+            "name": "test-skill",
+            "description": "test",
+            "content": "content",
+        }
+    )
     assert isolation_services["skill_registry"].get("test-skill") is not None

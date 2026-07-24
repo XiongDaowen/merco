@@ -61,10 +61,12 @@ class PromptToolkitInput(InputDriver):
             completer=completer,
             key_bindings=bindings,
             reserve_space_for_menu=4,
-            style=Style.from_dict({
-                "prompt": "bold",
-                "completion-menu.completion": "bg:#444 #fff",
-            }),
+            style=Style.from_dict(
+                {
+                    "prompt": "bold",
+                    "completion-menu.completion": "bg:#444 #fff",
+                }
+            ),
         )
 
         # Paste control: stash long pastes and display short marker

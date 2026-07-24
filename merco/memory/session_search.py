@@ -20,6 +20,7 @@ class SessionSearch:
 
     def _conn(self):
         import sqlite3
+
         conn = sqlite3.connect(self._store.db_path)
         conn.row_factory = sqlite3.Row
         return conn
@@ -50,13 +51,11 @@ class SessionSearch:
         with self._conn() as conn:
             conn.execute("DELETE FROM messages_fts")
             conn.execute(
-                "INSERT INTO messages_fts(rowid, content, session_id) "
-                "SELECT id, content, session_id FROM messages"
+                "INSERT INTO messages_fts(rowid, content, session_id) SELECT id, content, session_id FROM messages"
             )
             logger.info("FTS index rebuilt")
 
-    def search(self, query: str, session_id: str | None = None,
-               limit: int = 20) -> list[dict]:
+    def search(self, query: str, session_id: str | None = None, limit: int = 20) -> list[dict]:
         """搜索消息，返回排序结果 + 片段"""
         import sqlite3
 
@@ -125,7 +124,7 @@ class SessionSearch:
         sanitized = re.sub(r'"[^"]*"', _preserve_quoted, query)
 
         # Step 2: Strip remaining FTS5-special characters
-        sanitized = re.sub(r'[+{}()\"^]', " ", sanitized)
+        sanitized = re.sub(r"[+{}()\"^]", " ", sanitized)
 
         # Step 3: Collapse repeated *, remove leading * (prefix needs char before *)
         sanitized = re.sub(r"\*+", "*", sanitized)

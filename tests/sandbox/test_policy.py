@@ -1,4 +1,5 @@
 """PermissionPolicy + PolicyPipeline 单测"""
+
 import pytest
 
 from merco.sandbox.guard import (
@@ -26,6 +27,7 @@ class AllowAllPolicy(PermissionPolicy):
 
 class PassPolicy(PermissionPolicy):
     """返回 None — 无意见"""
+
     name = "pass"
 
     async def check(self, tool_name, arguments):
@@ -77,8 +79,11 @@ class TestBuiltinDefaultPolicy:
         assert result.action == GuardAction.ALLOW
 
     async def test_user_rules_override(self):
-        p = BuiltinDefaultPolicy(mode="ask", user_rules=[
-            {"tool": "bash", "pattern": "rm ", "action": "deny"},
-        ])
+        p = BuiltinDefaultPolicy(
+            mode="ask",
+            user_rules=[
+                {"tool": "bash", "pattern": "rm ", "action": "deny"},
+            ],
+        )
         result = await p.check("bash", {"command": "rm file.txt"})
         assert result.action == GuardAction.DENY

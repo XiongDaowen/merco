@@ -12,12 +12,14 @@ logger = logging.getLogger("merco.tools.edit")
 
 def _generate_diff(filepath: str, old: str, new: str) -> str:
     """生成 unified diff 文本"""
-    diff_lines = list(difflib.unified_diff(
-        old.splitlines(keepends=True),
-        new.splitlines(keepends=True),
-        fromfile=filepath,
-        tofile=filepath,
-    ))
+    diff_lines = list(
+        difflib.unified_diff(
+            old.splitlines(keepends=True),
+            new.splitlines(keepends=True),
+            fromfile=filepath,
+            tofile=filepath,
+        )
+    )
     return "".join(diff_lines)
 
 
@@ -32,6 +34,7 @@ def _validate_search(content: str, search: str, path: str) -> str | None:
 
 
 # ── EditFile ────────────────────────────────────────────────────────
+
 
 class EditFile(BaseTool):
     """编辑文件内容 — SEARCH/REPLACE 模式，含 diff 预览和确认"""
@@ -87,8 +90,7 @@ class EditFile(BaseTool):
         diff_text = _generate_diff(path, old_content, new_content)
 
         if not diff_text.strip():
-            return {"success": True, "path": path,
-                    "message": "文件内容无变化", "diff": ""}
+            return {"success": True, "path": path, "message": "文件内容无变化", "diff": ""}
 
         return {
             "planned_edit": True,

@@ -1,4 +1,5 @@
 """SubAgentManager 单测"""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -37,10 +38,12 @@ class TestSubAgentManager:
 
             # Mock 子代理执行
             mock_result = "子代理完成"
-            manager._create_sub_agent = AsyncMock(return_value=MagicMock(
-                session=MagicMock(id="sub_1"),
-                run=AsyncMock(return_value=mock_result),
-            ))
+            manager._create_sub_agent = AsyncMock(
+                return_value=MagicMock(
+                    session=MagicMock(id="sub_1"),
+                    run=AsyncMock(return_value=mock_result),
+                )
+            )
 
             await manager.dispatch(todo.id, "执行任务")
 

@@ -1,4 +1,5 @@
 """MemorySaveStrategy 单测"""
+
 import json
 
 import pytest
@@ -77,9 +78,11 @@ async def test_explicit_derive_key_handles_special_chars():
 
 def test_explicit_subscribe_registers_handler():
     """subscribe() 注册到 hooks"""
+
     class FakeHooks:
         def __init__(self):
             self.handlers = {}
+
         def on(self, event, handler):
             self.handlers[event] = handler
 
@@ -125,10 +128,12 @@ async def test_session_end_extracts_and_saves():
     """正常对话 → 调 LLM → 解析 → 存"""
     p = FakePipeline()
     msgs = [{"role": "user", "content": f"msg{i}"} for i in range(6)]
-    llm_content = json.dumps([
-        {"key": "user_prefers_chinese", "value": "用户偏好中文", "tags": ["lang"]},
-        {"key": "user_name", "value": "用户叫小王", "tags": []},
-    ])
+    llm_content = json.dumps(
+        [
+            {"key": "user_prefers_chinese", "value": "用户偏好中文", "tags": ["lang"]},
+            {"key": "user_name", "value": "用户叫小王", "tags": []},
+        ]
+    )
     llm = FakeLLM(content=llm_content)
     store = FakeSessionStore(messages=msgs)
     s = SessionEndExtractStrategy(p, lambda: llm, session_store=store, min_messages=5)

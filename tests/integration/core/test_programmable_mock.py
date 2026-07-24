@@ -1,4 +1,5 @@
 """ProgrammableModelProvider 与 Response DSL 单元测试"""
+
 import pytest
 
 from tests.integration.core.programmable_mock import ProgrammableModelProvider, Response
@@ -41,10 +42,12 @@ class TestProgrammableModelProvider:
     @pytest.mark.asyncio
     async def test_expect_returns_queued_responses(self):
         client = ProgrammableModelProvider()
-        client.expect([
-            Response.content("first"),
-            Response.content("second"),
-        ])
+        client.expect(
+            [
+                Response.content("first"),
+                Response.content("second"),
+            ]
+        )
 
         r1 = await client.chat(messages=[])
         r2 = await client.chat(messages=[])
@@ -88,9 +91,11 @@ class TestProgrammableModelProvider:
     @pytest.mark.asyncio
     async def test_tool_call_response_format(self):
         client = ProgrammableModelProvider()
-        client.expect([
-            Response.tool_call("read_file", {"path": "/tmp/x"}),
-        ])
+        client.expect(
+            [
+                Response.tool_call("read_file", {"path": "/tmp/x"}),
+            ]
+        )
 
         r = await client.chat(messages=[])
         assert "tool_calls" in r

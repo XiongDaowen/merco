@@ -1,4 +1,5 @@
 """DashboardSection 与 Dashboard 渲染测试"""
+
 from unittest.mock import MagicMock
 
 from cli.main import (
@@ -110,12 +111,14 @@ def test_skills_section_shows_names_and_truncates():
     section = SkillsSection(max_display=2)
     agent = make_fake_agent()
     registry = MagicMock()
-    registry.list_skills = MagicMock(return_value=[
-        {"name": "brainstorming", "description": "a"},
-        {"name": "test", "description": "b"},
-        {"name": "review", "description": "c"},
-        {"name": "debug", "description": "d"},
-    ])
+    registry.list_skills = MagicMock(
+        return_value=[
+            {"name": "brainstorming", "description": "a"},
+            {"name": "test", "description": "b"},
+            {"name": "review", "description": "c"},
+            {"name": "debug", "description": "d"},
+        ]
+    )
     agent.skill_registry = registry
     text = section.render(agent)
     assert "brainstorming" in text
@@ -167,10 +170,7 @@ def test_hint_section_shows_help_text():
 
 def test_dashboard_renders_all_sections_in_registration_order():
     """Dashboard 按 use() 顺序拼接所有区块输出"""
-    dashboard = (Dashboard()
-        .use(WelcomeSection())
-        .use(ModelSection())
-        .use(HintSection()))
+    dashboard = Dashboard().use(WelcomeSection()).use(ModelSection()).use(HintSection())
     agent = make_fake_agent()
     text = dashboard.render(agent)
     # 三段都应该存在
@@ -181,15 +181,14 @@ def test_dashboard_renders_all_sections_in_registration_order():
 
 def test_dashboard_skips_section_returning_none():
     """render() 返回 None 或空字符串时跳过"""
+
     class EmptySection:
         name = "empty"
+
         def render(self, agent, **ctx):
             return None
 
-    dashboard = (Dashboard()
-        .use(WelcomeSection())
-        .use(EmptySection())
-        .use(HintSection()))
+    dashboard = Dashboard().use(WelcomeSection()).use(EmptySection()).use(HintSection())
     agent = make_fake_agent()
     text = dashboard.render(agent)
     assert "Mercury Code" in text
@@ -198,14 +197,14 @@ def test_dashboard_skips_section_returning_none():
 
 def test_dashboard_section_render_failure_does_not_crash():
     """某个区块 render() 抛异常时，整个 Dashboard 不挂，显示失败标记"""
+
     class CrashSection:
         name = "crash"
+
         def render(self, agent, **ctx):
             raise RuntimeError("boom")
 
-    dashboard = (Dashboard()
-        .use(WelcomeSection())
-        .use(CrashSection()))
+    dashboard = Dashboard().use(WelcomeSection()).use(CrashSection())
     agent = make_fake_agent()
     text = dashboard.render(agent)
     assert "Mercury Code" in text

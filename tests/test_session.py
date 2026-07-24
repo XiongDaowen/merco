@@ -1,4 +1,5 @@
 """SQLite SessionStore 测试 — 无 merco 依赖"""
+
 import os
 import sys
 import tempfile
@@ -36,7 +37,7 @@ print(f"  {len(sessions)} session(s)  ✓")
 
 print("── 不覆盖已有标题 ──")
 store.create_session("s1", "新标题")  # IGNORE
-store.update_title("s1", "新标题")    # title != '' → skip
+store.update_title("s1", "新标题")  # title != '' → skip
 s2 = store.load_session("s1")
 assert s2["title"] == "测试标题"
 print("  title preserved  ✓")

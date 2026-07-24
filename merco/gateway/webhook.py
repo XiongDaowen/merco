@@ -1,4 +1,5 @@
 """WebhookGateway - FastAPI/uvicorn 参考网关适配器（同步请求/响应模型）。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -21,8 +22,9 @@ class WebhookGateway(GatewayAdapter):
 
     name = "webhook"
 
-    def __init__(self, *, host: str = "127.0.0.1", port: int = 0,
-                 path: str = "/message", outbound_url: str | None = None):
+    def __init__(
+        self, *, host: str = "127.0.0.1", port: int = 0, path: str = "/message", outbound_url: str | None = None
+    ):
         super().__init__()
         self.host = host
         self.port = port
@@ -48,8 +50,7 @@ class WebhookGateway(GatewayAdapter):
             reply = await gateway._message_handler(chat_id, message)
             return {"reply": reply}
 
-        config = uvicorn.Config(app, host=self.host, port=self.port,
-                                log_level="warning")
+        config = uvicorn.Config(app, host=self.host, port=self.port, log_level="warning")
         self._server = uvicorn.Server(config)
         self._serve_task = asyncio.create_task(self._server.serve())
         # 等启动绑定端口（serve() 会在 started=True 后进 main_loop）
@@ -60,8 +61,7 @@ class WebhookGateway(GatewayAdapter):
         servers = self._server.servers or []
         socks = servers[0].sockets if servers else []
         self.actual_port = socks[0].getsockname()[1] if socks else self.port
-        logger.info("WebhookGateway listening on %s:%s%s",
-                    self.host, self.actual_port, self.path)
+        logger.info("WebhookGateway listening on %s:%s%s", self.host, self.actual_port, self.path)
 
     async def stop(self) -> None:
         if self._server is not None:
@@ -79,6 +79,6 @@ class WebhookGateway(GatewayAdapter):
             logger.debug("WebhookGateway.send_message no outbound_url; no-op (chat_id=%s)", chat_id)
             return
         import httpx
+
         async with httpx.AsyncClient() as client:
-            await client.post(self.outbound_url,
-                              json={"chat_id": chat_id, "message": message})
+            await client.post(self.outbound_url, json={"chat_id": chat_id, "message": message})

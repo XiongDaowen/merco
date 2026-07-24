@@ -1,4 +1,5 @@
 """PluginSpec 单元测试"""
+
 from merco.plugins.base import Plugin, PluginSpec
 
 

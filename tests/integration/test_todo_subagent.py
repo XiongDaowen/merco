@@ -1,4 +1,5 @@
 """Todo + SubAgent 端到端集成测试"""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -27,10 +28,12 @@ class TestTodoSubAgentE2E:
 
         # ── 4. Mock 子代理执行 ──
         mock_result = "子代理完成了任务"
-        manager._create_sub_agent = AsyncMock(return_value=MagicMock(
-            session=MagicMock(id="sub_1"),
-            run=AsyncMock(return_value=mock_result),
-        ))
+        manager._create_sub_agent = AsyncMock(
+            return_value=MagicMock(
+                session=MagicMock(id="sub_1"),
+                run=AsyncMock(return_value=mock_result),
+            )
+        )
 
         # ── 5. 派发 ──
         subagent_id = await manager.dispatch(todo.id, "执行任务")
@@ -58,10 +61,12 @@ class TestTodoSubAgentE2E:
         todo = todo_manager.create("会失败的任务")
 
         # Mock 子代理执行抛出异常
-        manager._create_sub_agent = AsyncMock(return_value=MagicMock(
-            session=MagicMock(id="sub_err"),
-            run=AsyncMock(side_effect=RuntimeError("boom")),
-        ))
+        manager._create_sub_agent = AsyncMock(
+            return_value=MagicMock(
+                session=MagicMock(id="sub_err"),
+                run=AsyncMock(side_effect=RuntimeError("boom")),
+            )
+        )
 
         subagent_id = await manager.dispatch(todo.id, "执行会失败")
 
@@ -127,16 +132,16 @@ class TestTodoSubAgentE2E:
         todo = todo_manager.create("事件测试")
 
         mock_result = "完成"
-        manager._create_sub_agent = AsyncMock(return_value=MagicMock(
-            session=MagicMock(id="sub_hook"),
-            run=AsyncMock(return_value=mock_result),
-        ))
+        manager._create_sub_agent = AsyncMock(
+            return_value=MagicMock(
+                session=MagicMock(id="sub_hook"),
+                run=AsyncMock(return_value=mock_result),
+            )
+        )
 
         # Patch hooks.emit 以捕获调用
         test_agent.hooks.emit = AsyncMock()
 
         await manager.dispatch(todo.id, "触发事件")
 
-        test_agent.hooks.emit.assert_called_once_with(
-            "subagent.completed", todo_id=todo.id, result=mock_result
-        )
+        test_agent.hooks.emit.assert_called_once_with("subagent.completed", todo_id=todo.id, result=mock_result)

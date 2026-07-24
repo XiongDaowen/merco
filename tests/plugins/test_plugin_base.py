@@ -1,4 +1,5 @@
 """Plugin base class + PluginContext unit tests"""
+
 import pytest
 
 from merco.plugins.base import Plugin, PluginContext
@@ -39,15 +40,15 @@ def test_plugin_abc_requires_activate():
 
 def test_plugin_context_has_all_extension_points(ctx):
     """PluginContext exposes all extension points"""
-    assert hasattr(ctx, 'hooks')
-    assert hasattr(ctx, 'tool_registry')
-    assert hasattr(ctx, 'prompt_builder')
-    assert hasattr(ctx, 'recovery_pipeline')
-    assert hasattr(ctx, 'result_pipeline')
-    assert hasattr(ctx, 'memory_save_pipeline')
-    assert hasattr(ctx, 'recaller')
-    assert hasattr(ctx, 'config')
-    assert hasattr(ctx, 'observer')
+    assert hasattr(ctx, "hooks")
+    assert hasattr(ctx, "tool_registry")
+    assert hasattr(ctx, "prompt_builder")
+    assert hasattr(ctx, "recovery_pipeline")
+    assert hasattr(ctx, "result_pipeline")
+    assert hasattr(ctx, "memory_save_pipeline")
+    assert hasattr(ctx, "recaller")
+    assert hasattr(ctx, "config")
+    assert hasattr(ctx, "observer")
 
 
 def test_plugin_context_convenience_methods(ctx):
@@ -56,6 +57,7 @@ def test_plugin_context_convenience_methods(ctx):
 
     # Activate to register tool via convenience method
     import asyncio
+
     asyncio.run(plugin.activate(ctx))
 
     assert plugin.activated is True
@@ -77,6 +79,7 @@ def test_plugin_deactivate_default():
     plugin = MinimalPlugin()
     # Should not raise - default deactivate is a no-op
     import asyncio
+
     asyncio.run(plugin.deactivate())
 
 
@@ -100,8 +103,10 @@ def test_add_processor_rejects_non_whitelisted_pipeline(ctx):
 
 def test_add_processor_allows_context_pipeline(ctx):
     """add_processor 允许白名单内 pipeline"""
+
     class DummyProcessor:
         name = "dummy"
+
         async def process(self, messages, **kwargs):
             return messages
 
@@ -146,20 +151,26 @@ def ctx(tmp_path):
 
 def test_plugin_priority_and_depends_on_defaults():
     """Plugin 默认 priority=50, depends_on=[]"""
+
     class P(Plugin):
         name = "p"
+
         async def activate(self, ctx): ...
+
     assert P.priority == 50
     assert P.depends_on == []
 
 
 def test_plugin_priority_overridable():
     """Plugin 可覆盖 priority 和 depends_on"""
+
     class Q(Plugin):
         name = "q"
         priority = 100
         depends_on = ["p"]
+
         async def activate(self, ctx): ...
+
     assert Q.priority == 100
     assert Q.depends_on == ["p"]
 
@@ -169,11 +180,17 @@ def test_plugin_context_security_pipeline_exposed():
     from unittest.mock import MagicMock
 
     from merco.plugins.base import PluginContext
+
     sec = MagicMock()
     ctx = PluginContext(
-        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
-        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
-        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
+        hooks=MagicMock(),
+        tool_registry=MagicMock(),
+        prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(),
+        result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(),
+        recaller=MagicMock(),
+        config=MagicMock(),
         security_pipeline=sec,
     )
     assert ctx.security_pipeline is sec
@@ -184,13 +201,23 @@ def test_convenience_methods_delegate():
     from unittest.mock import MagicMock
 
     from merco.plugins.base import PluginContext
+
     ctx = PluginContext(
-        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
-        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
-        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
-        observer=MagicMock(), todo_manager=MagicMock(), sub_agent_manager=MagicMock(),
-        context_pipeline=MagicMock(), agent_profiles=MagicMock(),
-        memory_backends=MagicMock(), loop_policies=MagicMock(),
+        hooks=MagicMock(),
+        tool_registry=MagicMock(),
+        prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(),
+        result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(),
+        recaller=MagicMock(),
+        config=MagicMock(),
+        observer=MagicMock(),
+        todo_manager=MagicMock(),
+        sub_agent_manager=MagicMock(),
+        context_pipeline=MagicMock(),
+        agent_profiles=MagicMock(),
+        memory_backends=MagicMock(),
+        loop_policies=MagicMock(),
         security_pipeline=MagicMock(),
     )
     profile, policy, backend, sec_policy = object(), object(), object(), object()
@@ -209,10 +236,16 @@ def test_add_security_policy_without_pipeline_raises():
     from unittest.mock import MagicMock
 
     from merco.plugins.base import PluginContext
+
     ctx = PluginContext(
-        hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
-        recovery_pipeline=MagicMock(), result_pipeline=MagicMock(),
-        memory_save_pipeline=MagicMock(), recaller=MagicMock(), config=MagicMock(),
+        hooks=MagicMock(),
+        tool_registry=MagicMock(),
+        prompt_builder=MagicMock(),
+        recovery_pipeline=MagicMock(),
+        result_pipeline=MagicMock(),
+        memory_save_pipeline=MagicMock(),
+        recaller=MagicMock(),
+        config=MagicMock(),
     )  # security_pipeline 默认 None
     try:
         ctx.add_security_policy(object())

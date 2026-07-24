@@ -8,7 +8,7 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger("merco.sandbox.snapshot")
@@ -55,13 +55,13 @@ def track(path: str, content: str, session_id: str | None = None) -> dict:
         {session_id, snapshot_id, path, timestamp}
     """
     if session_id is None:
-        session_id = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+        session_id = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S_%f")
 
     snapshots = _load(session_id)
     entry = {
         "path": str(Path(path).resolve()),
         "content": content,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        "timestamp": datetime.now(tz=UTC).isoformat(),
     }
     snapshots.append(entry)
     _save(session_id, snapshots)
@@ -93,11 +93,13 @@ def list_sessions() -> list[dict]:
     for f in sorted(_ensure_dir().glob("*.json"), reverse=True):
         try:
             data = json.loads(f.read_text())
-            sessions.append({
-                "session_id": f.stem,
-                "file_count": len(data),
-                "timestamp": data[0]["timestamp"] if data else "",
-            })
+            sessions.append(
+                {
+                    "session_id": f.stem,
+                    "file_count": len(data),
+                    "timestamp": data[0]["timestamp"] if data else "",
+                }
+            )
         except Exception:
             continue
     return sessions
@@ -126,18 +128,22 @@ def revert(session_id: str, snapshot_index: int | None = None) -> list[dict]:
         try:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(entry["content"], encoding="utf-8")
-            results.append({
-                "path": entry["path"],
-                "reverted": True,
-                "error": None,
-            })
+            results.append(
+                {
+                    "path": entry["path"],
+                    "reverted": True,
+                    "error": None,
+                }
+            )
             logger.info("已恢复 %s", entry["path"])
         except Exception as e:
-            results.append({
-                "path": entry["path"],
-                "reverted": False,
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "path": entry["path"],
+                    "reverted": False,
+                    "error": str(e),
+                }
+            )
 
     if snapshot_index is None:
         # 全部撤销后删除会话文件（仅当所有撤销都成功；失败时保留以便重试）

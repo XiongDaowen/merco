@@ -1,4 +1,5 @@
 """TestScenario上下文对象与Agent构建器"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ class _FixedActionPolicy(PermissionPolicy):
 @dataclass
 class TestScenario:
     """集成测试场景上下文对象"""
+
     agent: Agent
     provider: ProgrammableModelProvider
     snapshot_root: Path
@@ -95,6 +97,7 @@ async def build_scenario_agent(provider: ProgrammableModelProvider, tmp_path: Pa
 
     # 使用根conftest里的make_test_registry()
     from tests.conftest import make_test_registry
+
     reg = make_test_registry()
 
     # 用Agent.create()异步工厂

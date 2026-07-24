@@ -1,4 +1,5 @@
 """插件系统集成测试 — 覆盖插件完整生命周期与多插件协同。"""
+
 import pytest
 
 from merco.plugins.base import Plugin, PluginContext
@@ -37,8 +38,7 @@ class TestPluginLifecycle:
     async def test_all_builtin_plugins_activate(self, scenario):
         active = scenario.agent.plugin_manager.active_plugins
         expected = {"observability", "skills", "mcp", "subagent", "web", "scheduler"}
-        assert expected.issubset(set(active)), \
-            f"missing {expected - set(active)}"
+        assert expected.issubset(set(active)), f"missing {expected - set(active)}"
 
 
 class TestPluginFailureIsolation:
@@ -84,10 +84,7 @@ class TestPluginHookEvents:
         scenario.agent.plugin_manager.register(TestPlugin())
         await scenario.agent.plugin_manager.activate("event_test")
 
-        assert any(
-            e.get("plugin_name") == "event_test" and e.get("version") == "2.5.0"
-            for e in emitted
-        )
+        assert any(e.get("plugin_name") == "event_test" and e.get("version") == "2.5.0" for e in emitted)
 
 
 class TestPluginContextShared:

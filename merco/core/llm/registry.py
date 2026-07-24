@@ -4,6 +4,7 @@ _BUILTIN_PROVIDERS is declarative data feeding the registry (not a static dict
 of provider metadata). Third-party providers register at runtime via
 PluginContext.register_model_provider.
 """
+
 from __future__ import annotations
 
 import os
@@ -14,39 +15,62 @@ from merco.core.llm.openai_provider import OpenAICompatibleProvider
 
 _BUILTIN_PROVIDERS: list[ModelProviderInfo] = [
     ModelProviderInfo(
-        name="openai", provider_class=OpenAICompatibleProvider, display_name="OpenAI",
-        base_url="https://api.openai.com/v1", key_env="OPENAI_API_KEY",
-        key_help="https://platform.openai.com/api-keys", default_model="gpt-4o",
+        name="openai",
+        provider_class=OpenAICompatibleProvider,
+        display_name="OpenAI",
+        base_url="https://api.openai.com/v1",
+        key_env="OPENAI_API_KEY",
+        key_help="https://platform.openai.com/api-keys",
+        default_model="gpt-4o",
         models=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini", "o1"],
         description="最通用的平台，GPT-4o / o3 系列",
     ),
     ModelProviderInfo(
-        name="minimax", provider_class=OpenAICompatibleProvider, display_name="MiniMax",
-        base_url="https://api.minimaxi.com/v1", key_env="MINIMAX_API_KEY",
+        name="minimax",
+        provider_class=OpenAICompatibleProvider,
+        display_name="MiniMax",
+        base_url="https://api.minimaxi.com/v1",
+        key_env="MINIMAX_API_KEY",
         key_help="https://platform.minimaxi.com/user-center/basic-information",
         default_model="MiniMax-M2.7",
         models=["MiniMax-M2.7", "MiniMax-Text-01", "abab7-chat"],
         description="国产平台，MiniMax-M2.7 性价比高",
     ),
     ModelProviderInfo(
-        name="anthropic", provider_class=AnthropicNativeProvider, display_name="Anthropic",
-        base_url="https://api.anthropic.com", key_env="ANTHROPIC_API_KEY",
+        name="anthropic",
+        provider_class=AnthropicNativeProvider,
+        display_name="Anthropic",
+        base_url="https://api.anthropic.com",
+        key_env="ANTHROPIC_API_KEY",
         key_help="https://console.anthropic.com/settings/keys",
         default_model="claude-sonnet-4-20250514",
-        models=["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022",
-                "claude-3-opus-20240229", "claude-3-5-sonnet-20241022"],
+        models=[
+            "claude-sonnet-4-20250514",
+            "claude-3-5-haiku-20241022",
+            "claude-3-opus-20240229",
+            "claude-3-5-sonnet-20241022",
+        ],
         description="Claude 系列，代码能力优秀（原生 Messages API）",
     ),
     ModelProviderInfo(
-        name="openrouter", provider_class=OpenAICompatibleProvider, display_name="OpenRouter",
-        base_url="https://openrouter.ai/api/v1", key_env="OPENROUTER_API_KEY",
-        key_help="https://openrouter.ai/keys", default_model="anthropic/claude-sonnet-4",
-        models=[], description="模型聚合平台，一个 key 调用上百种模型",
+        name="openrouter",
+        provider_class=OpenAICompatibleProvider,
+        display_name="OpenRouter",
+        base_url="https://openrouter.ai/api/v1",
+        key_env="OPENROUTER_API_KEY",
+        key_help="https://openrouter.ai/keys",
+        default_model="anthropic/claude-sonnet-4",
+        models=[],
+        description="模型聚合平台，一个 key 调用上百种模型",
     ),
     ModelProviderInfo(
-        name="deepseek", provider_class=OpenAICompatibleProvider, display_name="DeepSeek",
-        base_url="https://api.deepseek.com/v1", key_env="DEEPSEEK_API_KEY",
-        key_help="https://platform.deepseek.com/api_keys", default_model="deepseek-chat",
+        name="deepseek",
+        provider_class=OpenAICompatibleProvider,
+        display_name="DeepSeek",
+        base_url="https://api.deepseek.com/v1",
+        key_env="DEEPSEEK_API_KEY",
+        key_help="https://platform.deepseek.com/api_keys",
+        default_model="deepseek-chat",
         models=["deepseek-chat", "deepseek-reasoner"],
         description="国产平台，deepseek-reasoner 推理能力强",
     ),
@@ -57,9 +81,7 @@ class ModelRegistry:
     """Sole source of truth: register/get/list/select. Owns credential resolution."""
 
     def __init__(self):
-        self._providers: dict[str, ModelProviderInfo] = {
-            p.name: p for p in _BUILTIN_PROVIDERS
-        }
+        self._providers: dict[str, ModelProviderInfo] = {p.name: p for p in _BUILTIN_PROVIDERS}
 
     def register(self, info: ModelProviderInfo) -> None:
         self._providers[info.name] = info

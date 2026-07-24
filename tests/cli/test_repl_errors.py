@@ -1,4 +1,5 @@
 """_run_one_turn() 异常路径测试 — 用户最关心的 LLM 失败友好性"""
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
@@ -40,7 +41,12 @@ async def test_baseline_success_renders_panel_non_streaming(capture_console):
     current_task_ref = [None]
 
     result = await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
 
     text = capture.export_text()
@@ -62,7 +68,12 @@ async def test_stream_mode_suppresses_panel(capture_console):
     current_task_ref = [None]
 
     await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
 
     text = capture.export_text()
@@ -83,7 +94,12 @@ async def test_stream_mode_but_no_stream_content_still_panels(capture_console):
     current_task_ref = [None]
 
     await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
 
     text = capture.export_text()
@@ -101,7 +117,12 @@ async def test_empty_response_does_not_render_panel(capture_console):
     current_task_ref = [None]
 
     result = await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
     assert result == "continue"
 
@@ -113,16 +134,19 @@ async def test_empty_response_does_not_render_panel(capture_console):
 async def test_runtime_error_shows_red_friendly_text_not_traceback(capture_console):
     """RuntimeError → 显示 [red]错误: <e>[/red]，**禁止** traceback 裸奔"""
     capture, buf = capture_console
-    agent = make_fake_agent(
-        run_side_effect=RuntimeError("rate limit exceeded")
-    )
+    agent = make_fake_agent(run_side_effect=RuntimeError("rate limit exceeded"))
     driver = FakeDriver(inputs=["hi"])
     area = PromptArea()
     handle_cmd = AsyncMock(return_value=True)
     current_task_ref = [None]
 
     await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
 
     markup = capture.get_markup()
@@ -137,16 +161,19 @@ async def test_runtime_error_shows_red_friendly_text_not_traceback(capture_conso
 async def test_connection_error_shows_friendly_text(capture_console):
     """ConnectionError → 显示 [red]错误: ...[/red]，无 traceback"""
     capture, buf = capture_console
-    agent = make_fake_agent(
-        run_side_effect=ConnectionError("network unreachable")
-    )
+    agent = make_fake_agent(run_side_effect=ConnectionError("network unreachable"))
     driver = FakeDriver(inputs=["hi"])
     area = PromptArea()
     handle_cmd = AsyncMock(return_value=True)
     current_task_ref = [None]
 
     await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
 
     markup = capture.get_markup()
@@ -159,16 +186,19 @@ async def test_connection_error_shows_friendly_text(capture_console):
 async def test_timeout_error_shows_friendly_text(capture_console):
     """asyncio.TimeoutError → 友好提示"""
     capture, buf = capture_console
-    agent = make_fake_agent(
-        run_side_effect=asyncio.TimeoutError("LLM timeout")
-    )
+    agent = make_fake_agent(run_side_effect=TimeoutError("LLM timeout"))
     driver = FakeDriver(inputs=["hi"])
     area = PromptArea()
     handle_cmd = AsyncMock(return_value=True)
     current_task_ref = [None]
 
     await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
 
     markup = capture.get_markup()
@@ -181,16 +211,19 @@ async def test_timeout_error_shows_friendly_text(capture_console):
 async def test_cancelled_error_shows_dim_not_red(capture_console):
     """CancelledError → [dim]操作已取消[/dim]，**不是** [red]错误"""
     capture, buf = capture_console
-    agent = make_fake_agent(
-        run_side_effect=asyncio.CancelledError()
-    )
+    agent = make_fake_agent(run_side_effect=asyncio.CancelledError())
     driver = FakeDriver(inputs=["hi"])
     area = PromptArea()
     handle_cmd = AsyncMock(return_value=True)
     current_task_ref = [None]
 
     await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
 
     markup = capture.get_markup()
@@ -213,7 +246,12 @@ async def test_eof_error_propagates_from_driver(capture_console):
 
     with pytest.raises(EOFError):
         await _run_one_turn(
-            agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+            agent,
+            area,
+            driver,
+            handle_cmd,
+            current_task_ref,
+            console_obj=capture,
         )
 
 
@@ -229,7 +267,12 @@ async def test_keyboard_interrupt_propagates_from_driver(capture_console):
 
     with pytest.raises(KeyboardInterrupt):
         await _run_one_turn(
-            agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+            agent,
+            area,
+            driver,
+            handle_cmd,
+            current_task_ref,
+            console_obj=capture,
         )
 
 
@@ -244,7 +287,12 @@ async def test_slash_command_returns_continue(capture_console):
     current_task_ref = [None]
 
     result = await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
     assert result == "continue"
     handle_cmd.assert_called_once_with("/help", agent)
@@ -261,7 +309,12 @@ async def test_slash_command_returns_exit_breaks_repl(capture_console):
     current_task_ref = [None]
 
     result = await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
 
     assert result == "exit"
@@ -279,7 +332,12 @@ async def test_empty_input_returns_continue(capture_console):
     current_task_ref = [None]
 
     result = await _run_one_turn(
-        agent, area, driver, handle_cmd, current_task_ref, console_obj=capture,
+        agent,
+        area,
+        driver,
+        handle_cmd,
+        current_task_ref,
+        console_obj=capture,
     )
 
     assert result == "continue"
@@ -325,9 +383,7 @@ async def test_provider_error_uses_logger_info_not_warning(caplog, monkeypatch):
 
     provider = StreamingProvider()
     fake_agent = MagicMock()
-    fake_agent.provider.chat_stream = AsyncMock(
-        side_effect=Exception("rate limit")
-    )
+    fake_agent.provider.chat_stream = AsyncMock(side_effect=Exception("rate limit"))
     fake_agent._error_displayed_in_stream = False
     fake_agent.config.streaming = StreamingConfig(think=True, content=True, think_transient=False)
 

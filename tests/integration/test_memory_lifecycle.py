@@ -1,4 +1,5 @@
 """Memory 全链路端到端测试"""
+
 import json
 
 import pytest
@@ -77,7 +78,10 @@ async def test_full_lifecycle_session_end_extract(tmp_path):
     llm = FakeLLM(content=llm_content)
 
     strategy = SessionEndExtractStrategy(
-        pipeline, lambda: llm, session_store=sess_store, min_messages=5,
+        pipeline,
+        lambda: llm,
+        session_store=sess_store,
+        min_messages=5,
     )
     strategy.subscribe(hooks)
 
@@ -154,9 +158,7 @@ async def test_memory_save_emits_event(test_agent):
     test_agent.hooks.on("memory.saved", on_saved)
 
     # 触发 command.remember
-    await test_agent.hooks.emit(
-        "command.remember", text="我喜欢用中文", key="user_lang_pref"
-    )
+    await test_agent.hooks.emit("command.remember", text="我喜欢用中文", key="user_lang_pref")
 
     # 验证：store 写入成功
     record = test_agent._memory_store.load("user_lang_pref")

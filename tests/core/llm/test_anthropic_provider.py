@@ -117,9 +117,7 @@ def test_parse_response_extracts_cached_tokens():
     fake = MagicMock()
     fake.content = [SimpleNamespace(type="text", text="answer")]
     fake.stop_reason = "end_turn"
-    fake.usage = MagicMock(
-        input_tokens=100, output_tokens=20, cache_read_input_tokens=50
-    )
+    fake.usage = MagicMock(input_tokens=100, output_tokens=20, cache_read_input_tokens=50)
     result = provider._parse_response(fake)
     assert result["usage"]["prompt_tokens"] == 100
     assert result["usage"]["completion_tokens"] == 20

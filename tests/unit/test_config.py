@@ -127,23 +127,23 @@ class TestConfig:
         cfg = MercoConfig._from_dict(data)
         assert cfg.memory_enabled is False
         assert cfg.memory_path == "~/.merco/memory"  # default
-        assert cfg.memory_recall_enabled is True       # default
+        assert cfg.memory_recall_enabled is True  # default
         assert cfg.memory_recall_limit == 10
-        assert cfg.memory_recall_max_chars == 300      # default
-        assert cfg.memory_recall_threshold == 0.0      # default
+        assert cfg.memory_recall_max_chars == 300  # default
+        assert cfg.memory_recall_threshold == 0.0  # default
 
     def test_memory_value_is_string(self):
         """Non-dict 'memory' value should not crash — treated as empty dict."""
         data = {"memory": "off"}
         cfg = MercoConfig._from_dict(data)
-        assert cfg.memory_enabled is True   # default
+        assert cfg.memory_enabled is True  # default
         assert cfg.memory_path == "~/.merco/memory"
 
     def test_memory_value_is_null(self):
         """Non-dict 'memory' value (None/null) should not crash."""
         data = {"memory": None}
         cfg = MercoConfig._from_dict(data)
-        assert cfg.memory_enabled is True   # default
+        assert cfg.memory_enabled is True  # default
         assert cfg.memory_path == "~/.merco/memory"
 
     def test_model_value_is_string(self):
@@ -151,14 +151,14 @@ class TestConfig:
         data = {"model": "off"}
         cfg = MercoConfig._from_dict(data)
         assert cfg.model.provider == "openai"  # default
-        assert cfg.model.model == "gpt-4"      # default
+        assert cfg.model.model == "gpt-4"  # default
 
     def test_model_value_is_null(self):
         """Non-dict 'model' value (None/null) should not crash."""
         data = {"model": None}
         cfg = MercoConfig._from_dict(data)
         assert cfg.model.provider == "openai"  # default
-        assert cfg.model.model == "gpt-4"      # default
+        assert cfg.model.model == "gpt-4"  # default
 
     def test_memory_flat_backward_compat(self):
         """Old flat memory_enabled/memory_path still works as fallback."""
@@ -178,7 +178,7 @@ class TestConfig:
             "memory": {
                 "enabled": True,
                 "path": "/new/path",
-            }
+            },
         }
         cfg = MercoConfig._from_dict(data)
         assert cfg.memory_enabled is True

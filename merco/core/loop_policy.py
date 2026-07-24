@@ -1,4 +1,5 @@
 """Agent LoopPolicy — 可拔插循环策略"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -8,6 +9,7 @@ from dataclasses import dataclass
 @dataclass
 class LoopState:
     """Loop 当前状态"""
+
     iteration: int
     tool_calls_count: int
     max_tool_calls: int
@@ -18,12 +20,14 @@ class LoopState:
 @dataclass
 class LoopDecision:
     """Loop 策略决策"""
+
     action: str  # "continue" | "exit"
     reason: str = ""
 
 
 class LoopPolicy(ABC):
     """Agent Loop 策略基类"""
+
     name: str = ""
 
     @abstractmethod
@@ -34,6 +38,7 @@ class LoopPolicy(ABC):
 
 class DefaultLoopPolicy(LoopPolicy):
     """默认策略：完全复刻当前行为"""
+
     name = "default"
 
     async def decide(self, response: dict, state: LoopState) -> LoopDecision:

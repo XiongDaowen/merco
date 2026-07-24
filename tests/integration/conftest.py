@@ -1,4 +1,5 @@
 """集成测试顶层conftest"""
+
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,7 @@ async def scenario(
 
     # 将隔离的Guard实例通过GuardMiddleware包装后注入中间件链
     from merco.tools.middleware import GuardMiddleware
+
     guard_mw = GuardMiddleware(_isolation_services["guard"])
     agent.tool_registry.use(guard_mw)
 

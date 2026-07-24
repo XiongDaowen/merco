@@ -21,12 +21,14 @@ from tests.conftest import make_test_registry
 
 # ── Enhanced Mock LLM for streaming tests ──────────────────────────
 
+
 class StreamingMockProvider(ModelProvider):
     """Mock LLM that yields multiple chunks to simulate real streaming.
 
     Can be used as a drop-in mock (accepts the same init kwargs) or
     instantiated directly with chunks for test setup.
     """
+
     name = "mock"
 
     def __init__(self, chunks: list[dict] | None = None, **kwargs):
@@ -42,12 +44,10 @@ class StreamingMockProvider(ModelProvider):
         self.chunks = list(chunks or [])
         self.calls: list[dict] = []
 
-    async def chat(self, messages: list[dict], tools: list[dict] = None,
-                   tool_choice: str = "auto") -> dict:
+    async def chat(self, messages: list[dict], tools: list[dict] = None, tool_choice: str = "auto") -> dict:
         """Non-streaming: assemble all chunks into one response."""
         self.calls.append({"messages": messages, "tools": tools})
-        assembled = {"role": "assistant", "content": "", "reasoning": "",
-                     "tool_calls": [], "finish_reason": "stop"}
+        assembled = {"role": "assistant", "content": "", "reasoning": "", "tool_calls": [], "finish_reason": "stop"}
         for chunk in self.chunks:
             assembled["content"] += chunk.get("content", "")
             assembled["reasoning"] += chunk.get("reasoning", "")
@@ -59,8 +59,7 @@ class StreamingMockProvider(ModelProvider):
                 assembled["usage"] = chunk["usage"]
         return assembled
 
-    async def chat_stream(self, messages: list[dict], tools: list[dict] = None,
-                          tool_choice: str = "auto"):
+    async def chat_stream(self, messages: list[dict], tools: list[dict] = None, tool_choice: str = "auto"):
         """Yield chunks one by one to simulate streaming."""
         self.calls.append({"messages": messages, "tools": tools})
         for chunk in self.chunks:
@@ -74,8 +73,7 @@ class SlowStreamingMockProvider(StreamingMockProvider):
         super().__init__(chunks, **kwargs)
         self.delay = delay
 
-    async def chat_stream(self, messages: list[dict], tools: list[dict] = None,
-                          tool_choice: str = "auto"):
+    async def chat_stream(self, messages: list[dict], tools: list[dict] = None, tool_choice: str = "auto"):
         self.calls.append({"messages": messages, "tools": tools})
         for chunk in self.chunks:
             await asyncio.sleep(self.delay)
@@ -84,6 +82,7 @@ class SlowStreamingMockProvider(StreamingMockProvider):
 
 class CancellingMockProvider(ModelProvider):
     """Mock LLM that cancels the current task mid-stream."""
+
     name = "mock"
 
     def __init__(self, chunks_before_cancel: list[dict], **kwargs):
@@ -104,6 +103,7 @@ class CancellingMockProvider(ModelProvider):
 
 
 # ── Fixtures ────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def stream_agent(monkeypatch, tmp_path):
@@ -132,6 +132,7 @@ def stream_agent(monkeypatch, tmp_path):
 def quiet_console(monkeypatch):
     """Replace the agent module's console with a quiet one to avoid terminal noise."""
     from rich.console import Console
+
     quiet = Console(file=StringIO(), force_terminal=True, width=120)
     monkeypatch.setattr("merco.core.agent.console", quiet)
     return quiet
@@ -141,17 +142,20 @@ def quiet_console(monkeypatch):
 # Scenario 1: thinking + content both streaming
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_thinking_and_content_both_streaming(stream_agent, quiet_console):
     """streaming=True, stream_content=True, stream_thinking=True:
     Both thinking and content panels should stream and be preserved."""
-    stream_agent.provider = StreamingMockProvider([
-        {"reasoning": "Let me think..."},
-        {"reasoning": " about this."},
-        {"content": "The answer is "},
-        {"content": "42."},
-        {"finish_reason": "stop"},
-    ])
+    stream_agent.provider = StreamingMockProvider(
+        [
+            {"reasoning": "Let me think..."},
+            {"reasoning": " about this."},
+            {"content": "The answer is "},
+            {"content": "42."},
+            {"finish_reason": "stop"},
+        ]
+    )
 
     result = await stream_agent.run("What is the answer?")
 
@@ -168,12 +172,14 @@ async def test_thinking_and_content_both_streaming(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_thinking_only_no_content(stream_agent, quiet_console):
     """Model returns reasoning but empty content — should not crash."""
-    stream_agent.provider = StreamingMockProvider([
-        {"reasoning": "Thinking hard..."},
-        {"reasoning": " still thinking..."},
-        {"content": ""},
-        {"finish_reason": "stop"},
-    ])
+    stream_agent.provider = StreamingMockProvider(
+        [
+            {"reasoning": "Thinking hard..."},
+            {"reasoning": " still thinking..."},
+            {"content": ""},
+            {"finish_reason": "stop"},
+        ]
+    )
 
     # Should not crash even with empty content
     result = await stream_agent.run("Think about nothing")
@@ -184,11 +190,13 @@ async def test_thinking_only_no_content(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_content_only_no_thinking(stream_agent, quiet_console):
     """Model returns content without reasoning — should work fine."""
-    stream_agent.provider = StreamingMockProvider([
-        {"content": "Hello "},
-        {"content": "world!"},
-        {"finish_reason": "stop"},
-    ])
+    stream_agent.provider = StreamingMockProvider(
+        [
+            {"content": "Hello "},
+            {"content": "world!"},
+            {"finish_reason": "stop"},
+        ]
+    )
 
     result = await stream_agent.run("Say hello")
     assert "Hello" in result
@@ -199,13 +207,16 @@ async def test_content_only_no_thinking(stream_agent, quiet_console):
 # Scenario 2: Empty content handling
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_empty_content_no_crash(stream_agent, quiet_console):
     """Empty content should not crash — handled by empty response pipeline."""
-    stream_agent.provider = StreamingMockProvider([
-        {"content": ""},
-        {"finish_reason": "stop"},
-    ])
+    stream_agent.provider = StreamingMockProvider(
+        [
+            {"content": ""},
+            {"finish_reason": "stop"},
+        ]
+    )
 
     # Should not raise
     result = await stream_agent.run("Give empty response")
@@ -215,11 +226,13 @@ async def test_empty_content_no_crash(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_whitespace_only_content(stream_agent, quiet_console):
     """Whitespace-only content should be handled gracefully."""
-    stream_agent.provider = StreamingMockProvider([
-        {"content": "   "},
-        {"content": "\n\n"},
-        {"finish_reason": "stop"},
-    ])
+    stream_agent.provider = StreamingMockProvider(
+        [
+            {"content": "   "},
+            {"content": "\n\n"},
+            {"finish_reason": "stop"},
+        ]
+    )
 
     result = await stream_agent.run("Give whitespace")
     assert result is not None
@@ -229,18 +242,20 @@ async def test_whitespace_only_content(stream_agent, quiet_console):
 # Scenario 3: tool_calls with streaming
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_tool_calls_with_streaming(stream_agent, quiet_console):
     """Tool calls should work correctly with streaming enabled."""
     # First call: return a tool_call
     # Second call (after tool result): return final content
-    stream_agent.provider = StreamingMockProvider([
-        # First response: tool call
-        {"reasoning": "I need to use a tool"},
-        {"tool_calls": [{"id": "tc_1", "name": "echo", "index": 0,
-                         "arguments": '{"message": "hello"}'}]},
-        {"finish_reason": "tool_calls"},
-    ])
+    stream_agent.provider = StreamingMockProvider(
+        [
+            # First response: tool call
+            {"reasoning": "I need to use a tool"},
+            {"tool_calls": [{"id": "tc_1", "name": "echo", "index": 0, "arguments": '{"message": "hello"}'}]},
+            {"finish_reason": "tool_calls"},
+        ]
+    )
     # Override to provide second response after tool execution
     original_stream = stream_agent.provider.chat_stream
     call_count = [0]
@@ -250,8 +265,7 @@ async def test_tool_calls_with_streaming(stream_agent, quiet_console):
         if call_count[0] == 1:
             # First call: tool call
             yield {"reasoning": "I need to use a tool"}
-            yield {"tool_calls": [{"id": "tc_1", "name": "echo", "index": 0,
-                                   "arguments": '{"message": "hello"}'}]}
+            yield {"tool_calls": [{"id": "tc_1", "name": "echo", "index": 0, "arguments": '{"message": "hello"}'}]}
             yield {"finish_reason": "tool_calls"}
         else:
             # Second call: final answer
@@ -261,9 +275,11 @@ async def test_tool_calls_with_streaming(stream_agent, quiet_console):
 
     stream_agent.provider.chat_stream = multi_turn_stream
     # Also need to handle non-streaming chat for the wrap-up path
-    stream_agent.provider.chat = MagicMock(side_effect=[
-        # For the second call, the agent loop calls chat_stream, not chat
-    ])
+    stream_agent.provider.chat = MagicMock(
+        side_effect=[
+            # For the second call, the agent loop calls chat_stream, not chat
+        ]
+    )
 
     # Actually, the agent loop uses _provider.get_response which calls chat_stream
     # Let's just use a simpler approach - override chat_stream entirely
@@ -271,8 +287,7 @@ async def test_tool_calls_with_streaming(stream_agent, quiet_console):
         call_count[0] += 1
         if call_count[0] == 1:
             yield {"reasoning": "I need to use a tool"}
-            yield {"tool_calls": [{"id": "tc_1", "name": "echo", "index": 0,
-                                   "arguments": '{"message": "hello"}'}]}
+            yield {"tool_calls": [{"id": "tc_1", "name": "echo", "index": 0, "arguments": '{"message": "hello"}'}]}
             yield {"finish_reason": "tool_calls"}
         else:
             yield {"content": "The tool returned: hello"}
@@ -299,10 +314,8 @@ async def test_tool_calls_streaming_arguments(stream_agent, quiet_console):
         if call_count[0] == 1:
             # Tool call with arguments split across chunks
             yield {"reasoning": "Using tool"}
-            yield {"tool_calls": [{"id": "tc_1", "name": "echo", "index": 0,
-                                   "arguments": '{"mes'}]}
-            yield {"tool_calls": [{"id": "", "name": "", "index": 0,
-                                   "arguments": 'sage": "hello"}'}]}
+            yield {"tool_calls": [{"id": "tc_1", "name": "echo", "index": 0, "arguments": '{"mes'}]}
+            yield {"tool_calls": [{"id": "", "name": "", "index": 0, "arguments": 'sage": "hello"}'}]}
             yield {"finish_reason": "tool_calls"}
         else:
             yield {"content": "Done"}
@@ -321,6 +334,7 @@ async def test_tool_calls_streaming_arguments(stream_agent, quiet_console):
 # ═══════════════════════════════════════════════════════════
 # Scenario 4: Ctrl+C interruption
 # ═══════════════════════════════════════════════════════════
+
 
 @pytest.mark.asyncio
 async def test_interrupt_during_streaming(stream_agent, quiet_console):
@@ -358,6 +372,7 @@ async def test_interrupt_during_streaming(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_interrupt_preserves_partial_content(stream_agent, quiet_console):
     """When interrupted, partial content should be saved to session."""
+
     async def slow_stream_with_cancel(messages, tools=None, tool_choice="auto"):
         yield {"reasoning": "Thinking step 1"}
         yield {"reasoning": " Thinking step 2"}
@@ -389,6 +404,7 @@ async def test_interrupt_preserves_partial_content(stream_agent, quiet_console):
 # Scenario 5: stream_thinking_transient=True
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_stream_thinking_transient_true(monkeypatch, tmp_path):
     """When stream_thinking_transient=True, thinking panel should be transient."""
@@ -396,6 +412,7 @@ async def test_stream_thinking_transient_true(monkeypatch, tmp_path):
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     from rich.console import Console
+
     quiet = Console(file=StringIO(), force_terminal=True, width=120)
     monkeypatch.setattr("merco.core.agent.console", quiet)
 
@@ -413,11 +430,13 @@ async def test_stream_thinking_transient_true(monkeypatch, tmp_path):
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
 
-    agent.provider = StreamingMockProvider([
-        {"reasoning": "Transient thinking..."},
-        {"content": "Final answer"},
-        {"finish_reason": "stop"},
-    ])
+    agent.provider = StreamingMockProvider(
+        [
+            {"reasoning": "Transient thinking..."},
+            {"content": "Final answer"},
+            {"finish_reason": "stop"},
+        ]
+    )
 
     result = await agent.run("Test transient")
     assert "Final answer" in result
@@ -433,6 +452,7 @@ async def test_stream_thinking_transient_false_preserves_panel(monkeypatch, tmp_
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     from rich.console import Console
+
     quiet = Console(file=StringIO(), force_terminal=True, width=120)
     monkeypatch.setattr("merco.core.agent.console", quiet)
 
@@ -450,11 +470,13 @@ async def test_stream_thinking_transient_false_preserves_panel(monkeypatch, tmp_
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
 
-    agent.provider = StreamingMockProvider([
-        {"reasoning": "Persistent thinking..."},
-        {"content": "Final answer"},
-        {"finish_reason": "stop"},
-    ])
+    agent.provider = StreamingMockProvider(
+        [
+            {"reasoning": "Persistent thinking..."},
+            {"content": "Final answer"},
+            {"finish_reason": "stop"},
+        ]
+    )
 
     result = await agent.run("Test persistent")
     assert "Final answer" in result
@@ -465,6 +487,7 @@ async def test_stream_thinking_transient_false_preserves_panel(monkeypatch, tmp_
 # Scenario 6: stream_content=False (non-streaming content)
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_stream_content_false(monkeypatch, tmp_path):
     """When stream_content=False, content Live panel should not be created."""
@@ -472,6 +495,7 @@ async def test_stream_content_false(monkeypatch, tmp_path):
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
 
     from rich.console import Console
+
     quiet = Console(file=StringIO(), force_terminal=True, width=120)
     monkeypatch.setattr("merco.core.agent.console", quiet)
 
@@ -489,11 +513,13 @@ async def test_stream_content_false(monkeypatch, tmp_path):
     reg = make_test_registry()
     agent = Agent(config=cfg, tool_registry=reg)
 
-    agent.provider = StreamingMockProvider([
-        {"reasoning": "Thinking..."},
-        {"content": "Answer without streaming"},
-        {"finish_reason": "stop"},
-    ])
+    agent.provider = StreamingMockProvider(
+        [
+            {"reasoning": "Thinking..."},
+            {"content": "Answer without streaming"},
+            {"finish_reason": "stop"},
+        ]
+    )
 
     result = await agent.run("Test no content streaming")
     assert "Answer without streaming" in result
@@ -503,17 +529,21 @@ async def test_stream_content_false(monkeypatch, tmp_path):
 # Scenario 7: Config combinations
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_streaming_false_uses_non_streaming_provider(stream_agent, quiet_console):
     """When streaming=False, NonStreamingProvider should be used."""
     stream_agent.config.streaming.enabled = False
     # Re-create provider
     from merco.core.agent import NonStreamingProvider
+
     stream_agent._provider = NonStreamingProvider()
 
-    stream_agent.provider = StreamingMockProvider([
-        {"content": "Non-streaming answer"},
-    ])
+    stream_agent.provider = StreamingMockProvider(
+        [
+            {"content": "Non-streaming answer"},
+        ]
+    )
 
     result = await stream_agent.run("Test non-streaming")
     assert "Non-streaming answer" in result
@@ -522,11 +552,13 @@ async def test_streaming_false_uses_non_streaming_provider(stream_agent, quiet_c
 @pytest.mark.asyncio
 async def test_streaming_with_usage_info(stream_agent, quiet_console):
     """Streaming with usage info should not crash."""
-    stream_agent.provider = StreamingMockProvider([
-        {"reasoning": "Thinking..."},
-        {"content": "Answer"},
-        {"finish_reason": "stop", "usage": {"prompt_tokens": 10, "completion_tokens": 5}},
-    ])
+    stream_agent.provider = StreamingMockProvider(
+        [
+            {"reasoning": "Thinking..."},
+            {"content": "Answer"},
+            {"finish_reason": "stop", "usage": {"prompt_tokens": 10, "completion_tokens": 5}},
+        ]
+    )
 
     result = await stream_agent.run("Test with usage")
     assert "Answer" in result
@@ -547,13 +579,15 @@ async def test_many_small_chunks(stream_agent, quiet_console):
 @pytest.mark.asyncio
 async def test_interleaved_reasoning_and_content(stream_agent, quiet_console):
     """Interleaved reasoning and content chunks should both be captured."""
-    stream_agent.provider = StreamingMockProvider([
-        {"reasoning": "Step 1: "},
-        {"content": "First part. "},
-        {"reasoning": "Step 2: "},
-        {"content": "Second part."},
-        {"finish_reason": "stop"},
-    ])
+    stream_agent.provider = StreamingMockProvider(
+        [
+            {"reasoning": "Step 1: "},
+            {"content": "First part. "},
+            {"reasoning": "Step 2: "},
+            {"content": "Second part."},
+            {"finish_reason": "stop"},
+        ]
+    )
 
     result = await stream_agent.run("Multi-step answer")
     assert "First part" in result

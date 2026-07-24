@@ -33,6 +33,7 @@ _STOP_REASON_MAP = {
 def translate_anthropic_error(exc: Exception) -> ProviderError:
     """Translate an anthropic SDK exception into a merco ProviderError subclass."""
     import anthropic
+
     status = getattr(exc, "status_code", None) or 0
     if isinstance(exc, getattr(anthropic, "AuthenticationError", type(None))):
         return AuthError(str(exc), status_code=status or 401)
@@ -116,9 +117,7 @@ class AnthropicNativeProvider(ModelProvider):
                 )
                 continue
             if role == "assistant" and message.get("tool_calls"):
-                blocks: list[dict] = [
-                    {"type": "text", "text": message.get("content", "")}
-                ]
+                blocks: list[dict] = [{"type": "text", "text": message.get("content", "")}]
                 for tool_call in message["tool_calls"]:
                     function = tool_call.get("function", {})
                     arguments = function.get("arguments", "{}")
@@ -193,9 +192,7 @@ class AnthropicNativeProvider(ModelProvider):
             "role": "assistant",
             "content": content,
             "reasoning": reasoning,
-            "finish_reason": _STOP_REASON_MAP.get(
-                getattr(response, "stop_reason", ""), "stop"
-            ),
+            "finish_reason": _STOP_REASON_MAP.get(getattr(response, "stop_reason", ""), "stop"),
             "usage": usage_dict,
             **({"tool_calls": tool_calls} if tool_calls else {}),
         }
@@ -208,9 +205,7 @@ class AnthropicNativeProvider(ModelProvider):
             raise translate_anthropic_error(exc) from exc
         return self._parse_response(response)
 
-    async def chat_stream(
-        self, messages, tools=None, tool_choice="auto"
-    ) -> AsyncIterator[dict]:
+    async def chat_stream(self, messages, tools=None, tool_choice="auto") -> AsyncIterator[dict]:
         params = self._build_params(messages, tools, tool_choice)
         params["stream"] = True
         try:
@@ -259,11 +254,7 @@ class AnthropicNativeProvider(ModelProvider):
         return None
 
     def _final_chunk(self, final) -> dict:
-        chunk: dict[str, Any] = {
-            "finish_reason": _STOP_REASON_MAP.get(
-                getattr(final, "stop_reason", ""), "stop"
-            )
-        }
+        chunk: dict[str, Any] = {"finish_reason": _STOP_REASON_MAP.get(getattr(final, "stop_reason", ""), "stop")}
         usage = final.usage
         if usage:
             input_tokens = getattr(usage, "input_tokens", 0) or 0

@@ -4,6 +4,7 @@
 （Agent.create + 插件激活 + scheduler/gateway 启动）-> REPL/submit/handle_inbound
 -> stop()。start()/stop() 幂等。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,8 +30,7 @@ class AgentRuntime:
     scheduler 基础设施，不属于一次 run。
     """
 
-    def __init__(self, config: MercoConfig, *, tool_registry=None,
-                 agent: Agent | None = None):
+    def __init__(self, config: MercoConfig, *, tool_registry=None, agent: Agent | None = None):
         self.config = config
         self._tool_registry = tool_registry
         self._agent: Agent | None = agent

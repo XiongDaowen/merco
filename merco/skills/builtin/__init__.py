@@ -41,4 +41,3 @@ def install_builtin_skills(force: bool = False) -> list[str]:
         installed.append(entry.name)
 
     return installed
-

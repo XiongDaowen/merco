@@ -1,4 +1,5 @@
 """插件管理器单元测试"""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -52,9 +53,7 @@ class TestPluginManager:
         assert mock_plugin.name in manager._active
         # 事件被触发
         mock_context.hooks.emit.assert_called_once_with(
-            "plugin.activated",
-            plugin_name=mock_plugin.name,
-            version=mock_plugin.version
+            "plugin.activated", plugin_name=mock_plugin.name, version=mock_plugin.version
         )
 
     @pytest.mark.asyncio
@@ -89,11 +88,7 @@ class TestPluginManager:
         # 错误日志被记录
         assert any("activation failed" in record.message for record in caplog.records)
         # 错误事件被触发
-        mock_context.hooks.emit.assert_any_call(
-            "plugin.error",
-            plugin_name=mock_plugin.name,
-            error="Activation failed"
-        )
+        mock_context.hooks.emit.assert_any_call("plugin.error", plugin_name=mock_plugin.name, error="Activation failed")
 
     @pytest.mark.asyncio
     async def test_activate_plugin_event_emit_failure(self, manager, mock_plugin, mock_context, caplog):
@@ -122,10 +117,7 @@ class TestPluginManager:
         # 插件被移出激活集合
         assert mock_plugin.name not in manager._active
         # 事件被触发
-        mock_context.hooks.emit.assert_called_once_with(
-            "plugin.deactivated",
-            plugin_name=mock_plugin.name
-        )
+        mock_context.hooks.emit.assert_called_once_with("plugin.deactivated", plugin_name=mock_plugin.name)
 
     @pytest.mark.asyncio
     async def test_deactivate_nonexistent_plugin(self, manager):
@@ -185,9 +177,7 @@ class TestPluginManager:
         plugin2.activate = AsyncMock()
 
         # 默认禁用plugin2
-        mock_context.config.plugins = {
-            "plugin2": {"enabled": False}
-        }
+        mock_context.config.plugins = {"plugin2": {"enabled": False}}
 
         manager.register(plugin1)
         manager.register(plugin2)
@@ -236,6 +226,7 @@ class TestPluginManager:
     def test_register_all_specs(self, manager):
         """register_all 存 specs"""
         from merco.plugins.base import PluginSpec
+
         spec = PluginSpec(name="from-spec", source="entrypoint", loader=lambda: MagicMock)
         manager.register_all([spec])
         assert "from-spec" in manager._specs
@@ -244,6 +235,7 @@ class TestPluginManager:
     def test_meta_from_spec(self, manager):
         """_meta 返回 spec 的 priority/depends_on"""
         from merco.plugins.base import PluginSpec
+
         spec = PluginSpec(name="m", source="dir", priority=80, depends_on=["x"], loader=lambda: MagicMock)
         manager.register_all([spec])
         assert manager._meta("m") == (80, ["x"])
@@ -256,6 +248,7 @@ class TestPluginManager:
     def test_all_names_union(self, manager, mock_plugin):
         """_all_names 是 _plugins 与 _specs 的并集"""
         from merco.plugins.base import PluginSpec
+
         manager.register(mock_plugin)
         manager.register_all([PluginSpec(name="spec-only", source="dir", loader=lambda: MagicMock)])
         names = set(manager._all_names())
@@ -264,41 +257,53 @@ class TestPluginManager:
     def test_resolve_order_priority_then_name(self, manager):
         """同无依赖，按 priority 降序、name 升序"""
         from merco.plugins.base import PluginSpec
-        manager.register_all([
-            PluginSpec(name="low", source="dir", priority=10, loader=lambda: MagicMock),
-            PluginSpec(name="high", source="dir", priority=90, loader=lambda: MagicMock),
-            PluginSpec(name="mid", source="dir", priority=50, loader=lambda: MagicMock),
-        ])
+
+        manager.register_all(
+            [
+                PluginSpec(name="low", source="dir", priority=10, loader=lambda: MagicMock),
+                PluginSpec(name="high", source="dir", priority=90, loader=lambda: MagicMock),
+                PluginSpec(name="mid", source="dir", priority=50, loader=lambda: MagicMock),
+            ]
+        )
         order = manager._resolve_order(manager._all_names())
         assert order == ["high", "mid", "low"]
 
     def test_resolve_order_topological(self, manager):
         """depends_on 决定拓扑序：b 依赖 a，a 先"""
         from merco.plugins.base import PluginSpec
-        manager.register_all([
-            PluginSpec(name="b", source="dir", priority=99, depends_on=["a"], loader=lambda: MagicMock),
-            PluginSpec(name="a", source="dir", priority=1, loader=lambda: MagicMock),
-        ])
+
+        manager.register_all(
+            [
+                PluginSpec(name="b", source="dir", priority=99, depends_on=["a"], loader=lambda: MagicMock),
+                PluginSpec(name="a", source="dir", priority=1, loader=lambda: MagicMock),
+            ]
+        )
         order = manager._resolve_order(manager._all_names())
         assert order.index("a") < order.index("b")  # a 在 b 前（尽管 b priority 更高）
 
     def test_resolve_order_boot_only(self, manager):
         """boot_only=True 只返回 priority>=100"""
         from merco.plugins.base import PluginSpec
-        manager.register_all([
-            PluginSpec(name="boot", source="dir", priority=100, loader=lambda: MagicMock),
-            PluginSpec(name="normal", source="dir", priority=50, loader=lambda: MagicMock),
-        ])
+
+        manager.register_all(
+            [
+                PluginSpec(name="boot", source="dir", priority=100, loader=lambda: MagicMock),
+                PluginSpec(name="normal", source="dir", priority=50, loader=lambda: MagicMock),
+            ]
+        )
         assert manager._resolve_order(manager._all_names(), boot_only=True) == ["boot"]
 
     def test_resolve_order_cycle_excluded(self, manager, caplog):
         """循环依赖节点被排除"""
         from merco.plugins.base import PluginSpec
-        manager.register_all([
-            PluginSpec(name="x", source="dir", depends_on=["y"], loader=lambda: MagicMock),
-            PluginSpec(name="y", source="dir", depends_on=["x"], loader=lambda: MagicMock),
-            PluginSpec(name="z", source="dir", loader=lambda: MagicMock),
-        ])
+
+        manager.register_all(
+            [
+                PluginSpec(name="x", source="dir", depends_on=["y"], loader=lambda: MagicMock),
+                PluginSpec(name="y", source="dir", depends_on=["x"], loader=lambda: MagicMock),
+                PluginSpec(name="z", source="dir", loader=lambda: MagicMock),
+            ]
+        )
         with caplog.at_level("WARNING"):
             order = manager._resolve_order(manager._all_names())
         assert "z" in order
@@ -307,10 +312,13 @@ class TestPluginManager:
     def test_resolve_order_missing_dep_pruned(self, manager, caplog):
         """depends_on 引用不在池内的名字 -> 该节点剪枝"""
         from merco.plugins.base import PluginSpec
-        manager.register_all([
-            PluginSpec(name="needs_ghost", source="dir", depends_on=["ghost"], loader=lambda: MagicMock),
-            PluginSpec(name="ok", source="dir", loader=lambda: MagicMock),
-        ])
+
+        manager.register_all(
+            [
+                PluginSpec(name="needs_ghost", source="dir", depends_on=["ghost"], loader=lambda: MagicMock),
+                PluginSpec(name="ok", source="dir", loader=lambda: MagicMock),
+            ]
+        )
         with caplog.at_level("WARNING"):
             order = manager._resolve_order(manager._all_names())
         assert "ok" in order
@@ -325,6 +333,7 @@ class TestPluginManager:
             name = "lazy"
             version = "1.0.0"
             activated = False
+
             async def activate(self, ctx):
                 type(P).activated = True
 
@@ -341,17 +350,21 @@ class TestPluginManager:
 
         class Dep(Plugin):
             name = "dep"
+
             async def activate(self, ctx): ...
 
         class Need(Plugin):
             name = "need"
+
             async def activate(self, ctx): ...
 
         manager = PluginManager(mock_context)
-        manager.register_all([
-            PluginSpec(name="dep", source="dir", loader=lambda: Dep),
-            PluginSpec(name="need", source="dir", depends_on=["dep"], loader=lambda: Need),
-        ])
+        manager.register_all(
+            [
+                PluginSpec(name="dep", source="dir", loader=lambda: Dep),
+                PluginSpec(name="need", source="dir", depends_on=["dep"], loader=lambda: Need),
+            ]
+        )
         # 不激活 dep，直接激活 need -> 应被跳过
         with caplog.at_level("WARNING"):
             await manager.activate("need")
@@ -365,18 +378,22 @@ class TestPluginManager:
         class Boot(Plugin):
             name = "boot"
             priority = 100
+
             async def activate(self, ctx): ...
 
         class Normal(Plugin):
             name = "normal"
             priority = 50
+
             async def activate(self, ctx): ...
 
         manager = PluginManager(mock_context)
-        manager.register_all([
-            PluginSpec(name="boot", source="dir", priority=100, loader=lambda: Boot),
-            PluginSpec(name="normal", source="dir", priority=50, loader=lambda: Normal),
-        ])
+        manager.register_all(
+            [
+                PluginSpec(name="boot", source="dir", priority=100, loader=lambda: Boot),
+                PluginSpec(name="normal", source="dir", priority=50, loader=lambda: Normal),
+            ]
+        )
         await manager.activate_boot()
         assert "boot" in manager._active
         assert "normal" not in manager._active
@@ -391,6 +408,7 @@ class TestPluginManager:
         class Boot(Plugin):
             name = "boot"
             priority = 100
+
             async def activate(self, ctx):
                 calls["n"] += 1
 
@@ -408,6 +426,7 @@ class TestPluginManager:
         class Boot(Plugin):
             name = "boot"
             priority = 100
+
             async def activate(self, ctx): ...
 
         mock_context.config.plugins = {"boot": {"enabled": False}}
@@ -428,19 +447,23 @@ class TestPluginManager:
         class BadBoot(Plugin):
             name = "bad-boot"
             priority = 100
+
             async def activate(self, ctx):
                 raise RuntimeError("boot boom")
 
         class GoodBoot(Plugin):
             name = "good-boot"
             priority = 100
+
             async def activate(self, ctx): ...
 
         manager = PluginManager(mock_context)
-        manager.register_all([
-            PluginSpec(name="bad-boot", source="dir", priority=100, loader=lambda: BadBoot),
-            PluginSpec(name="good-boot", source="dir", priority=100, loader=lambda: GoodBoot),
-        ])
+        manager.register_all(
+            [
+                PluginSpec(name="bad-boot", source="dir", priority=100, loader=lambda: BadBoot),
+                PluginSpec(name="good-boot", source="dir", priority=100, loader=lambda: GoodBoot),
+            ]
+        )
 
         await manager.activate_boot()
 

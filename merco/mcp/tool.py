@@ -1,4 +1,5 @@
 """MCP tool → BaseTool adapter for ToolRegistry."""
+
 from merco.tools.base import BaseTool
 
 
@@ -21,9 +22,7 @@ class MCPServerTool(BaseTool):
     async def execute(self, **kwargs) -> dict:
         # ToolGuard check — sandbox integration
         if self._guard:
-            approved = await self._guard.check(
-                self.name, kwargs, source=f"mcp:{self.server}"
-            )
+            approved = await self._guard.check(self.name, kwargs, source=f"mcp:{self.server}")
             if not approved:
                 return {"error": "操作已被拦截或取消"}
         try:

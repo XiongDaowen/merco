@@ -15,6 +15,7 @@ console = Console()
 # INFO GROUP
 # ═══════════════════════════════════════════════════════════════════
 
+
 @cmd_registry.register("/help", "显示帮助", group="info")
 async def cmd_help(agent, args):
     console.print(Panel(cmd_registry.get_help_text(), title="帮助"))
@@ -32,7 +33,9 @@ async def cmd_context(agent, args):
     stats = agent.get_context_stats()
     bar = ContextBar()
     console.print(bar.render(agent))
-    console.print(f"  阈值: {int(stats['threshold']*100)}%  |  模型推算: {'是' if stats['is_estimate'] else '否（API 实测）'}")
+    console.print(
+        f"  阈值: {int(stats['threshold'] * 100)}%  |  模型推算: {'是' if stats['is_estimate'] else '否（API 实测）'}"
+    )
     return True
 
 
@@ -78,7 +81,7 @@ async def cmd_report(agent, args):
 
 @cmd_registry.register("/reload-mcp", description="重新加载 MCP 服务器", group="info")
 async def cmd_reload_mcp(agent, args):
-    if not hasattr(agent, 'mcp_manager'):
+    if not hasattr(agent, "mcp_manager"):
         console.print("[dim]MCP 尚未初始化[/dim]")
         return True
     await agent.mcp_manager.reload()
@@ -91,7 +94,7 @@ async def cmd_reload_mcp(agent, args):
 
 @cmd_registry.register("/mcp-status", description="MCP 服务器状态", group="info")
 async def cmd_mcp_status(agent, args):
-    if not hasattr(agent, 'mcp_manager'):
+    if not hasattr(agent, "mcp_manager"):
         console.print("[dim]MCP 尚未初始化[/dim]")
         return True
     status = agent.mcp_manager.status()
@@ -109,6 +112,7 @@ async def cmd_mcp_status(agent, args):
 # SESSION GROUP
 # ═══════════════════════════════════════════════════════════════════
 
+
 @cmd_registry.register("/new", "新会话", group="session")
 async def cmd_new(agent, args):
     agent.observer.save()
@@ -118,13 +122,13 @@ async def cmd_new(agent, args):
     agent.reset()
     agent.observer.reset(full=True)
     from merco.sandbox import snapshot
+
     snapshot.set_current_session(agent.session.id)
     console.print("[dim]已开启新会话[/dim]")
     return True
 
 
-@cmd_registry.register("/sessions", "历史会话列表", group="session",
-                       sub={"<n>": "切换到第 n 个会话"})
+@cmd_registry.register("/sessions", "历史会话列表", group="session", sub={"<n>": "切换到第 n 个会话"})
 async def cmd_sessions(agent, args):
     if args:
         # 切换会话：支持序号 (1,2,3) 或 session id
@@ -140,6 +144,7 @@ async def cmd_sessions(agent, args):
 
         if target_id and target_id != agent.session.id:
             from merco.core.session import Session
+
             agent.observer.save()
             agent.session.metadata["observer"] = agent.observer.snapshot()
             agent.session.save()
@@ -150,6 +155,7 @@ async def cmd_sessions(agent, args):
                 agent.observer.reset()
                 agent._restore_context()
                 from merco.sandbox import snapshot
+
                 snapshot.set_current_session(agent.session.id)
                 console.print(f"[green]已切换到: {s.title or s.id}[/green]")
             else:
@@ -170,9 +176,10 @@ async def cmd_sessions(agent, args):
         marker = " ← 当前" if s["id"] == agent.session.id else ""
         title = s["title"] or f"会话 {s['id']}"
         console.print(
-            f"  {i+1}. [bold]{title}[/bold]{marker}"
+            f"  {i + 1}. [bold]{title}[/bold]{marker}"
             f"  [dim]{s['message_count']} 条消息  {s['updated_at'][:10]}"
-            f"  [/dim][bright_black]{s['id']}[/bright_black]")
+            f"  [/dim][bright_black]{s['id']}[/bright_black]"
+        )
     console.print("[dim]用 /sessions <序号> 切换会话[/dim]")
     return True
 
@@ -187,8 +194,8 @@ async def cmd_fork(agent, args):
     agent._session_store.save_metadata(agent.session.id, agent.session.metadata)
 
     from merco.core.session import Session
-    new_session = Session.fork(agent.session.id, agent._session_store,
-                                title=title or None)
+
+    new_session = Session.fork(agent.session.id, agent._session_store, title=title or None)
     if not new_session:
         console.print("[red]Fork 失败[/red]")
         return True
@@ -197,6 +204,7 @@ async def cmd_fork(agent, args):
     agent.observer.reset(full=agent.config.fork_reset_observer)
     agent._restore_context()
     from merco.sandbox import snapshot
+
     snapshot.set_current_session(agent.session.id)
     display = new_session.title or new_session.id[:8]
     console.print(f"[green]已 fork 到: {display}[/green]")
@@ -238,11 +246,10 @@ async def cmd_history(agent, args):
         return True
 
     total = len(msgs)
-    page = msgs[offset-1:offset-1+limit]
-    end_idx = min(offset+limit-1, total)
+    page = msgs[offset - 1 : offset - 1 + limit]
+    end_idx = min(offset + limit - 1, total)
 
-    console.print(f"[bold]📋 {agent.session.title or agent.session.id[:8]}"
-                  f" ({offset}-{end_idx}/{total}):[/bold]")
+    console.print(f"[bold]📋 {agent.session.title or agent.session.id[:8]} ({offset}-{end_idx}/{total}):[/bold]")
     for i, m in enumerate(page, offset):
         role_icon = {"user": "👤", "assistant": "🤖", "tool": "🔧", "system": "⚙️"}.get(m["role"], "❓")
         content = (m.get("content") or "")[:120].replace("\n", " ")
@@ -250,13 +257,14 @@ async def cmd_history(agent, args):
         console.print(f"  {i:3d}. {role_icon} [dim]{timestamp}[/dim] {content}")
 
     if end_idx < total:
-        console.print(f"  [dim]... 共 {total} 条。下一页: /history {offset+limit}[/dim]")
+        console.print(f"  [dim]... 共 {total} 条。下一页: /history {offset + limit}[/dim]")
     return True
 
 
 @cmd_registry.register("/revert", "撤销本会话的文件修改", group="session")
 async def cmd_revert(agent, args):
     from merco.sandbox import snapshot
+
     session_id = snapshot.get_current_session()
     if not session_id:
         console.print("[red]未找到当前会话[/red]")
@@ -265,22 +273,21 @@ async def cmd_revert(agent, args):
     if not records:
         console.print("[dim]当前会话无文件修改记录[/dim]")
         return True
-    resp = await asyncio.to_thread(
-        input, f"将撤销 {len(records)} 处修改，确认？[y/N] ")
+    resp = await asyncio.to_thread(input, f"将撤销 {len(records)} 处修改，确认？[y/N] ")
     if resp.strip().lower() not in ("y", "yes"):
         console.print("[dim]已取消[/dim]")
         return True
     results = snapshot.revert(session_id)
     ok = sum(1 for r in results if r["reverted"])
     fail = sum(1 for r in results if not r["reverted"])
-    console.print(f"[green]已恢复 {ok} 个文件[/green]"
-                  + (f"，{fail} 个失败" if fail else ""))
+    console.print(f"[green]已恢复 {ok} 个文件[/green]" + (f"，{fail} 个失败" if fail else ""))
     return True
 
 
 # ═══════════════════════════════════════════════════════════════════
 # SEARCH GROUP
 # ═══════════════════════════════════════════════════════════════════
+
 
 @cmd_registry.register("/search", "搜索历史消息", group="search")
 async def cmd_search(agent, args):
@@ -289,6 +296,7 @@ async def cmd_search(agent, args):
         console.print("[dim]用法: /search <关键词>[/dim]")
         return True
     from merco.memory.session_search import SessionSearch
+
     searcher = SessionSearch(agent._session_store)
     results = searcher.search(query, limit=10)
     if not results:
@@ -298,7 +306,7 @@ async def cmd_search(agent, args):
     for i, r in enumerate(results):
         sid = r["session_id"][:8]
         marker = " ← 当前" if r["session_id"] == agent.session.id else ""
-        console.print(f"  {i+1}. [bold]{r['session_title'] or sid}[/bold]{marker}")
+        console.print(f"  {i + 1}. [bold]{r['session_title'] or sid}[/bold]{marker}")
         console.print(f"     [dim]{r['snippet']}[/dim]")
         console.print(f"     [bright_black]{r['role'][:8]:8s}  {r['timestamp'][:16]}[/bright_black]")
     return True
@@ -324,6 +332,7 @@ async def cmd_recall(agent, args):
 # ═══════════════════════════════════════════════════════════════════
 # MEMORY GROUP
 # ═══════════════════════════════════════════════════════════════════
+
 
 @cmd_registry.register("/remember", "存一条记忆（key= 可选）", group="memory")
 async def cmd_remember(agent, args):
@@ -389,11 +398,12 @@ async def cmd_forget(agent, args):
 # SYSTEM GROUP
 # ═══════════════════════════════════════════════════════════════════
 
+
 @cmd_registry.register("/plugins", "列出已安装插件", group="system")
 async def cmd_plugins(agent, args):
     """列出所有插件及其状态"""
     pm = agent.plugin_manager
-    plugins_config = getattr(agent.config, 'plugins', {})
+    plugins_config = getattr(agent.config, "plugins", {})
 
     if not pm._plugins:
         console.print("[dim]暂无插件[/dim]")
@@ -414,6 +424,7 @@ async def cmd_plugins(agent, args):
 # ═══════════════════════════════════════════════════════════════════
 # TASK GROUP
 # ═══════════════════════════════════════════════════════════════════
+
 
 @cmd_registry.register("/todos", "列出所有任务", group="task")
 async def cmd_todos(agent, args):
@@ -511,6 +522,7 @@ async def cmd_agent(agent, args):
 # ═══════════════════════════════════════════════════════════════════
 # CONTROL GROUP
 # ═══════════════════════════════════════════════════════════════════
+
 
 @cmd_registry.register("/exit", "退出", group="control")
 @cmd_registry.register("/quit", "退出", group="control")

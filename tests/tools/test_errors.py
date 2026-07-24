@@ -1,4 +1,5 @@
 """错误处理工具单元测试"""
+
 import pytest
 
 from merco.tools.errors import _param_names, _params_hint, _public_message, classify_error, empty_response, tool_error
@@ -56,7 +57,6 @@ def sample_schema():
 
 
 class TestToolError:
-
     def test_tool_error_param_mismatch_with_schema(self, sample_schema):
         """测试参数不匹配错误（有schema）"""
         exc = TypeError("expected str for path")
@@ -89,6 +89,7 @@ class TestToolError:
         # 实际上tool_not_found错误是在registry里处理的，这里只需要测试分支
         # 我们直接构造一个返回值来测试分支
         from merco.tools.errors import ERROR_CATEGORIES
+
         result["category"] = "tool_not_found"
         result["error"] = f"[{ERROR_CATEGORIES['tool_not_found']}] nonexistent_tool: not found"
         result["suggestion"] = "该工具不可用。请使用其他可用工具完成用户请求。"

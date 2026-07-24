@@ -3,6 +3,7 @@
 Extracted from agent.py. Uses agent.config (StreamingConfig), agent.context,
 agent.session, agent.provider.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,40 +27,43 @@ logger = logging.getLogger("merco.agent")
 
 
 def _build_reasoning_panel(text: str) -> Panel:
-    return Panel(f"[dim]{text.rstrip()}[/dim]", border_style="dim",
-                 title="🧠 思考中…", title_align="left", padding=(0, 1))
+    return Panel(
+        f"[dim]{text.rstrip()}[/dim]", border_style="dim", title="🧠 思考中…", title_align="left", padding=(0, 1)
+    )
 
 
 class ResponseProvider(ABC):
     """响应策略基类 — 工厂模式，Agent 不感知流/非流"""
 
     @abstractmethod
-    async def get_response(self, agent: Agent, messages: list,
-                           tools: list | None) -> dict:
-        ...
+    async def get_response(self, agent: Agent, messages: list, tools: list | None) -> dict: ...
+
 
 class NonStreamingProvider(ResponseProvider):
     """非流式：一次 chat 返回完整响应"""
 
-    async def get_response(self, agent: Agent, messages: list,
-                           tools: list | None) -> dict:
-        response = await agent.provider.chat(
-            messages, tools=tools, tool_choice="auto")
+    async def get_response(self, agent: Agent, messages: list, tools: list | None) -> dict:
+        response = await agent.provider.chat(messages, tools=tools, tool_choice="auto")
         reasoning = response.get("reasoning", "")
         if reasoning and reasoning.strip():
             agent._render_reasoning(reasoning)
         return response
 
+
 class StreamingProvider(ResponseProvider):
     """流式：thinking 用 Live Panel 逐 token 显示，content 不流"""
 
-    async def get_response(self, agent: Agent, messages: list,
-                           tools: list | None) -> dict:
+    async def get_response(self, agent: Agent, messages: list, tools: list | None) -> dict:
         from merco.core.agent import console
 
         assembled: dict = {
-            "role": "assistant", "content": "", "reasoning": "",
-            "tool_calls": [], "finish_reason": None, "usage": None}
+            "role": "assistant",
+            "content": "",
+            "reasoning": "",
+            "tool_calls": [],
+            "finish_reason": None,
+            "usage": None,
+        }
         reasoning_buf = ""
         content_buf = ""
         tc_buf: dict[int, dict] = {}
@@ -71,15 +75,20 @@ class StreamingProvider(ResponseProvider):
         _content_update_interval = 0.3  # 300ms throttle for content panel
 
         # ── 初始等待提示（无 reasoning 时显示"⏳ 思考中…"，有则显示推理文字）──
-        thinking_panel = Panel("[dim]⏳ 思考中…[/dim]", border_style="dim",
-                      title="🧠 思考中…", title_align="left", padding=(0, 1))
+        thinking_panel = Panel(
+            "[dim]⏳ 思考中…[/dim]", border_style="dim", title="🧠 思考中…", title_align="left", padding=(0, 1)
+        )
 
         # ── content 面板延迟创建：收到第一个 content chunk 时才创建 ──
         content_panel = None  # lazy: created on first content chunk
 
         # ── 使用单个 Live 来显示 thinking 面板（content 面板延迟加入 Group）──
-        live = Live(Group(thinking_panel), console=console, refresh_per_second=4,
-                    transient=agent.config.streaming.think_transient)
+        live = Live(
+            Group(thinking_panel),
+            console=console,
+            refresh_per_second=4,
+            transient=agent.config.streaming.think_transient,
+        )
         live.start()
 
         # ── 定时刷新任务：防止 API 返回慢时 thinking 面板卡顿 ──
@@ -98,6 +107,7 @@ class StreamingProvider(ResponseProvider):
                 if reasoning_buf:
                     nonlocal_thinking_panel[0] = _build_reasoning_panel(reasoning_buf)
                     live.update(_rebuild_group())
+
         refresh_task = asyncio.create_task(_refresh_thinking())
         stream_error: Exception | None = None
 
@@ -116,9 +126,11 @@ class StreamingProvider(ResponseProvider):
                     assembled["content"] = content_buf
                     if tc_buf:
                         assembled["tool_calls"] = [
-                            {"id": v["id"], "name": v["name"],
-                             "arguments": _json.loads(v["arguments"])
-                             if v["arguments"] else {}}
+                            {
+                                "id": v["id"],
+                                "name": v["name"],
+                                "arguments": _json.loads(v["arguments"]) if v["arguments"] else {},
+                            }
                             for v in (tc_buf[i] for i in sorted(tc_buf))
                         ]
                     # 将部分响应添加到 context 和 session
@@ -130,12 +142,14 @@ class StreamingProvider(ResponseProvider):
                         }
                         if tc_buf:
                             assistant_msg["tool_calls"] = assembled["tool_calls"]
-                        logger.debug("StreamingProvider 中断: 将 reasoning(%d chars) 存入 context (这是唯一泄漏窗口)",
-                                    len(reasoning_buf))
+                        logger.debug(
+                            "StreamingProvider 中断: 将 reasoning(%d chars) 存入 context (这是唯一泄漏窗口)",
+                            len(reasoning_buf),
+                        )
                         agent.context.add(assistant_msg)
-                        agent.session.add_message("assistant", content_buf,
-                                                  reasoning=reasoning_buf,
-                                                  tool_calls=assembled.get("tool_calls"))
+                        agent.session.add_message(
+                            "assistant", content_buf, reasoning=reasoning_buf, tool_calls=assembled.get("tool_calls")
+                        )
                     raise asyncio.CancelledError()
                 r = chunk.get("reasoning", "")
                 if r:
@@ -150,8 +164,7 @@ class StreamingProvider(ResponseProvider):
                 if content_buf.strip() and agent.config.streaming.content:
                     # Lazy init: create content_panel on first content chunk
                     if content_panel is None:
-                        content_panel = Panel("", border_style="dim",
-                                              title_align="left", padding=(0, 1))
+                        content_panel = Panel("", border_style="dim", title_align="left", padding=(0, 1))
                         nonlocal_content_panel[0] = content_panel
                     # Throttle updates to prevent excessive re-rendering
                     now = time.monotonic()
@@ -162,12 +175,11 @@ class StreamingProvider(ResponseProvider):
                 for tc in chunk.get("tool_calls", []):
                     idx = tc["index"]
                     if idx not in tc_buf:
-                        tc_buf[idx] = {
-                            "id": tc.get("id", ""),
-                            "name": tc.get("name", ""),
-                            "arguments": ""}
-                    if tc.get("id"): tc_buf[idx]["id"] = tc["id"]
-                    if tc.get("name"): tc_buf[idx]["name"] = tc["name"]
+                        tc_buf[idx] = {"id": tc.get("id", ""), "name": tc.get("name", ""), "arguments": ""}
+                    if tc.get("id"):
+                        tc_buf[idx]["id"] = tc["id"]
+                    if tc.get("name"):
+                        tc_buf[idx]["name"] = tc["name"]
                     tc_buf[idx]["arguments"] += tc.get("arguments", "")
                 if chunk.get("finish_reason"):
                     assembled["finish_reason"] = chunk["finish_reason"]
@@ -195,7 +207,7 @@ class StreamingProvider(ResponseProvider):
             agent._error_displayed_in_stream = True
             raise e
         finally:
-            if 'refresh_task' in locals():
+            if "refresh_task" in locals():
                 refresh_task.cancel()
                 try:
                     await refresh_task
@@ -212,14 +224,15 @@ class StreamingProvider(ResponseProvider):
         assembled["content"] = content_buf
         if tc_buf:
             assembled["tool_calls"] = [
-                {"id": v["id"], "name": v["name"],
-                 "arguments": _json.loads(v["arguments"])
-                 if v["arguments"] else {}}
+                {"id": v["id"], "name": v["name"], "arguments": _json.loads(v["arguments"]) if v["arguments"] else {}}
                 for v in (tc_buf[i] for i in sorted(tc_buf))
             ]
         logger.debug(
             "stream done: finish=%s content=%d reasoning=%d tool_calls=%d%s",
-            assembled.get("finish_reason"), len(assembled["content"]),
-            len(assembled["reasoning"]), len(assembled["tool_calls"]),
-            f" {[tc['name'] for tc in assembled['tool_calls']]}" if assembled["tool_calls"] else "")
+            assembled.get("finish_reason"),
+            len(assembled["content"]),
+            len(assembled["reasoning"]),
+            len(assembled["tool_calls"]),
+            f" {[tc['name'] for tc in assembled['tool_calls']]}" if assembled["tool_calls"] else "",
+        )
         return assembled

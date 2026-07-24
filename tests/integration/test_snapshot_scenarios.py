@@ -1,4 +1,5 @@
 """快照恢复集成测试 — 覆盖文件编辑前后快照记录与回滚。"""
+
 import pytest
 
 from merco.sandbox import snapshot
@@ -20,14 +21,19 @@ class TestSnapshotCreation:
         # 模拟 EditApplyMiddleware：在实际代码路径中，中间件会在工具执行前调用 snapshot.track()
         snapshot.track(str(target), original, session_id="test-edit-1")
 
-        scenario.provider.expect([
-            Response.tool_call("edit_file", {
-                "path": str(target),
-                "search": "return 1",
-                "replace": "return 42",
-            }),
-            Response.content("已修改"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call(
+                    "edit_file",
+                    {
+                        "path": str(target),
+                        "search": "return 1",
+                        "replace": "return 42",
+                    },
+                ),
+                Response.content("已修改"),
+            ]
+        )
 
         await scenario.run("把 return 1 改成 return 42")
 
@@ -50,13 +56,18 @@ class TestSnapshotCreation:
         # 模拟 EditApplyMiddleware：在实际代码路径中，中间件会在工具执行前调用 snapshot.track()
         snapshot.track(str(target), original, session_id="test-write-1")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {
-                "path": str(target),
-                "content": "new content",
-            }),
-            Response.content("已写入"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call(
+                    "write_file",
+                    {
+                        "path": str(target),
+                        "content": "new content",
+                    },
+                ),
+                Response.content("已写入"),
+            ]
+        )
 
         await scenario.run("重写文件")
 
@@ -81,20 +92,24 @@ class TestSingleRevert:
         snapshot.track(str(file_a), "original_a", session_id="multi-edit")
         file_a.write_text("modified_a")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {"path": str(file_a), "content": "modified_a"}),
-            Response.content("ok1"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call("write_file", {"path": str(file_a), "content": "modified_a"}),
+                Response.content("ok1"),
+            ]
+        )
         await scenario.run("改 a")
 
         # 快照 1：记录 file_b 修改前状态
         snapshot.track(str(file_b), "original_b", session_id="multi-edit")
         file_b.write_text("modified_b")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {"path": str(file_b), "content": "modified_b"}),
-            Response.content("ok2"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call("write_file", {"path": str(file_b), "content": "modified_b"}),
+                Response.content("ok2"),
+            ]
+        )
         await scenario.run("改 b")
 
         assert file_a.read_text() == "modified_a"
@@ -124,20 +139,24 @@ class TestFullRevert:
         snapshot.track(str(file_a), "orig_a", session_id="full-revert-test")
         file_a.write_text("mod_a")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {"path": str(file_a), "content": "mod_a"}),
-            Response.content("ok"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call("write_file", {"path": str(file_a), "content": "mod_a"}),
+                Response.content("ok"),
+            ]
+        )
         await scenario.run("改 a")
 
         # 快照 1：file_b
         snapshot.track(str(file_b), "orig_b", session_id="full-revert-test")
         file_b.write_text("mod_b")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {"path": str(file_b), "content": "mod_b"}),
-            Response.content("ok"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call("write_file", {"path": str(file_b), "content": "mod_b"}),
+                Response.content("ok"),
+            ]
+        )
         await scenario.run("改 b")
 
         results = snapshot.revert("full-revert-test")
@@ -159,10 +178,12 @@ class TestFullRevert:
         snapshot.track(str(target), "original", session_id="clear-test")
         target.write_text("modified")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {"path": str(target), "content": "modified"}),
-            Response.content("ok"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call("write_file", {"path": str(target), "content": "modified"}),
+                Response.content("ok"),
+            ]
+        )
         await scenario.run("改 x")
 
         assert snapshot._session_path("clear-test").exists()
@@ -185,20 +206,24 @@ class TestSnapshotHistory:
         snapshot.track(str(target), "v0", session_id="history-test")
         target.write_text("v1")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {"path": str(target), "content": "v1"}),
-            Response.content("ok"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call("write_file", {"path": str(target), "content": "v1"}),
+                Response.content("ok"),
+            ]
+        )
         await scenario.run("第一次写")
 
         # 快照 1
         snapshot.track(str(target), "v1", session_id="history-test")
         target.write_text("v2")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {"path": str(target), "content": "v2"}),
-            Response.content("ok"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call("write_file", {"path": str(target), "content": "v2"}),
+                Response.content("ok"),
+            ]
+        )
         await scenario.run("第二次写")
 
         history = snapshot.history("history-test")
@@ -228,10 +253,12 @@ class TestSessionIsolation:
         snapshot.track(str(target), "init", session_id="session_a")
         target.write_text("by_a")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {"path": str(target), "content": "by_a"}),
-            Response.content("ok"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call("write_file", {"path": str(target), "content": "by_a"}),
+                Response.content("ok"),
+            ]
+        )
         await scenario.run("session a edit")
 
         snapshot.set_current_session("session_b")
@@ -240,10 +267,12 @@ class TestSessionIsolation:
         snapshot.track(str(target), "by_a", session_id="session_b")
         target.write_text("by_b")
 
-        scenario.provider.expect([
-            Response.tool_call("write_file", {"path": str(target), "content": "by_b"}),
-            Response.content("ok"),
-        ])
+        scenario.provider.expect(
+            [
+                Response.tool_call("write_file", {"path": str(target), "content": "by_b"}),
+                Response.content("ok"),
+            ]
+        )
         await scenario.run("session b edit")
 
         history_a = snapshot.history("session_a")

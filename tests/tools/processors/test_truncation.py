@@ -1,4 +1,5 @@
 """截断处理器单元测试"""
+
 import json
 import os
 import tempfile
@@ -27,26 +28,20 @@ class TestTruncationProcessor:
         """创建处理器实例，使用临时目录"""
         return TruncationProcessor(
             max_bytes=1000,  # 小阈值方便测试
-            trunc_dir=temp_trunc_dir
+            trunc_dir=temp_trunc_dir,
         )
 
     @pytest.fixture
     def small_result_ctx(self):
         """小结果上下文（不需要截断）"""
-        return ProcessContext(
-            tool_name="test_tool",
-            arguments={},
-            result={"data": "small content", "status": "ok"}
-        )
+        return ProcessContext(tool_name="test_tool", arguments={}, result={"data": "small content", "status": "ok"})
 
     @pytest.fixture
     def large_result_ctx(self):
         """大结果上下文（需要截断）"""
         large_data = "x" * 2000  # 超过max_bytes=1000
         return ProcessContext(
-            tool_name="test_tool",
-            arguments={},
-            result={"data": large_data, "status": "ok", "other": "additional info"}
+            tool_name="test_tool", arguments={}, result={"data": large_data, "status": "ok", "other": "additional info"}
         )
 
     @pytest.mark.asyncio
@@ -74,7 +69,7 @@ class TestTruncationProcessor:
         assert file_path.startswith(temp_trunc_dir)
 
         # 检查文件内容
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             saved_data = json.load(f)
             assert saved_data["data"] == "x" * 2000
             assert saved_data["status"] == "ok"
@@ -84,11 +79,7 @@ class TestTruncationProcessor:
         """测试结果超过文件大小上限，不写入文件"""
         processor.max_file_bytes = 1000  # 小上限
         large_data = "x" * 2000
-        ctx = ProcessContext(
-            tool_name="test_tool",
-            arguments={},
-            result={"data": large_data}
-        )
+        ctx = ProcessContext(tool_name="test_tool", arguments={}, result={"data": large_data})
 
         await processor.process(ctx)
 
@@ -111,15 +102,12 @@ class TestTruncationProcessor:
     @pytest.mark.asyncio
     async def test_non_serializable_result_skipped(self, processor):
         """测试无法序列化的结果不截断"""
+
         # 创建包含无法序列化的对象的结果
         class NonSerializable:
             pass
 
-        ctx = ProcessContext(
-            tool_name="test_tool",
-            arguments={},
-            result={"data": NonSerializable()}
-        )
+        ctx = ProcessContext(tool_name="test_tool", arguments={}, result={"data": NonSerializable()})
 
         result = await processor.process(ctx)
         assert result is False
@@ -176,6 +164,7 @@ class TestTruncationProcessor:
         """测试目录不存在时清理不报错"""
         # 创建一个 processor，其 trunc_dir 路径不存在
         import tempfile
+
         nonexistent = os.path.join(tempfile.gettempdir(), "merco_test_nonexistent_dir_xyz")
         processor = TruncationProcessor(trunc_dir=nonexistent)
         assert not os.path.exists(processor.trunc_dir)

@@ -2,6 +2,7 @@
 
 边界：错误分类 + 公共消息脱敏。LLM 错误（ProviderError 等）由 core.llm.errors 处理。
 """
+
 from __future__ import annotations
 
 import logging
@@ -78,8 +79,7 @@ def tool_error(
 def empty_response() -> dict:
     """空回复错误 — 回调 LLM 让它产出实际内容"""
     return {
-        "error": "[空回复] 你既没有回复用户也没有调用工具。"
-                 "请直接回答用户，或使用工具推进任务。",
+        "error": "[空回复] 你既没有回复用户也没有调用工具。请直接回答用户，或使用工具推进任务。",
         "category": "empty_response",
         "suggestion": "请直接回复用户，或调用工具获取信息。",
     }

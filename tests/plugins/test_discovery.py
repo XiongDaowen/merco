@@ -1,4 +1,5 @@
 """PluginDiscovery 单元测试"""
+
 from unittest.mock import MagicMock
 
 from merco.plugins.base import Plugin
@@ -10,6 +11,7 @@ class _EPPlugin(Plugin):
     version = "1.0.0"
     priority = 60
     depends_on = []
+
     async def activate(self, ctx): ...
 
 
@@ -43,7 +45,7 @@ def test_discover_entrypoints_basic(monkeypatch):
     s = specs[0]
     assert s.name == "ep_test"
     assert s.source == "entrypoint"
-    assert s.priority == 60          # 从类属性读
+    assert s.priority == 60  # 从类属性读
     assert s.version == "1.0.0"
     assert s.load_cls() is _EPPlugin
 
@@ -57,11 +59,13 @@ def test_discover_entrypoints_reads_priority_from_class(monkeypatch):
         name = "with_deps"
         priority = 90
         depends_on = ["ep_test"]
+
         async def activate(self, ctx): ...
 
     class Dep(Plugin):
         name = "ep_test"
         version = "1.0.0"
+
         async def activate(self, ctx): ...
 
     monkeypatch.setattr(
@@ -82,7 +86,8 @@ def _write_dir_plugin(tmp_path, name, entry="main:MyPlugin", priority=50, depend
     (pdir / "plugin.toml").write_text(
         f'[plugin]\nname = "{name}"\nversion = "0.1.0"\n'
         f'description = "d"\npriority = {priority}\n'
-        f'depends_on = {depends_on or []}\nentry = "{entry}"\n', encoding="utf-8"
+        f'depends_on = {depends_on or []}\nentry = "{entry}"\n',
+        encoding="utf-8",
     )
     (pdir / "main.py").write_text(
         "from merco.plugins.base import Plugin\n"
@@ -148,6 +153,7 @@ def test_dir_overrides_entrypoint(tmp_path, monkeypatch):
     class EPVer(Plugin):
         name = "shared"
         priority = 10
+
         async def activate(self, ctx): ...
 
     monkeypatch.setattr(
@@ -173,9 +179,11 @@ def test_disabled_plugin_not_loaded(monkeypatch):
 
 def test_missing_dep_pruned(monkeypatch, caplog):
     """depends_on 引用不存在的插件 -> 剪枝"""
+
     class WithMissing(Plugin):
         name = "needs_ghost"
         depends_on = ["ghost"]
+
         async def activate(self, ctx): ...
 
     cfg = _config_with()
@@ -192,14 +200,17 @@ def test_missing_dep_pruned(monkeypatch, caplog):
 
 def test_circular_dep_skipped(monkeypatch, caplog):
     """循环依赖 -> 检测 warn + 跳过涉及插件"""
+
     class A(Plugin):
         name = "circ_a"
         depends_on = ["circ_b"]
+
         async def activate(self, ctx): ...
 
     class B(Plugin):
         name = "circ_b"
         depends_on = ["circ_a"]
+
         async def activate(self, ctx): ...
 
     cfg = _config_with()
@@ -219,11 +230,17 @@ def test_builtin_entrypoints_discoverable():
     """真实 entry_points：7 个 builtin 都能被发现且 priority 正确"""
     cfg = _config_with()  # uses MagicMock config — not used here
     from merco.plugins.discovery import PluginDiscovery
+
     discovery = PluginDiscovery(cfg)
     specs = {s.name: s for s in discovery.discover()}
     expected = {
-        "observability": 100, "skills": 60, "mcp": 50,
-        "subagent": 40, "web": 30, "scheduler": 20, "superpower": 10,
+        "observability": 100,
+        "skills": 60,
+        "mcp": 50,
+        "subagent": 40,
+        "web": 30,
+        "scheduler": 20,
+        "superpower": 10,
     }
     for name, prio in expected.items():
         assert name in specs, f"missing builtin {name}"

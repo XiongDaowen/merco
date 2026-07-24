@@ -46,6 +46,7 @@ def ctx(tmp_path):
     agent = FakeAgent()
 
     from merco.agents.profile import AgentProfileRegistry
+
     agent_profiles = AgentProfileRegistry()
 
     ctx = PluginContext(

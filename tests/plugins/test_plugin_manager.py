@@ -1,4 +1,5 @@
 """PluginManager unit tests"""
+
 import pytest
 
 from merco.plugins.base import Plugin, PluginContext
@@ -93,8 +94,10 @@ async def test_deactivate_plugin(manager, ctx):
 async def test_activate_emits_event(manager, ctx):
     """Activating a plugin emits plugin.activated event"""
     events = []
+
     async def on_activated(plugin_name, **kwargs):
         events.append(plugin_name)
+
     ctx.hooks.on("plugin.activated", on_activated)
 
     manager._plugins["fake"] = FakePlugin()
@@ -120,8 +123,10 @@ async def test_activate_all_enabled(manager, ctx):
 async def test_activate_failure_isolated(manager, ctx):
     """Plugin activation failure does not affect other plugins"""
     events = []
+
     async def on_error(plugin_name, **kwargs):
         events.append(plugin_name)
+
     ctx.hooks.on("plugin.error", on_error)
 
     manager._plugins["failing"] = FailingPlugin()

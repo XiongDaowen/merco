@@ -1,4 +1,5 @@
 """ToolReduceRecovery — reduces tools when context is too large."""
+
 from __future__ import annotations
 
 from merco.core.pipeline import Recovery, RecoveryContext

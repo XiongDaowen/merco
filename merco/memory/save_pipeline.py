@@ -1,4 +1,5 @@
 """Memory 保存链 — Strategy 通过它写入 MemoryStore"""
+
 from __future__ import annotations
 
 import logging
@@ -22,6 +23,7 @@ SOURCE_PRIORITY: dict[str, int] = {
 @dataclass
 class SaveItem:
     """Pipeline 输入单元"""
+
     key: str
     value: str
     source: MemorySource
@@ -32,6 +34,7 @@ class SaveItem:
 
 class MemorySaveProcessor(ABC):
     """保存链处理器基类"""
+
     name: str = ""
 
     @abstractmethod
@@ -42,6 +45,7 @@ class MemorySaveProcessor(ABC):
 
 class SourceEnricher(MemorySaveProcessor):
     """自动补 [source] 前缀到 tags"""
+
     name = "source_enricher"
 
     async def process(self, item: SaveItem) -> SaveItem:
@@ -53,6 +57,7 @@ class SourceEnricher(MemorySaveProcessor):
 
 class DedupProcessor(MemorySaveProcessor):
     """按 source 优先级 skip 已有 key"""
+
     name = "dedup"
 
     def __init__(self, store):
@@ -118,8 +123,10 @@ class MemorySavePipeline:
         try:
             await self.hooks.emit(
                 "memory.saved",
-                key=item.key, value=item.value,
-                source=item.source, tags=item.tags,
+                key=item.key,
+                value=item.value,
+                source=item.source,
+                tags=item.tags,
             )
         except Exception as hook_err:
             logger.debug("hooks.emit('memory.saved') 失败: %s", hook_err)

@@ -13,6 +13,7 @@ re-nests flat->nested only when storing into context for the next turn.
 Each provider populates `reasoning` its own way (OpenAI-compatible via
 thinking.py; Anthropic via native thinking blocks).
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -52,12 +53,12 @@ class ModelProviderInfo:
     ``provider_class`` is what makes this a registry spec, not a static dict.
     """
 
-    name: str                                  # id: "openai" / "anthropic" / third-party
+    name: str  # id: "openai" / "anthropic" / third-party
     provider_class: type[ModelProvider]
-    display_name: str = ""                     # wizard label: "OpenAI"
+    display_name: str = ""  # wizard label: "OpenAI"
     base_url: str = ""
-    key_env: str = ""                          # provider knows its own key env
-    key_help: str = ""                         # URL to obtain a key (wizard)
+    key_env: str = ""  # provider knows its own key env
+    key_help: str = ""  # URL to obtain a key (wizard)
     default_model: str = ""
     models: list[str] = field(default_factory=list)
     description: str = ""

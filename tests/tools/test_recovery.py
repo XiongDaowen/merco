@@ -1,4 +1,5 @@
 """工具精简恢复器单元测试"""
+
 import pytest
 
 from merco.core.pipeline import RecoveryContext
@@ -20,7 +21,7 @@ class TestToolReduceRecovery:
             error=Exception("test error"),
             compress_count=0,
             max_reduce=3,
-            tool_count=10  # 当前有10个工具
+            tool_count=10,  # 当前有10个工具
         )
 
     @pytest.mark.asyncio

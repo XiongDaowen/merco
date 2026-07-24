@@ -11,6 +11,7 @@ logger = logging.getLogger("merco.core.interrupt")
 @dataclass
 class CleanupContext:
     """中断清理上下文。"""
+
     agent: Any  # Agent 类型，避免循环导入
     cancelled_tool_calls: list[dict]
     session_id: str
@@ -19,6 +20,7 @@ class CleanupContext:
 
 class CleanupProcessor(ABC):
     """清理处理器基类。"""
+
     name: str = ""
 
     @abstractmethod
@@ -29,6 +31,7 @@ class CleanupProcessor(ABC):
 
 class InjectCancelMessages(CleanupProcessor):
     """为孤儿 tool_calls 注入取消消息。"""
+
     name = "inject_cancel"
 
     async def process(self, ctx: CleanupContext) -> bool:
@@ -40,14 +43,10 @@ class InjectCancelMessages(CleanupProcessor):
         for msg in reversed(ctx.agent.context.messages):
             if msg.get("role") != "assistant":
                 continue
-            for tc in (msg.get("tool_calls") or []):
+            for tc in msg.get("tool_calls") or []:
                 tc_id = tc.get("id") if isinstance(tc, dict) else None
                 if tc_id and tc_id not in completed_ids:
-                    tool_msg = {
-                        "role": "tool",
-                        "tool_call_id": tc_id,
-                        "content": "取消 (Ctrl+C)"
-                    }
+                    tool_msg = {"role": "tool", "tool_call_id": tc_id, "content": "取消 (Ctrl+C)"}
                     ctx.agent.context.add(tool_msg)
                     ctx.agent.session.add_message("tool", "取消 (Ctrl+C)", tool_call_id=tc_id)
         return False
@@ -55,11 +54,12 @@ class InjectCancelMessages(CleanupProcessor):
 
 class TerminateSubprocesses(CleanupProcessor):
     """kill 所有运行中的子进程。"""
+
     name = "kill_subprocesses"
 
     async def process(self, ctx: CleanupContext) -> bool:
         bash_tool = ctx.agent.tool_registry.get("bash") if ctx.agent.tool_registry else None
-        if bash_tool and hasattr(bash_tool, '_active_processes'):
+        if bash_tool and hasattr(bash_tool, "_active_processes"):
             for proc in list(bash_tool._active_processes):
                 proc.kill()
             bash_tool._active_processes.clear()
@@ -68,6 +68,7 @@ class TerminateSubprocesses(CleanupProcessor):
 
 class CloseMCPConnections(CleanupProcessor):
     """关闭 MCP 连接。"""
+
     name = "close_mcp"
 
     async def process(self, ctx: CleanupContext) -> bool:
@@ -78,6 +79,7 @@ class CloseMCPConnections(CleanupProcessor):
 
 class EmitInterruptHooks(CleanupProcessor):
     """发射中断钩子。"""
+
     name = "emit_hooks"
 
     async def process(self, ctx: CleanupContext) -> bool:
@@ -91,6 +93,7 @@ class EmitInterruptHooks(CleanupProcessor):
 
 class SavePartialState(CleanupProcessor):
     """保存 session + observer 快照。"""
+
     name = "save_state"
 
     async def process(self, ctx: CleanupContext) -> bool:

@@ -99,12 +99,13 @@ async def test():
     check("空命令", await g5.check("bash", {"command": ""}))
 
     # ─────────────────────────────────────────────────────
-    print(f"\n{'='*40}")
+    print(f"\n{'=' * 40}")
     print(f"结果: {passed} 通过, {failed} 失败")
     return failed == 0
 
 
 # ── SecurityChecker 集成测试 ─────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_security_checker_regex_denies_dangerous():

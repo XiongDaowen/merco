@@ -1,4 +1,5 @@
 """AgentProfile 端到端集成测试"""
+
 from unittest.mock import AsyncMock, MagicMock
 
 from merco.agents.profile import BUILTIN_PROFILES, AgentProfileRegistry
@@ -18,10 +19,12 @@ async def test_task_tool_dispatches_with_agent_name(test_agent):
     mock_result = "研究发现"
 
     # Mock 子代理执行 — 无真实 LLM
-    manager._create_sub_agent = AsyncMock(return_value=MagicMock(
-        session=MagicMock(id="sub_researcher_1"),
-        run=AsyncMock(return_value=mock_result),
-    ))
+    manager._create_sub_agent = AsyncMock(
+        return_value=MagicMock(
+            session=MagicMock(id="sub_researcher_1"),
+            run=AsyncMock(return_value=mock_result),
+        )
+    )
 
     await manager.dispatch(todo.id, "研究某个模块", "researcher")
 

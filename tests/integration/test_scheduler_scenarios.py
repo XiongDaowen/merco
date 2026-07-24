@@ -1,4 +1,5 @@
 """调度器集成测试 — 覆盖 cron 任务调度、并发、异常隔离。"""
+
 import asyncio
 from datetime import datetime
 
@@ -68,9 +69,14 @@ class TestConcurrentExecution:
     async def test_multiple_jobs_concurrent_execution(self, scenario):
         results = []
 
-        async def handler_a(): results.append("a")
-        async def handler_b(): results.append("b")
-        async def handler_c(): results.append("c")
+        async def handler_a():
+            results.append("a")
+
+        async def handler_b():
+            results.append("b")
+
+        async def handler_c():
+            results.append("c")
 
         scenario.scheduler.add_job("a", "* * * * *", handler_a)
         scenario.scheduler.add_job("b", "* * * * *", handler_b)
@@ -81,7 +87,8 @@ class TestConcurrentExecution:
 
     @pytest.mark.asyncio
     async def test_jobs_update_independently(self, scenario):
-        async def h(): pass
+        async def h():
+            pass
 
         scenario.scheduler.add_job("j1", "* * * * *", h)
         scenario.scheduler.add_job("j2", "* * * * *", h)
@@ -148,7 +155,8 @@ class TestJobEnableDisable:
 
 class TestJobListRemove:
     def test_list_jobs_returns_metadata(self, scenario):
-        async def h(): pass
+        async def h():
+            pass
 
         scenario.scheduler.add_job("j1", "* * * * *", h)
         scenario.scheduler.add_job("j2", "0 0 * * *", h)
@@ -161,7 +169,8 @@ class TestJobListRemove:
             assert "enabled" in job
 
     def test_remove_job(self, scenario):
-        async def h(): pass
+        async def h():
+            pass
 
         scenario.scheduler.add_job("to_remove", "* * * * *", h)
         assert "to_remove" in scenario.scheduler._jobs

@@ -31,6 +31,7 @@ class WebFetch(BaseTool):
                 else:
                     # 简单提取文本内容
                     import re
+
                     text = re.sub(r"<[^>]+>", "", response.text)
                     text = re.sub(r"\s+", " ", text).strip()
                     return {"content": text, "url": url}
@@ -57,17 +58,19 @@ class WebSearch(BaseTool):
     async def execute(self, query: str, n: int = 5) -> dict:
         try:
             from ddgs import DDGS
+
             results = []
             with DDGS() as ddgs:
                 for r in ddgs.text(query, max_results=n):
-                    results.append({
-                        "title": r["title"],
-                        "url": r["href"],
-                        "snippet": r["body"],
-                    })
+                    results.append(
+                        {
+                            "title": r["title"],
+                            "url": r["href"],
+                            "snippet": r["body"],
+                        }
+                    )
             return {"results": results, "query": query}
         except ImportError:
             return {"error": "ddgs 未安装。运行 pip install ddgs", "results": []}
         except Exception as e:
             return {"error": str(e), "results": []}
-

@@ -30,6 +30,7 @@ from merco.tools.registry import ToolRegistry
 
 # ── Recording test tool ──────────────────────────────────────────────
 
+
 class SearchTool(BaseTool):
     """A tool the mocked Anthropic response will ask to call.
 
@@ -56,9 +57,11 @@ class SearchTool(BaseTool):
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
+
 def _quiet_console(monkeypatch):
     """Redirect the agent module's rich Console to a StringIO buffer."""
     from rich.console import Console
+
     quiet = Console(file=StringIO(), force_terminal=True, width=120)
     monkeypatch.setattr("merco.core.agent.console", quiet)
     return quiet
@@ -116,10 +119,9 @@ def _build_agent(monkeypatch, tmp_path, *, streaming: bool) -> tuple[Agent, Sear
 
 # ── Test A: non-streaming Anthropic tool call through the agent loop ─
 
+
 @pytest.mark.asyncio
-async def test_anthropic_non_streaming_tool_call_through_agent_loop(
-    monkeypatch, tmp_path
-):
+async def test_anthropic_non_streaming_tool_call_through_agent_loop(monkeypatch, tmp_path):
     """A non-streaming Anthropic tool_use block must drive the agent loop.
 
     Before the C1 fix, _parse_response emitted nested {id,type,function:{...}}
@@ -129,9 +131,7 @@ async def test_anthropic_non_streaming_tool_call_through_agent_loop(
     _quiet_console(monkeypatch)
     agent, search = _build_agent(monkeypatch, tmp_path, streaming=False)
 
-    agent.provider.client.messages.create = AsyncMock(
-        side_effect=[_tool_use_response(), _final_text_response()]
-    )
+    agent.provider.client.messages.create = AsyncMock(side_effect=[_tool_use_response(), _final_text_response()])
 
     result = await agent.run("search for x")
 
@@ -144,6 +144,7 @@ async def test_anthropic_non_streaming_tool_call_through_agent_loop(
 
 
 # ── Test B: streaming Anthropic tool call through the agent loop ─────
+
 
 class _FakeAnthropicStream:
     """Async context manager double for anthropic's stream manager.
@@ -183,9 +184,7 @@ def _tool_use_stream_events() -> list:
         SimpleNamespace(
             type="content_block_start",
             index=0,
-            content_block=SimpleNamespace(
-                type="tool_use", id="tc1", name="search", input={}
-            ),
+            content_block=SimpleNamespace(type="tool_use", id="tc1", name="search", input={}),
         ),
         SimpleNamespace(
             type="content_block_delta",
@@ -214,9 +213,7 @@ def _final_text_stream_events() -> list:
 
 
 @pytest.mark.asyncio
-async def test_anthropic_streaming_tool_call_through_agent_loop(
-    monkeypatch, tmp_path
-):
+async def test_anthropic_streaming_tool_call_through_agent_loop(monkeypatch, tmp_path):
     """A streaming Anthropic tool_use must drive the agent loop.
 
     Before the I1 fix, _parse_stream_event never handled content_block_start

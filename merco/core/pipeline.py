@@ -22,13 +22,14 @@ logger = logging.getLogger("merco.pipeline")
 
 # ── 上下文 ───────────────────────────────────────────────
 
+
 @dataclass
 class ProcessContext:
     """管线上下文，在处理器链之间传递和变换"""
 
     tool_name: str
     arguments: dict
-    result: dict                       # 当前结果，处理器可原地修改
+    result: dict  # 当前结果，处理器可原地修改
     tool_schema: dict | None = None
     tool_call_id: str = ""
     # 额外要添加到上下文的 side-effect 消息（如 skill 内容注入）
@@ -38,6 +39,7 @@ class ProcessContext:
 
 
 # ── 处理器 ───────────────────────────────────────────────
+
 
 class Processor(ABC):
     """处理器基类。每个处理器只做一件事。"""
@@ -51,6 +53,7 @@ class Processor(ABC):
 
 
 # ── 管线 ─────────────────────────────────────────────────
+
 
 class ResultPipeline:
     """结果处理管线。用 use() 注册处理器，process() 链式执行。"""
@@ -85,7 +88,6 @@ class ResultPipeline:
                     break
             except Exception:
                 logger.warning("管线处理器 '%s' 异常", p.name, exc_info=True)
-
 
 
 def _walk_truncate(obj, max_per_value: int, filepath: str, pagination: dict | None = None):
@@ -128,8 +130,8 @@ def _is_reading_trunc_file(ctx: ProcessContext, trunc_dir: str) -> bool:
     return False
 
 
-
 # ── LLM 调用恢复管线 ──────────────────────────────────────
+
 
 @dataclass
 class RecoveryContext:
@@ -141,23 +143,23 @@ class RecoveryContext:
 
     # ── 诊断（Agent 填入）────────────────
     error: Exception
-    status_code: int = 0                  # HTTP 状态码（ProviderError 自动提取）
-    context_tokens: int = 0               # 当前上下文 token 估算
-    tool_count: int = 0                   # 请求中的工具数量
-    attempt_count: int = 0                # 本轮已尝试恢复次数（跨策略累计）
-    model: str = ""                       # 当前模型名
+    status_code: int = 0  # HTTP 状态码（ProviderError 自动提取）
+    context_tokens: int = 0  # 当前上下文 token 估算
+    tool_count: int = 0  # 请求中的工具数量
+    attempt_count: int = 0  # 本轮已尝试恢复次数（跨策略累计）
+    model: str = ""  # 当前模型名
 
     # ── 意图标志位（策略设置，Agent 执行）──
-    compress: bool = False                # 需要压缩上下文
-    reduce_tools: bool = False            # 需要精简工具列表
-    switch_model: ModelConfig | None = None   # 跨 provider 切换（provider+model 全 spec）
-    reduce_history: bool = False          # 需要裁剪对话历史
-    extra_wait: float = 0.0               # 额外等待时间（秒），0 = 不等
+    compress: bool = False  # 需要压缩上下文
+    reduce_tools: bool = False  # 需要精简工具列表
+    switch_model: ModelConfig | None = None  # 跨 provider 切换（provider+model 全 spec）
+    reduce_history: bool = False  # 需要裁剪对话历史
+    extra_wait: float = 0.0  # 额外等待时间（秒），0 = 不等
 
     # ── 限制 ────────────────────────────
-    compress_count: int = 0               # 已执行压缩的次数
-    max_compress: int = 2                 # 允许的最大压缩次数
-    max_reduce: int = 1                   # 允许的最大精简次数
+    compress_count: int = 0  # 已执行压缩的次数
+    max_compress: int = 2  # 允许的最大压缩次数
+    max_reduce: int = 1  # 允许的最大精简次数
 
 
 class Recovery:
@@ -215,13 +217,14 @@ class RecoveryPipeline:
 
 # ── 空回复处理管线 ─────────────────────────────────────────
 
+
 @dataclass
 class EmptyResponseContext:
     """空回复处理的上下文。管线策略读取诊断字段，设置标志位。"""
 
-    reasoning: str = ""           # 模型输出的 reasoning 内容
-    retry_count: int = 0          # 本轮已重试次数
-    max_retries: int = 2          # 允许的最大重试次数
+    reasoning: str = ""  # 模型输出的 reasoning 内容
+    retry_count: int = 0  # 本轮已重试次数
+    max_retries: int = 2  # 允许的最大重试次数
 
     # ── 意图标志位 ────────────────
     inject_error: str | None = None  # 要注入上下文的 user 错误消息

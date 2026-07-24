@@ -1,4 +1,5 @@
 """MCP Server lifecycle manager — connect, discover tools, register."""
+
 import logging
 import time
 
@@ -12,6 +13,7 @@ _MCP_AVAILABLE = False
 try:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
+
     _MCP_AVAILABLE = True
 except ImportError:
     pass
@@ -71,9 +73,7 @@ class MCPServerManager:
             return False
 
     async def _connect_stdio(self, config: MCPServerConfig) -> list[dict]:
-        params = StdioServerParameters(
-            command=config.command, args=config.args, env=config.env
-        )
+        params = StdioServerParameters(command=config.command, args=config.args, env=config.env)
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -123,8 +123,9 @@ class MCPServerManager:
                         else:
                             result = await self._call_http_tool(state["config"], tool_name, arguments)
                         if self._hooks:
-                            await self._hooks.emit("mcp.tool_call", server=name, tool=tool_name,
-                                                duration=time.monotonic()-t0)
+                            await self._hooks.emit(
+                                "mcp.tool_call", server=name, tool=tool_name, duration=time.monotonic() - t0
+                            )
                         return result
                     except Exception as e:
                         if self._hooks:
@@ -133,9 +134,7 @@ class MCPServerManager:
         return {"error": f"Tool '{tool_name}' not found in any MCP server", "isError": True}
 
     async def _call_stdio_tool(self, config: MCPServerConfig, tool_name: str, arguments: dict) -> dict:
-        params = StdioServerParameters(
-            command=config.command, args=config.args, env=config.env
-        )
+        params = StdioServerParameters(command=config.command, args=config.args, env=config.env)
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()

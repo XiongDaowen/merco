@@ -1,4 +1,5 @@
 """全隔离服务工厂 — 每个测试场景独立的状态服务"""
+
 import pytest
 
 from merco.sandbox import snapshot

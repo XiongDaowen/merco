@@ -11,7 +11,7 @@ def estimate_tokens(text: str) -> int:
     """估算 token 数。CJK 约 1.5 token/字，英文约 4 字符/token。"""
     if not text:
         return 0
-    cjk = len(re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]', text))
+    cjk = len(re.findall(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]", text))
     other = len(text) - cjk
     return int(cjk * 1.5 + other / 4)
 
@@ -30,8 +30,9 @@ class ContextManager:
         """添加消息到上下文"""
         r = message.get("reasoning", "")
         if r:
-            _logger.warning("context.add: 消息包含 reasoning (%d chars, first 100: %s…)",
-                           len(r), r[:100].replace("\n", "\\n"))
+            _logger.warning(
+                "context.add: 消息包含 reasoning (%d chars, first 100: %s…)", len(r), r[:100].replace("\n", "\\n")
+            )
         self.messages.append(message)
         self.current_tokens += msg_tokens(message)
 
@@ -56,7 +57,6 @@ class ContextManager:
         if n is None:
             return self.messages
         return self.messages[-n:]
-
 
 
 def msg_tokens(message: dict) -> int:

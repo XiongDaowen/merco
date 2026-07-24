@@ -1,4 +1,5 @@
 """技能工具单元测试"""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -20,12 +21,12 @@ class TestSkillViewTool:
         registry = MagicMock()
         registry.list_skills.return_value = [
             {"name": "project-vision", "description": "项目愿景规划"},
-            {"name": "debug-code", "description": "代码调试工具"}
+            {"name": "debug-code", "description": "代码调试工具"},
         ]
         registry.get.return_value = {
             "name": "project-vision",
             "description": "项目愿景规划",
-            "content": "# 项目愿景\n详细内容..."
+            "content": "# 项目愿景\n详细内容...",
         }
         return registry
 

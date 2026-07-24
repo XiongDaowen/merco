@@ -1,4 +1,5 @@
 """Skill plugin — creates and loads SkillRegistry."""
+
 from __future__ import annotations
 
 import logging

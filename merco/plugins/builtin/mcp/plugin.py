@@ -1,4 +1,5 @@
 """MCP plugin — creates the MCP server manager."""
+
 from __future__ import annotations
 
 import logging

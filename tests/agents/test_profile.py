@@ -1,4 +1,5 @@
 """AgentProfile + Registry 单测"""
+
 from merco.agents.profile import BUILTIN_PROFILES, AgentProfile, AgentProfileRegistry
 
 

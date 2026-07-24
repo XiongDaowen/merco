@@ -1,4 +1,5 @@
 """SubAgent plugin — creates TodoManager + SubAgentManager and wires TaskTool."""
+
 from __future__ import annotations
 
 import logging

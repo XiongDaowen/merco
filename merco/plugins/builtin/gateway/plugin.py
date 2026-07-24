@@ -1,4 +1,5 @@
 """Gateway plugin - registers the built-in WebhookGateway."""
+
 from __future__ import annotations
 
 import logging

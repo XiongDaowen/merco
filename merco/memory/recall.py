@@ -164,6 +164,7 @@ class HybridRecaller(BaseRecaller):
 # Backward-compatible synchronous MemoryRecall (existing API)
 # ---------------------------------------------------------------------------
 
+
 class MemoryRecall:
     """Legacy memory recall — kept for backward compatibility.
 

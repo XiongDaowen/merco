@@ -1,4 +1,5 @@
 """EditFile planner + EditApplyMiddleware 单测"""
+
 import pytest
 
 from merco.tools.edit import EditFile
@@ -79,7 +80,10 @@ async def test_edit_apply_middleware_cancel_does_not_write(tmp_path, monkeypatch
         return False
 
     monkeypatch.setattr("merco.tools.middleware.confirm_edit", reject)
-    monkeypatch.setattr("merco.tools.middleware.snapshot.track", lambda path, old: (_ for _ in ()).throw(AssertionError("should not track")))
+    monkeypatch.setattr(
+        "merco.tools.middleware.snapshot.track",
+        lambda path, old: (_ for _ in ()).throw(AssertionError("should not track")),
+    )
 
     tool = EditFile()
     planned = await tool.execute(str(p), "hello", "hi")

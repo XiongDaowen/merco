@@ -1,4 +1,5 @@
 """Tests for Agent streaming error handling: error flag, panel display, re-raise."""
+
 import asyncio
 from io import StringIO
 from unittest.mock import MagicMock, patch
@@ -14,6 +15,7 @@ from merco.tools.registry import ToolRegistry
 
 class _FailingStreamLLM:
     """Mock LLM whose chat_stream raises immediately."""
+
     model = "test-model"
 
     def __init__(self, exc: Exception):
@@ -29,8 +31,7 @@ class _FailingStreamLLM:
         raise self._exc
 
 
-async def _make_agent_with_failing_llm(monkeypatch, tmp_path, exc: Exception,
-                                  streaming: bool = True) -> Agent:
+async def _make_agent_with_failing_llm(monkeypatch, tmp_path, exc: Exception, streaming: bool = True) -> Agent:
     """Build Agent with _FailingStreamLLM injected directly (bypass plugin activation)."""
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr("merco.core.agent._get_db_path", lambda: db_path)
@@ -68,7 +69,7 @@ async def _make_agent_with_failing_llm(monkeypatch, tmp_path, exc: Exception,
 class TestErrorFlag:
     def test_flag_exists_and_initialized_false(self, test_agent):
         """Agent should have _error_displayed_in_stream attr, False after init."""
-        assert hasattr(test_agent, '_error_displayed_in_stream')
+        assert hasattr(test_agent, "_error_displayed_in_stream")
         assert test_agent._error_displayed_in_stream is False
 
     def test_flag_reset_on_run_entry(self, test_agent):
@@ -76,6 +77,7 @@ class TestErrorFlag:
         test_agent._error_displayed_in_stream = True
         # Call just the first line of run() to verify reset; inspect the method.
         import inspect
+
         source = inspect.getsource(test_agent.run)
         assert "_error_displayed_in_stream = False" in source
 
@@ -90,13 +92,11 @@ class TestStreamingProviderError:
         provider = StreamingProvider()
         fake_out = StringIO()
         import merco.core.agent as agent_mod
+
         con = Console(file=fake_out, force_terminal=True, width=120, color_system=None)
         with patch.object(agent_mod, "console", con):
             with pytest.raises(Exception, match="502 bad gateway"):
-                await provider.get_response(
-                    agent,
-                    [{"role": "user", "content": "hi"}],
-                    [])
+                await provider.get_response(agent, [{"role": "user", "content": "hi"}], [])
 
     @pytest.mark.asyncio
     async def test_sets_error_flag_on_error(self, tmp_path, monkeypatch):
@@ -106,13 +106,11 @@ class TestStreamingProviderError:
         provider = StreamingProvider()
         fake_out = StringIO()
         import merco.core.agent as agent_mod
+
         con = Console(file=fake_out, force_terminal=True, width=120, color_system=None)
         with patch.object(agent_mod, "console", con):
             with pytest.raises(Exception):
-                await provider.get_response(
-                    agent,
-                    [{"role": "user", "content": "hi"}],
-                    [])
+                await provider.get_response(agent, [{"role": "user", "content": "hi"}], [])
         assert agent._error_displayed_in_stream is True
 
     @pytest.mark.asyncio
@@ -129,21 +127,21 @@ class TestStreamingProviderError:
         provider = StreamingProvider()
         fake_out = StringIO()
         import merco.core.agent as agent_mod
+
         con = Console(file=fake_out, force_terminal=True, width=120, color_system=None)
         with patch.object(agent_mod, "console", con):
             with pytest.raises(Exception):
-                await provider.get_response(
-                    agent,
-                    [{"role": "user", "content": "hi"}],
-                    [])
+                await provider.get_response(agent, [{"role": "user", "content": "hi"}], [])
         assert agent._error_displayed_in_stream is True
 
     @pytest.mark.asyncio
     async def test_cancelled_error_propagates_without_setting_error_flag(self, tmp_path, monkeypatch):
         """asyncio.CancelledError should re-raise without setting error flag."""
+
         class _CancelImmediateLLM:
             model = "test-model"
             calls = []
+
             async def chat_stream(self, messages, tools=None, tool_choice="auto"):
                 raise asyncio.CancelledError()
                 yield  # pragma: no cover
@@ -179,13 +177,11 @@ class TestStreamingProviderError:
         provider = StreamingProvider()
         fake_out = StringIO()
         import merco.core.agent as agent_mod
+
         con = Console(file=fake_out, force_terminal=True, width=120, color_system=None)
         with patch.object(agent_mod, "console", con):
             with pytest.raises(asyncio.CancelledError):
-                await provider.get_response(
-                    agent,
-                    [{"role": "user", "content": "hi"}],
-                    [])
+                await provider.get_response(agent, [{"role": "user", "content": "hi"}], [])
         # CancelledError path must NOT set error-displayed flag
         assert agent._error_displayed_in_stream is False
 
@@ -212,11 +208,10 @@ class TestStreamLoggerNoTracebackLeak:
         import inspect
 
         from merco.core.agent import StreamingProvider
+
         source = inspect.getsource(StreamingProvider.get_response)
         assert "StreamingProvider API 错误" in source
         for line in source.splitlines():
             stripped = line.strip()
             if "StreamingProvider API 错误" in stripped and "logger.warning" in stripped:
-                raise AssertionError(
-                    f"StreamingProvider 不应使用 logger.warning：\n  {stripped}"
-                )
+                raise AssertionError(f"StreamingProvider 不应使用 logger.warning：\n  {stripped}")

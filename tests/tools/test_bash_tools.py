@@ -1,4 +1,5 @@
 """Bash工具单元测试"""
+
 import pytest
 
 from merco.tools.bash_tools import BashTool
@@ -79,9 +80,11 @@ class TestBashTool:
 
     def test_kill_all_processes(self, bash_tool):
         """测试kill_all方法终止所有活跃进程"""
+
         # 手动添加一个模拟进程（不需要实际运行）
         class MockProcess:
             killed = False
+
             def kill(self):
                 self.killed = True
 

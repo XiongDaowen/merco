@@ -1,11 +1,11 @@
 """TodoManager — SQLite 任务管理"""
+
 from __future__ import annotations
 
 import os
 import sqlite3
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from .models import TodoItem
 
@@ -50,12 +50,22 @@ class TodoManager:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "INSERT INTO todos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (item.id, item.title, item.description, item.status, item.priority,
-                 item.parent_id, item.assigned_to, item.created_at, item.updated_at, item.result),
+                (
+                    item.id,
+                    item.title,
+                    item.description,
+                    item.status,
+                    item.priority,
+                    item.parent_id,
+                    item.assigned_to,
+                    item.created_at,
+                    item.updated_at,
+                    item.result,
+                ),
             )
         return item
 
-    def get(self, id: str) -> Optional[TodoItem]:
+    def get(self, id: str) -> TodoItem | None:
         """获取任务"""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -64,7 +74,7 @@ class TodoManager:
                 return None
             return self._row_to_item(row)
 
-    def update(self, id: str, **kwargs) -> Optional[TodoItem]:
+    def update(self, id: str, **kwargs) -> TodoItem | None:
         """更新任务"""
         item = self.get(id)
         if not item:

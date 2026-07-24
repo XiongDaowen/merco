@@ -6,6 +6,7 @@ Differentiated wait:
 - 401/403/404: one short 1.0s retry, then gives up
 - Other 4xx/unknown: backoff starting at delay*0.66 (slightly shorter)
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,8 +24,7 @@ class WaitRecovery(Recovery):
 
     name = "wait"
 
-    def __init__(self, delay: float = 3.0, max_delay: float = 30.0,
-                 short_delay: float = 1.0):
+    def __init__(self, delay: float = 3.0, max_delay: float = 30.0, short_delay: float = 1.0):
         self.delay = delay
         self.max_delay = max_delay
         self.short_delay = short_delay
@@ -35,9 +35,13 @@ class WaitRecovery(Recovery):
         name = type(ctx.error).__name__.lower()
 
         # 413/too-long → compression handles it
-        if status == 413 or "context length" in body or "maximum context" in body \
-                or "prompt too long" in body \
-                or ("too long" in body and "context" in body):
+        if (
+            status == 413
+            or "context length" in body
+            or "maximum context" in body
+            or "prompt too long" in body
+            or ("too long" in body and "context" in body)
+        ):
             return False
 
         # Deterministic errors: one short retry only
@@ -45,8 +49,7 @@ class WaitRecovery(Recovery):
             if ctx.attempt_count >= 1:
                 return False
             delay = self.short_delay
-            logger.info("→ 确定性错误 (status=%s)，快速重试一次（%.1fs）",
-                        status, delay)
+            logger.info("→ 确定性错误 (status=%s)，快速重试一次（%.1fs）", status, delay)
             ctx.extra_wait = max(ctx.extra_wait, delay)
             return True
 
@@ -70,8 +73,7 @@ class WaitRecovery(Recovery):
         else:
             base = self.delay * 0.66
 
-        delay = min(base * (2 ** ctx.attempt_count), self.max_delay)
-        logger.info("→ 等待 %.1fs 后重试 LLM（attempt=%d, status=%s）",
-                    delay, ctx.attempt_count + 1, status)
+        delay = min(base * (2**ctx.attempt_count), self.max_delay)
+        logger.info("→ 等待 %.1fs 后重试 LLM（attempt=%d, status=%s）", delay, ctx.attempt_count + 1, status)
         ctx.extra_wait = max(ctx.extra_wait, delay)
         return True

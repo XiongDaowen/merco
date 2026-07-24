@@ -1,4 +1,5 @@
 """Superpower plugin unit tests"""
+
 import pytest
 
 from merco.plugins.base import PluginContext

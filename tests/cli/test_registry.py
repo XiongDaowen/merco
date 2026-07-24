@@ -62,7 +62,9 @@ def test_get_all_grouped(fresh_registry):
 def test_sub_commands(fresh_registry):
     """注册带 sub 字典的命令，验证子命令可访问"""
     fresh_registry.register(
-        "/skill", "技能命令", lambda: None,
+        "/skill",
+        "技能命令",
+        lambda: None,
         sub={"view": "查看技能", "list": "列出技能"},
     )
     cmd = fresh_registry.get("/skill")

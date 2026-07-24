@@ -1,4 +1,5 @@
 """CLI 生命周期文案测试 — 启动 banner、调试模式、配置错误、退出"""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -66,9 +67,7 @@ def test_setup_agent_returns_unstarted_runtime():
             cfg.sandbox_mode = "local"
             mock_cfg_cls.load = MagicMock(return_value=cfg)
             with patch("merco.skills.builtin.install_builtin_skills"):
-                runtime, dashboard, config_source = main._setup_agent(
-                    None, None, None, debug=False
-                )
+                runtime, dashboard, config_source = main._setup_agent(None, None, None, debug=False)
 
     assert isinstance(runtime, AgentRuntime)
     assert dashboard is not None
@@ -110,9 +109,7 @@ def test_dashboard_renders_key_info():
     """Dashboard 调用 render 返回欢迎信息与帮助提示"""
     from cli.main import Dashboard, HintSection, WelcomeSection
 
-    dashboard = (Dashboard()
-        .use(WelcomeSection())
-        .use(HintSection()))
+    dashboard = Dashboard().use(WelcomeSection()).use(HintSection())
     agent = make_fake_agent()
     dashboard_text = dashboard.render(agent)
     assert "Mercury Code" in dashboard_text

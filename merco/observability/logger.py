@@ -16,9 +16,7 @@ def setup_logger(
 
     # 控制台输出
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    )
+    console_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
     logger.addHandler(console_handler)
 
     # 文件输出
@@ -26,9 +24,7 @@ def setup_logger(
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_path)
-        file_handler.setFormatter(
-            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-        )
+        file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
         logger.addHandler(file_handler)
 
     return logger

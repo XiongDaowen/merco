@@ -1,4 +1,5 @@
 """JSONBackend — 每记忆一个 .json 文件"""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +11,7 @@ from merco.memory.backend import MemoryBackend
 
 class JSONBackend(MemoryBackend):
     """JSON 文件后端"""
+
     name = "json"
 
     def __init__(self, base_path: str):

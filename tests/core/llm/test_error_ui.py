@@ -1,4 +1,5 @@
 """LLM 错误 UI 单元测试"""
+
 from merco.core.llm.error_ui import (
     build_retry_line,
     classify_error,
@@ -86,16 +87,20 @@ class TestErrorClassification:
 
     def test_classify_timeout_from_name(self):
         """测试从异常类名识别超时"""
+
         class TimeoutError(Exception):
             pass
+
         exc = TimeoutError("Request timed out")
         info = classify_error(exc)
         assert info.label == "请求超时"
 
     def test_classify_connection_error(self):
         """测试连接错误"""
+
         class ConnectionError(Exception):
             pass
+
         exc = ConnectionError("Failed to connect to API")
         info = classify_error(exc)
         assert info.label == "连接错误"

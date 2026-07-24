@@ -17,6 +17,7 @@ from tests.conftest import MockModelProvider
 # 基础对话
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_simple_conversation(test_agent):
     """用户问 → LLM 答 → session 有 2 条消息"""
@@ -32,10 +33,12 @@ async def test_simple_conversation(test_agent):
 @pytest.mark.asyncio
 async def test_multi_turn(test_agent):
     """多轮对话 → session 累积消息"""
-    test_agent.provider = MockModelProvider([
-        {"content": "第一轮"},
-        {"content": "第二轮"},
-    ])
+    test_agent.provider = MockModelProvider(
+        [
+            {"content": "第一轮"},
+            {"content": "第二轮"},
+        ]
+    )
 
     r1 = await test_agent.run("问1")
     r2 = await test_agent.run("问2")
@@ -48,16 +51,18 @@ async def test_multi_turn(test_agent):
 # 工具调用
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_tool_call_chain(test_agent):
     """用户问 → tool_call → tool_result → LLM 答 → 完整链路持久化"""
-    test_agent.provider = MockModelProvider([
-        {
-            "tool_calls": [{"id": "t1", "name": "echo",
-                            "arguments": {"message": "hello"}}],
-        },
-        {"content": "工具返回了 hello"},
-    ])
+    test_agent.provider = MockModelProvider(
+        [
+            {
+                "tool_calls": [{"id": "t1", "name": "echo", "arguments": {"message": "hello"}}],
+            },
+            {"content": "工具返回了 hello"},
+        ]
+    )
 
     result = await test_agent.run("回显hello")
     assert "工具返回了 hello" in result
@@ -71,6 +76,7 @@ async def test_tool_call_chain(test_agent):
 # ═══════════════════════════════════════════════════════════
 # Session 持久化
 # ═══════════════════════════════════════════════════════════
+
 
 @pytest.mark.asyncio
 async def test_session_save_and_load(test_agent):
@@ -104,9 +110,12 @@ async def test_session_resume_or_create(test_agent):
 @pytest.mark.asyncio
 async def test_new_session_preserves_old(test_agent):
     """/new → 旧 session 保留 → 新 session 独立"""
-    test_agent.provider = MockModelProvider([
-        {"content": "旧对话"}, {"content": "新对话"},
-    ])
+    test_agent.provider = MockModelProvider(
+        [
+            {"content": "旧对话"},
+            {"content": "新对话"},
+        ]
+    )
 
     await test_agent.run("旧问题")
     old_id = test_agent.session.id
@@ -124,6 +133,7 @@ async def test_new_session_preserves_old(test_agent):
 # ═══════════════════════════════════════════════════════════
 # Guard 守卫
 # ═══════════════════════════════════════════════════════════
+
 
 @pytest.mark.asyncio
 async def test_guard_sensitive_blocked(test_agent):
@@ -159,6 +169,7 @@ async def test_guard_auto_skips(test_agent):
 # Context 压缩
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_context_compression_triggered(test_agent):
     """MockLLM 产生 N 条大消息 → context 超过阈值 → 压缩 → messages 变少"""
@@ -169,13 +180,15 @@ async def test_context_compression_triggered(test_agent):
     test_agent.context.max_tokens = 20000  # ContextManager 已在 __init__ 创建，需同步更新
 
     # Mock LLM 5 次调用：前 4 轮大消息触发压缩，第 5 轮压缩后的正常消息
-    test_agent.provider = MockModelProvider([
-        {"content": big_msg},  # 第 1 轮
-        {"content": big_msg},  # 第 2 轮
-        {"content": big_msg},  # 第 3 轮
-        {"content": big_msg},  # 第 4 轮 — 累积到 > 16000 tokens，触发压缩
-        {"content": "压缩后继续"},  # 压缩后第 5 轮
-    ])
+    test_agent.provider = MockModelProvider(
+        [
+            {"content": big_msg},  # 第 1 轮
+            {"content": big_msg},  # 第 2 轮
+            {"content": big_msg},  # 第 3 轮
+            {"content": big_msg},  # 第 4 轮 — 累积到 > 16000 tokens，触发压缩
+            {"content": "压缩后继续"},  # 压缩后第 5 轮
+        ]
+    )
 
     # 跑 4 轮
     for i in range(4):
@@ -194,6 +207,7 @@ async def test_context_compression_triggered(test_agent):
 # ═══════════════════════════════════════════════════════════
 # Context 恢复
 # ═══════════════════════════════════════════════════════════
+
 
 @pytest.mark.asyncio
 async def test_context_restore_after_switch(test_agent):
@@ -219,6 +233,7 @@ async def test_context_restore_after_switch(test_agent):
 # Session Fork on Compress
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_session_fork_on_compress(test_agent):
     """压缩时自动 fork 当前 session 到 child session"""
@@ -228,13 +243,15 @@ async def test_session_fork_on_compress(test_agent):
     test_agent.context.max_tokens = 20000  # ContextManager 已在 __init__ 创建，需同步更新
 
     # Mock LLM 5 次调用：前 4 轮大消息累积触发压缩 → 自动 fork
-    test_agent.provider = MockModelProvider([
-        {"content": big_msg},
-        {"content": big_msg},
-        {"content": big_msg},
-        {"content": big_msg},
-        {"content": "压缩后继续"},
-    ])
+    test_agent.provider = MockModelProvider(
+        [
+            {"content": big_msg},
+            {"content": big_msg},
+            {"content": big_msg},
+            {"content": big_msg},
+            {"content": "压缩后继续"},
+        ]
+    )
 
     original_session_id = test_agent.session.id
 
@@ -258,6 +275,7 @@ async def test_session_fork_on_compress(test_agent):
 # MCP tool calling E2E
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_mcp_tool_calling_e2e(test_agent, tmp_path):
     """MCP tool 通过 agent.run() 端到端调用 → result 正确"""
@@ -280,16 +298,20 @@ async def test_mcp_tool_calling_e2e(test_agent, tmp_path):
     test_agent.tool_registry.register(MockMCPTool())
 
     # Mock LLM：第一次 tool_call → 第二次答
-    test_agent.provider = MockModelProvider([
-        {
-            "tool_calls": [{
-                "id": "mcp_t1",
-                "name": "mcp_test_tool",
-                "arguments": {"query": "test query"},
-            }],
-        },
-        {"content": "MCP 工具返回了结果"},
-    ])
+    test_agent.provider = MockModelProvider(
+        [
+            {
+                "tool_calls": [
+                    {
+                        "id": "mcp_t1",
+                        "name": "mcp_test_tool",
+                        "arguments": {"query": "test query"},
+                    }
+                ],
+            },
+            {"content": "MCP 工具返回了结果"},
+        ]
+    )
 
     result = await test_agent.run("用 mcp 工具查 test query")
     assert "MCP 工具返回了结果" in result
@@ -298,9 +320,11 @@ async def test_mcp_tool_calling_e2e(test_agent, tmp_path):
     msgs = test_agent.session.messages
     assert any(m["role"] == "tool" and "mcp: test query" in str(m.get("content", "")) for m in msgs)
 
+
 @pytest.mark.asyncio
 async def test_recovery_pipeline_retries_on_5xx(test_agent):
     """MockLLM 第一次抛 500 → RecoveryPipeline 重试 → 第二次成功"""
+
     class FlakyLLM:
         name = "mock"
 

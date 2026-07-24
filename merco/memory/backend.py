@@ -1,4 +1,5 @@
 """MemoryBackend ABC + MemoryBackendRegistry"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -6,6 +7,7 @@ from abc import ABC, abstractmethod
 
 class MemoryBackend(ABC):
     """记忆存储后端基类"""
+
     name: str = ""
 
     @abstractmethod

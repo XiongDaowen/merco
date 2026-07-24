@@ -1,4 +1,5 @@
 """Agent 构造 gateway_registry + plugin_ctx accessor 测试。"""
+
 from merco.core.agent import Agent
 from merco.core.config import MercoConfig
 from merco.gateway.registry import GatewayRegistry

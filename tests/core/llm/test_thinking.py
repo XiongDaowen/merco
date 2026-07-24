@@ -1,4 +1,5 @@
 """ThinkingExtractor + strategies + factory."""
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -39,6 +40,7 @@ def test_extract_direct_field_reasoning():
 
 
 # ── _strip_think_tags / _clean_content unit behavior ──
+
 
 class TestThinkTagHandling:
     """Think 标签底层清理：_strip_think_tags（chunk 安全，不动空白）与 _clean_content（终态 strip）。"""
@@ -104,15 +106,14 @@ def test_clean_content_strips_think_tags_and_outer_whitespace():
 
 # ── ThinkTagStrategy (incl. cross-chunk delta) ──
 
+
 class TestThinkTagStrategy:
     """ThinkTagStrategy 策略测试，含跨 chunk 状态机。"""
 
     def test_extract_from_message_standard(self):
         """从完整消息中提取标准 think 标签。"""
         strategy = ThinkTagStrategy()
-        message = SimpleNamespace(
-            content="<think>This is my reasoning</think>And this is the answer"
-        )
+        message = SimpleNamespace(content="<think>This is my reasoning</think>And this is the answer")
         result = strategy.extract_from_message(message)
         assert result is not None
         assert result["reasoning"] == "This is my reasoning"
@@ -121,9 +122,7 @@ class TestThinkTagStrategy:
     def test_extract_from_message_alternate_close(self):
         """提取 [/think] 格式的标签。"""
         strategy = ThinkTagStrategy()
-        message = SimpleNamespace(
-            content="<think>This is my reasoning[/think]And this is the answer"
-        )
+        message = SimpleNamespace(content="<think>This is my reasoning[/think]And this is the answer")
         result = strategy.extract_from_message(message)
         assert result is not None
         assert result["reasoning"] == "This is my reasoning"
@@ -132,9 +131,7 @@ class TestThinkTagStrategy:
     def test_extract_from_message_thinking_tag(self):
         """提取 <thinking> 标签。"""
         strategy = ThinkTagStrategy()
-        message = SimpleNamespace(
-            content="<thinking>This is my reasoning</thinking>And this is the answer"
-        )
+        message = SimpleNamespace(content="<thinking>This is my reasoning</thinking>And this is the answer")
         result = strategy.extract_from_message(message)
         assert result is not None
         assert result["reasoning"] == "This is my reasoning"
@@ -143,9 +140,7 @@ class TestThinkTagStrategy:
     def test_extract_from_message_multiple_blocks(self):
         """提取多个 think 块（reasoning 用 \\n\\n 拼接，content 去标签后 strip）。"""
         strategy = ThinkTagStrategy()
-        message = SimpleNamespace(
-            content="<think>First thought</think>Hi <think>Second thought</think>There"
-        )
+        message = SimpleNamespace(content="<think>First thought</think>Hi <think>Second thought</think>There")
         result = strategy.extract_from_message(message)
         assert result is not None
         assert result["reasoning"] == "First thought\n\nSecond thought"
@@ -220,6 +215,7 @@ class TestThinkTagStrategy:
 
 # ── DirectFieldStrategy ─────────────────────
 
+
 class TestDirectFieldStrategy:
     """DirectFieldStrategy：从顶层 reasoning_content / reasoning 字段提取。"""
 
@@ -248,6 +244,7 @@ class TestDirectFieldStrategy:
 
 
 # ── ModelExtraStrategy ──────────────────────
+
 
 class TestModelExtraStrategy:
     """ModelExtraStrategy：从 model_extra 字典提取 reasoning_content / reasoning。"""
@@ -284,6 +281,7 @@ class TestModelExtraStrategy:
 
 
 # ── ThinkingExtractor integration ───────────
+
 
 class TestThinkingExtractor:
     """ThinkingExtractor 集成测试：优先级 / fallback / reset 委托。"""

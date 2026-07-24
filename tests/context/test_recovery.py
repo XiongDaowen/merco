@@ -1,4 +1,5 @@
 """上下文压缩恢复策略单元测试"""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -88,7 +89,7 @@ class TestContextCompressRecovery:
         ctx.error = Exception("Too large")
         ctx.error.status_code = 413
         ctx.compress_count = 2  # 已经压缩 2 次
-        ctx.max_compress = 2    # 最大 2 次
+        ctx.max_compress = 2  # 最大 2 次
         ctx.context_tokens = 10000
         ctx.extra_wait = 0.0
         ctx.compress = False

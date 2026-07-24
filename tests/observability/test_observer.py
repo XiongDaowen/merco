@@ -19,6 +19,7 @@ def obs(hooks):
 
 # ── 基础场景 ─────────────────────────────────────────────
 
+
 def test_fresh_session_report(obs):
     """无历史、无 live → 暂无数据。"""
     obs._live.increment("turns", 1)
@@ -39,6 +40,7 @@ def test_accumulated_plus_live_no_merge(obs):
 
 
 # ── 核心 bug 复现与验证 ────────────────────────────────────
+
 
 def test_report_after_merge_no_double_count(obs):
     """merge 后 report 不重复计数 — 根本 bug 场景。"""
@@ -90,6 +92,7 @@ def test_report_after_merge_then_more_activity(obs):
 
 # ── session 切换 ─────────────────────────────────────────
 
+
 def test_reset_clears_last_merged(obs):
     """reset() 清空 _last_merged，切会话后新增量正确计算。"""
     obs._acc_map = {"turns": 100}
@@ -121,6 +124,7 @@ def test_restore_then_report(obs):
 
 # ── 中断统计 ─────────────────────────────────────────────
 
+
 def test_on_interrupt_counts(obs):
     """中断计入 live 的中断计数和工具调用。"""
     obs._on_interrupt(interrupted_tools=2)
@@ -140,6 +144,7 @@ def test_on_interrupt_report_shows_yellow(obs):
 
 
 # ── _merge_to_acc 增量正确性 ──────────────────────────────
+
 
 def test_merge_to_acc_only_adds_delta(obs):
     """_merge_to_acc 只累加增量，不重复加已合并部分。"""
@@ -165,14 +170,17 @@ def test_merge_to_acc_idempotent(obs):
 
 # ── 大数字格式化 ─────────────────────────────────────────
 
+
 def test_fmt_n():
     from merco.observability.observer import _fmt_n
+
     assert _fmt_n(999) == "999"
     assert _fmt_n(1024) == "1.0K"
     assert _fmt_n(1048576) == "1024.0K"
 
 
 # ── snapshot / restore round-trip ─────────────────────────
+
 
 def test_snapshot_restore_roundtrip(obs):
     """snapshot → restore → acc_map 不变。"""
@@ -184,6 +192,7 @@ def test_snapshot_restore_roundtrip(obs):
 
 
 # ── Hook 事件计数 during agent loop ───────────────────────
+
 
 @pytest.mark.asyncio
 async def test_observer_counts_hook_events_in_agent_loop(test_agent, monkeypatch):
@@ -210,10 +219,12 @@ async def test_observer_counts_hook_events_in_agent_loop(test_agent, monkeypatch
     observer.reset(full=False)
 
     # Mock LLM：第一次 tool_call → 第二次 final answer
-    test_agent.provider = MockModelProvider([
-        {"tool_calls": [{"id": "t1", "name": "echo", "arguments": {"message": "hi"}}]},
-        {"content": "done"},
-    ])
+    test_agent.provider = MockModelProvider(
+        [
+            {"tool_calls": [{"id": "t1", "name": "echo", "arguments": {"message": "hi"}}]},
+            {"content": "done"},
+        ]
+    )
 
     # 跑一轮带工具调用
     await test_agent.run("echo hi")

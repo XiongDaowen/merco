@@ -39,6 +39,7 @@ import merco
 
 class DashboardSection(ABC):
     """首页展示区块基类。新增条目：继承 + 实现 render() + dashboard.use()"""
+
     name: str = ""
 
     @abstractmethod
@@ -49,12 +50,14 @@ class DashboardSection(ABC):
 
 class WelcomeSection(DashboardSection):
     name = "welcome"
+
     def render(self, agent, **ctx) -> str:
         return f"[bold green]Mercury Code v{merco.__version__}[/bold green]"
 
 
 class ModelSection(DashboardSection):
     name = "model"
+
     def render(self, agent, **ctx) -> str:
         return f"模型: {agent.config.model.provider}/{agent.config.model.model}"
 
@@ -70,7 +73,7 @@ class ToolsSection(DashboardSection):
         active = [t.name for t in tools if t.check()]
         if not active:
             return "工具: [dim]无[/dim]"
-        shown = active[:self.max_display]
+        shown = active[: self.max_display]
         line = f"工具: [bold]{', '.join(shown)}[/bold]"
         if len(active) > self.max_display:
             line += f" [dim]等 {len(active)} 个[/dim]"
@@ -90,7 +93,7 @@ class SkillsSection(DashboardSection):
         skills = registry.list_skills()
         if not skills:
             return "技能: [dim]无[/dim]"
-        names = [s["name"] for s in skills[:self.max_display]]
+        names = [s["name"] for s in skills[: self.max_display]]
         line = f"技能: [bold]{', '.join(names)}[/bold]"
         if len(skills) > self.max_display:
             line += f" [dim]等 {len(skills)} 个[/dim]"
@@ -125,6 +128,7 @@ class HintSection(DashboardSection):
 
 class Dashboard:
     """首页渲染器。按 use() 顺序渲染各区块。"""
+
     def __init__(self):
         self._sections: list[DashboardSection] = []
 
@@ -146,10 +150,12 @@ class Dashboard:
 
 # ── 共享的 Agent 启动逻辑 ────────────────────────────────────────────────
 
+
 def _setup_agent(config_path: str | None, model: str | None, api_key: str | None, debug: bool):
     from merco.core.config import MercoConfig
     from merco.core.runtime import AgentRuntime
     from merco.tools import discover_tools, tool_registry
+
     discover_tools()
 
     if debug:
@@ -174,19 +180,22 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
         if env_key:
             cfg.model.api_key = env_key
         else:
-            console.print(Panel(
-                "[yellow]未配置 API Key。[/yellow]\n\n"
-                "首次使用？运行 [bold]merco setup[/bold] 交互式配置，一分钟搞定。\n\n"
-                "也可以手动——选一种就行：\n"
-                "  [bold]• OpenAI：[/bold] export [dim]OPENAI_API_KEY=sk-...[/dim] 然后 [dim]merco run[/dim]\n"
-                "  [bold]• 其他平台：[/bold] [dim]merco.json[/dim] 写 [dim]\"model\": {\"provider\": \"deepseek\", \"api_key\": \"sk-...\"}[/dim]\n"
-                "  [bold]• 临时启动：[/bold] [dim]merco run -k sk-...[/dim]",
-                title="⚙️ 需要配置",
-                border_style="yellow",
-            ))
+            console.print(
+                Panel(
+                    "[yellow]未配置 API Key。[/yellow]\n\n"
+                    "首次使用？运行 [bold]merco setup[/bold] 交互式配置，一分钟搞定。\n\n"
+                    "也可以手动——选一种就行：\n"
+                    "  [bold]• OpenAI：[/bold] export [dim]OPENAI_API_KEY=sk-...[/dim] 然后 [dim]merco run[/dim]\n"
+                    '  [bold]• 其他平台：[/bold] [dim]merco.json[/dim] 写 [dim]"model": {"provider": "deepseek", "api_key": "sk-..."}[/dim]\n'
+                    "  [bold]• 临时启动：[/bold] [dim]merco run -k sk-...[/dim]",
+                    title="⚙️ 需要配置",
+                    border_style="yellow",
+                )
+            )
             resp = input("\n现在配置？按 Enter 进入向导，输入 n 退出: ").strip().lower()
             if resp != "n":
                 from merco.setup import run_setup_wizard
+
                 run_setup_wizard()
                 # 重新加载配置
                 cfg = MercoConfig.load(config_path)
@@ -200,34 +209,38 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
 
     # ── 安装内置技能到全局目录（首次运行或版本更新时自动执行）──
     from merco.skills.builtin import install_builtin_skills
+
     install_builtin_skills()
 
     runtime = AgentRuntime(config=cfg, tool_registry=tool_registry)
 
     # 显示加载的配置来源
     config_source = "默认值"
-    for candidate in ["./merco.json", "./.merco/merco.json",
-                       os.path.expanduser("~/.config/merco/config.json")]:
+    for candidate in ["./merco.json", "./.merco/merco.json", os.path.expanduser("~/.config/merco/config.json")]:
         if os.path.exists(candidate):
             config_source = candidate
             break
 
-    dashboard = (Dashboard()
+    dashboard = (
+        Dashboard()
         .use(WelcomeSection())
         .use(SessionSection())
         .use(ModelSection())
         .use(ToolsSection(max_display=5))
         .use(SkillsSection(max_display=3))
         .use(ConfigSection())
-        .use(HintSection()))
+        .use(HintSection())
+    )
 
     return runtime, dashboard, config_source
 
 
 # ── 输入区 PromptDecorator ─────────────────────────────────────
 
+
 class PromptDecorator(ABC):
     """输入区装饰器基类。新增：继承 + 实现 render() + prompt_area.use()"""
+
     name: str = ""
 
     def render(self, agent) -> str | None:
@@ -241,6 +254,7 @@ class PromptDecorator(ABC):
 
 class ContextBar(PromptDecorator):
     """上下文用量进度条 — 半高薄款"""
+
     name = "context_bar"
     _W = 16
 
@@ -305,6 +319,7 @@ def _fmt(n: int, is_estimate: bool = False) -> str:
 
 class PromptArea:
     """输入区渲染器。按 use() 顺序渲染各装饰器，Panel 包裹输出。"""
+
     def __init__(self):
         self._decorators: list[PromptDecorator] = []
 
@@ -326,8 +341,8 @@ class PromptArea:
         return "\n".join(pre_parts), prompt
 
 
-
 # ── REPL 交互循环 ────────────────────────────────────────────────────────
+
 
 async def _run_one_turn(agent, prompt_area, driver, handle_command, current_task_ref, console_obj=None):
     """处理一轮 REPL：渲染 → 读输入 → 命令分发 → 跑 agent → 异常分支。
@@ -372,10 +387,18 @@ async def _run_one_turn(agent, prompt_area, driver, handle_command, current_task
     # 错误响应（❌ 开头）：若 Provider 已显示过 Panel（_error_displayed_in_stream=True），
     # 则跳过；否则用 Rich 红 Panel 渲染 llm_error(e) 返回的 markup 字符串。
     if response.startswith("❌"):
-        if not getattr(agent, '_error_displayed_in_stream', False):
+        if not getattr(agent, "_error_displayed_in_stream", False):
             from rich.text import Text
-            c.print(Panel(Text.from_markup(response), border_style="red",
-                           title="⚠ API 错误", title_align="left", padding=(0, 1)))
+
+            c.print(
+                Panel(
+                    Text.from_markup(response),
+                    border_style="red",
+                    title="⚠ API 错误",
+                    title_align="left",
+                    padding=(0, 1),
+                )
+            )
     elif not (agent.config.streaming.enabled and agent.config.streaming.content):
         c.print(Panel(Markdown(response), border_style="dim"))
     c.rule(style="dim")
@@ -424,6 +447,7 @@ def run_repl(runtime, dashboard=None, config_source=""):
 
     import cli.commands  # noqa: F401 - triggers all @cmd_registry.register decorators
     from cli.input_driver import InputInterrupt, PromptToolkitInput
+
     driver = PromptToolkitInput([c.name for c in cmd_registry.get_all()])
 
     # ── 中断处理管线 ──
@@ -435,10 +459,12 @@ def run_repl(runtime, dashboard=None, config_source=""):
         _run_exit_hooks()
         sys.exit(0)
 
-    interrupt_pipeline = (InterruptPipeline()
+    interrupt_pipeline = (
+        InterruptPipeline()
         .use(CancelTaskStrategy())
         .use(ClearInputStrategy(_clear_input_buffer))
-        .use(ExitWithHooksStrategy(_exit_gracefully)))
+        .use(ExitWithHooksStrategy(_exit_gracefully))
+    )
 
     async def repl():
         loop = asyncio.get_running_loop()
@@ -452,7 +478,7 @@ def run_repl(runtime, dashboard=None, config_source=""):
             ctx = InterruptContext(
                 state=InterruptState.AGENT_RUNNING if cur and not cur.done() else InterruptState.IDLE,
                 task=cur,
-                exit_count=exit_count
+                exit_count=exit_count,
             )
             interrupt_pipeline.process_sync(ctx)
             if not ctx.handled and ctx.exit_count > exit_count:
@@ -481,15 +507,16 @@ def run_repl(runtime, dashboard=None, config_source=""):
         # Render dashboard after MCP loaded
         if dashboard:
             dashboard_text = dashboard.render(agent, config_source=config_source)
-            console.print(Panel(
-                dashboard_text,
-                title="🚀 Mercury Code",
-            ))
+            console.print(
+                Panel(
+                    dashboard_text,
+                    title="🚀 Mercury Code",
+                )
+            )
 
         try:
             while True:
-                prompt_area = (PromptArea()
-                    .use(ContextBar()))
+                prompt_area = PromptArea().use(ContextBar())
 
                 # 重新注册信号处理器（prompt_toolkit 可能已清除）
                 for sig in (signal.SIGINT, signal.SIGTERM):
@@ -501,15 +528,16 @@ def run_repl(runtime, dashboard=None, config_source=""):
 
                 try:
                     result = await _run_one_turn(
-                        agent, prompt_area, driver, handle_command,
-                        current_task_ref, console_obj=console,
+                        agent,
+                        prompt_area,
+                        driver,
+                        handle_command,
+                        current_task_ref,
+                        console_obj=console,
                     )
                 except InputInterrupt:
                     # 通过管线处理退出逻辑
-                    ctx = InterruptContext(
-                        state=InterruptState.IDLE,
-                        exit_count=exit_count
-                    )
+                    ctx = InterruptContext(state=InterruptState.IDLE, exit_count=exit_count)
                     interrupt_pipeline.process_sync(ctx)
                     if ctx.handled:
                         pass
@@ -548,6 +576,7 @@ def run_repl(runtime, dashboard=None, config_source=""):
 
 # ── 回调：无子命令时进入交互模式 ─────────────────────────────────────────
 
+
 @app.callback(invoke_without_command=True)
 def main_callback(
     ctx: typer.Context,
@@ -563,6 +592,7 @@ def main_callback(
 
 
 # ── 子命令 ────────────────────────────────────────────────────────────────
+
 
 @app.command("run")
 def run_cmd(
@@ -618,10 +648,12 @@ def skills_cmd(
 def setup_cmd():
     """交互式配置 API — 引导选择平台、填写 Key 和模型"""
     from merco.setup import run_setup_wizard
+
     run_setup_wizard()
 
 
 # ── 命令处理 ──────────────────────────────────────────────────────────────
+
 
 async def handle_command(cmd: str, agent) -> bool:
     parts = cmd.split(maxsplit=1)

@@ -1,4 +1,5 @@
 """快照系统单元测试"""
+
 import json
 import tempfile
 from datetime import datetime
@@ -119,6 +120,7 @@ class TestSnapshot:
         snapshot.track("/test/file1.txt", "content1", session_id=session1)
         # 等待一点时间，确保时间戳不同
         import time
+
         time.sleep(0.01)
         snapshot.track("/test/file2.txt", "content2", session_id=session2)
         snapshot.track("/test/file3.txt", "content3", session_id=session2)

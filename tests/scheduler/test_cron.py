@@ -1,4 +1,5 @@
 """Cron调度器单元测试"""
+
 import asyncio
 import logging
 from datetime import datetime
@@ -81,16 +82,14 @@ class TestCronScheduler:
     @pytest.mark.asyncio
     async def test_start_stop(self, scheduler):
         """测试启动和停止调度器"""
+
         # 启动后立即停止，防止一直运行
         async def stop_after_short_delay():
             await asyncio.sleep(0.1)
             await scheduler.stop()
 
         # 同时运行调度器和停止任务
-        await asyncio.gather(
-            scheduler.start(),
-            stop_after_short_delay()
-        )
+        await asyncio.gather(scheduler.start(), stop_after_short_delay())
 
         assert scheduler._running is False
 
@@ -152,6 +151,7 @@ class TestCronScheduler:
     async def test_run_job_async_handler(self, scheduler):
         """测试执行异步处理器"""
         mock_handler = MagicMock()
+
         # 模拟异步函数
         async def async_handler():
             mock_handler()
@@ -178,6 +178,7 @@ class TestCronScheduler:
     @pytest.mark.asyncio
     async def test_run_job_exception_handled(self, scheduler):
         """测试任务执行异常不会中断调度器"""
+
         def failing_handler():
             raise Exception("Task failed")
 
@@ -187,7 +188,7 @@ class TestCronScheduler:
         await scheduler._run_job(job)
 
         assert job.last_run is None  # 异常时不更新last_run
-        assert job.run_count == 0    # 异常时不增加计数
+        assert job.run_count == 0  # 异常时不增加计数
 
     class TestIsDue:
         """_is_due方法测试"""
@@ -224,6 +225,7 @@ class TestCronScheduler:
 
 # --- Wave 3 T2 regression tests -------------------------------------------------
 
+
 def test_is_due_star_matches_any_time():
     """`* * * * *` 任意时刻匹配。"""
     sched = CronScheduler()
@@ -244,8 +246,8 @@ def test_is_due_weekday_uses_cron_sunday_zero_convention():
     2026-07-26 是周日。cron 表达式 "* * * * 0" 应在周日匹配，周一不匹配。
     """
     sched = CronScheduler()
-    sunday = datetime(2026, 7, 26, 10, 0)   # 周日
-    monday = datetime(2026, 7, 27, 10, 0)   # 周一
+    sunday = datetime(2026, 7, 26, 10, 0)  # 周日
+    monday = datetime(2026, 7, 27, 10, 0)  # 周一
     assert sched._is_due("* * * * 0", sunday) is True, "周日应匹配 weekday=0"
     assert sched._is_due("* * * * 0", monday) is False, "周一不应匹配 weekday=0"
 
@@ -261,9 +263,8 @@ async def test_run_job_logs_exception_does_not_swallow(caplog):
     with caplog.at_level(logging.ERROR, logger="merco.scheduler.cron"):
         await sched._run_job(job)
     # 异常被记 ERROR 日志：logger.exception 保留 traceback (exc_info) + 消息含 job 名
-    assert any(
-        r.levelname == "ERROR" and r.exc_info is not None and "bad" in r.message
-        for r in caplog.records
-    ), "job 异常应记 ERROR 日志（含 traceback 与 job 名）"
+    assert any(r.levelname == "ERROR" and r.exc_info is not None and "bad" in r.message for r in caplog.records), (
+        "job 异常应记 ERROR 日志（含 traceback 与 job 名）"
+    )
     # job 状态未推进（last_run 未更新，因 handler 失败）
     assert job.last_run is None

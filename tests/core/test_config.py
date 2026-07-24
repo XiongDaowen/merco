@@ -1,4 +1,5 @@
 """ModelConfig + StreamingConfig cleanup."""
+
 import json
 import os
 import tempfile
@@ -8,8 +9,8 @@ from merco.core.config import MercoConfig, ModelConfig, StreamingConfig
 
 def test_model_config_defaults():
     cfg = ModelConfig(provider="openai", model="gpt-4o")
-    assert not hasattr(cfg, "resolve")           # resolve() removed
-    assert cfg.request_cooldown == 0.3           # absorbs hardcoded cooldown
+    assert not hasattr(cfg, "resolve")  # resolve() removed
+    assert cfg.request_cooldown == 0.3  # absorbs hardcoded cooldown
     assert cfg.fallbacks == []
 
 
@@ -29,7 +30,7 @@ def test_streaming_bool_migration_from_old_config():
     try:
         cfg = MercoConfig.load(path)
         assert cfg.streaming.enabled is True
-        assert cfg.streaming.think is False      # migrated from stream_thinking
+        assert cfg.streaming.think is False  # migrated from stream_thinking
     finally:
         os.unlink(path)
 

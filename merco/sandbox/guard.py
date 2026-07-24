@@ -25,10 +25,12 @@ logger = logging.getLogger("merco.guard")
 
 # ── 枚举和结果 ──────────────────────────────────────────────
 
+
 class GuardAction(Enum):
-    ALLOW = "allow"      # 直接放行
-    DENY = "deny"        # 直接拒绝
-    ASK = "ask"          # 需要用户确认
+    ALLOW = "allow"  # 直接放行
+    DENY = "deny"  # 直接拒绝
+    ASK = "ask"  # 需要用户确认
+
 
 @dataclass
 class GuardResult:
@@ -48,11 +50,12 @@ class GuardConfirmationRequired(Exception):
 
 # ── 规则 ──────────────────────────────────────────────────
 
+
 @dataclass
 class GuardRule:
-    tool: str     # "bash" | "write_file" | "*" 所有工具
+    tool: str  # "bash" | "write_file" | "*" 所有工具
     pattern: str
-    action: str   # "ask" | "deny" | "allow"
+    action: str  # "ask" | "deny" | "allow"
 
     def to_dict(self) -> dict:
         return {"tool": self.tool, "pattern": self.pattern, "action": self.action}
@@ -102,6 +105,7 @@ _DEFAULT_RULES: list[GuardRule] = [
 
 # ── ToolGuard ─────────────────────────────────────────────
 
+
 class ToolGuard:
     """工具执行守卫 — facade，委托给 PolicyPipeline
 
@@ -132,8 +136,7 @@ class ToolGuard:
 
     def rule(self, tool: str, pattern: str, action: str) -> "ToolGuard":
         """添加规则（向后兼容）。在默认策略前插入一条自定义策略。"""
-        self._pipeline._policies.insert(0,
-            _SingleRulePolicy(tool, pattern, action))
+        self._pipeline._policies.insert(0, _SingleRulePolicy(tool, pattern, action))
         return self
 
     async def check(self, tool_name: str, arguments: dict) -> GuardResult:
@@ -142,8 +145,10 @@ class ToolGuard:
 
 # ── PermissionPolicy ───────────────────────────────────────
 
+
 class PermissionPolicy(ABC):
     """安全策略基类"""
+
     name: str = ""
 
     @abstractmethod
@@ -174,6 +179,7 @@ class PolicyPipeline:
 
 class _SingleRulePolicy(PermissionPolicy):
     """单条规则的策略包装"""
+
     name = "single_rule"
 
     def __init__(self, tool, pattern, action):
@@ -192,8 +198,10 @@ class _SingleRulePolicy(PermissionPolicy):
 
 # ── BuiltinDefaultPolicy ───────────────────────────────────
 
+
 class BuiltinDefaultPolicy(PermissionPolicy):
     """默认安全策略 — 包装 30 条默认规则 + SecurityChecker + mode logic"""
+
     name = "builtin_default"
 
     def __init__(self, mode: str = "ask", user_rules: list = None):
@@ -201,9 +209,7 @@ class BuiltinDefaultPolicy(PermissionPolicy):
         self._rules: list[GuardRule] = []
         if user_rules:
             for r in user_rules:
-                self._rules.append(
-                    GuardRule.from_dict(r) if isinstance(r, dict) else r
-                )
+                self._rules.append(GuardRule.from_dict(r) if isinstance(r, dict) else r)
         self._rules.extend(_DEFAULT_RULES)
 
     async def check(self, tool_name: str, arguments: dict) -> GuardResult | None:

@@ -22,10 +22,7 @@ def test_merco_run_help_succeeds(cli_runner):
 
     result = cli_runner.invoke(app, ["run", "--help"])
 
-    assert result.exit_code == 0, (
-        f"stdout={result.stdout!r} "
-        f"stderr={getattr(result, 'stderr', None) or ''!r}"
-    )
+    assert result.exit_code == 0, f"stdout={result.stdout!r} stderr={getattr(result, 'stderr', None) or ''!r}"
     assert "Usage:" in result.stdout
 
 

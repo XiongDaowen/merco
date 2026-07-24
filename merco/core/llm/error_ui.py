@@ -3,6 +3,7 @@
 Responsibility: what errors look like. NOT when to show them (callers decide).
 Zero side effects: no logging, no SDK import (duck-typing only).
 """
+
 from __future__ import annotations
 
 import re
@@ -15,8 +16,9 @@ _SENSITIVE_KEYWORDS = ("api_key", "token", "secret", "authorization", "bearer")
 @dataclass
 class ErrorInfo:
     """Classified error metadata."""
-    label: str   # Short label e.g. "认证失败", "服务端错误 (502)"
-    hint: str    # One-line user-facing hint
+
+    label: str  # Short label e.g. "认证失败", "服务端错误 (502)"
+    hint: str  # One-line user-facing hint
     exc: Exception  # Original exception
 
 
@@ -40,20 +42,11 @@ def classify_error(exc: Exception) -> ErrorInfo:
         return ErrorInfo(label="认证失败", hint="API Key 无效或已过期，请检查配置。", exc=exc)
 
     # 403 / forbidden / permission
-    if (
-        status == 403
-        or "forbidden" in body
-        or "permission" in body
-        or "access denied" in body
-    ):
+    if status == 403 or "forbidden" in body or "permission" in body or "access denied" in body:
         return ErrorInfo(label="权限不足", hint="账户无权限访问该资源。", exc=exc)
 
     # 404 / model not found
-    if (
-        status == 404
-        or ("not found" in body and "model" in body)
-        or "model not exist" in body
-    ):
+    if status == 404 or ("not found" in body and "model" in body) or "model not exist" in body:
         return ErrorInfo(label="模型/接口不存在", hint="模型或接口不存在，检查模型名和 base_url。", exc=exc)
 
     # 413 / context length
@@ -67,11 +60,7 @@ def classify_error(exc: Exception) -> ErrorInfo:
         return ErrorInfo(label="请求过长", hint="上下文超过模型上限，正在压缩后重试…", exc=exc)
 
     # 429 / rate limit
-    if (
-        status == 429
-        or "rate limit" in body
-        or "too many requests" in body
-    ):
+    if status == 429 or "rate limit" in body or "too many requests" in body:
         return ErrorInfo(label="请求限流", hint="API 限流，稍后重试…", exc=exc)
 
     # 5xx server errors
@@ -120,7 +109,7 @@ def sanitize_message(exc: Exception, max_len: int = 300) -> str:
         #   字母边界不会在 _ 处产生边界 → "access_token" 命中；
         #   但 "tokens"（s 是字母）不会命中，因为 token 右邻 s 是字母。
         pattern_spaced = kw.replace("_", "[ _-]?")
-        if re.search(rf'(?i)(?<![a-zA-Z]){pattern_spaced}(?![a-zA-Z])', msg):
+        if re.search(rf"(?i)(?<![a-zA-Z]){pattern_spaced}(?![a-zA-Z])", msg):
             return "(包含敏感信息，已脱敏)"
 
     if len(msg) > max_len:
@@ -140,27 +129,25 @@ def build_error_panel(info: ErrorInfo):
     """
     from rich.panel import Panel
     from rich.text import Text
+
     detail = sanitize_message(info.exc)
-    text = Text.from_markup(
-        f"[bold red]❌ {info.label}[/bold red]\n"
-        f"[red]{info.hint}[/red]\n\n"
-        f"[dim]{detail}[/dim]"
-    )
+    text = Text.from_markup(f"[bold red]❌ {info.label}[/bold red]\n[red]{info.hint}[/red]\n\n[dim]{detail}[/dim]")
     return Panel(
-        text, border_style="red",
-        title="⚠ API 错误", title_align="left", padding=(0, 1),
+        text,
+        border_style="red",
+        title="⚠ API 错误",
+        title_align="left",
+        padding=(0, 1),
     )
 
 
-def build_retry_line(info: ErrorInfo, attempt: int, max_attempts: int,
-                     actions: list[str]) -> str:
+def build_retry_line(info: ErrorInfo, attempt: int, max_attempts: int, actions: list[str]) -> str:
     """Return a yellow one-line retry status string.
 
     Example: "↻ API 请求限流（第 1/3 次）— 等待 3s + 压缩上下文…"
     """
     action_str = " + ".join(actions) if actions else "立即重试"
-    return (f"[yellow]↻ API {info.label}（第 {attempt}/{max_attempts} 次）"
-            f"— {action_str}…[/yellow]")
+    return f"[yellow]↻ API {info.label}（第 {attempt}/{max_attempts} 次）— {action_str}…[/yellow]"
 
 
 @asynccontextmanager
@@ -195,14 +182,16 @@ async def retry_spinner(label: str, seconds: float, console):
                 await asyncio.sleep(0.1)
                 waited += 0.1
                 remain = max(0.0, total - waited)
-                live.update(Text.from_markup(
-                    f"[yellow]{next(spinner)} 等待 {remain:.1f}s 冷却中…[/yellow]"
-                ))
+                live.update(Text.from_markup(f"[yellow]{next(spinner)} 等待 {remain:.1f}s 冷却中…[/yellow]"))
         except asyncio.CancelledError:
             pass
 
-    with Live(Text.from_markup(f"[yellow]{next(spinner)} 等待 {seconds:.1f}s 冷却中…[/yellow]"),
-              console=console, refresh_per_second=8, transient=True) as live:
+    with Live(
+        Text.from_markup(f"[yellow]{next(spinner)} 等待 {seconds:.1f}s 冷却中…[/yellow]"),
+        console=console,
+        refresh_per_second=8,
+        transient=True,
+    ) as live:
         ticker = asyncio.create_task(_tick(live, seconds))
         try:
             yield
@@ -221,5 +210,4 @@ def error_message(info: ErrorInfo) -> str:
     startswith("❌") and wraps it in a red Panel via Text.from_markup.
     """
     detail = sanitize_message(info.exc)
-    return (f"❌ [bold red]{info.label}[/bold red]：[red]{info.hint}[/red]\n"
-            f"[dim]{detail}[/dim]")
+    return f"❌ [bold red]{info.label}[/bold red]：[red]{info.hint}[/red]\n[dim]{detail}[/dim]"

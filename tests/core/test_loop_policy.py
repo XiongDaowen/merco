@@ -1,4 +1,5 @@
 """LoopPolicy 单测"""
+
 import pytest
 
 from merco.core.loop_policy import DefaultLoopPolicy, LoopDecision, LoopPolicy, LoopPolicyRegistry, LoopState

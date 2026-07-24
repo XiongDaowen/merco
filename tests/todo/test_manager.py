@@ -1,4 +1,5 @@
 """TodoManager 单测"""
+
 import pytest
 
 from merco.todo.manager import TodoManager

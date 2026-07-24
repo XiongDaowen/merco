@@ -1,4 +1,5 @@
 """网络工具单元测试"""
+
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -98,6 +99,7 @@ class TestWebSearch:
     async def test_search_ddgs_not_installed(self, search_tool):
         """测试ddgs未安装的情况"""
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):

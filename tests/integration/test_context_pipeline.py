@@ -1,4 +1,5 @@
 """Context Pipeline 端到端集成测试"""
+
 from merco.context.processors.cache_optimize import CacheOptimizeProcessor
 from merco.context.processors.compress import CompressProcessor
 
@@ -14,20 +15,25 @@ async def test_pipeline_with_compress(test_agent):
 
     # Replace pipeline with small-token CompressProcessor to match
     from merco.context.pipeline import ContextPipeline
+
     test_agent.context_pipeline = ContextPipeline()
     test_agent.context_pipeline.use(CacheOptimizeProcessor())
-    test_agent.context_pipeline.use(CompressProcessor(
-        max_tokens=20000,
-        threshold=0.75,
-    ))
+    test_agent.context_pipeline.use(
+        CompressProcessor(
+            max_tokens=20000,
+            threshold=0.75,
+        )
+    )
 
     # Provide enough mock LLM responses for 4 turns
-    test_agent.provider = MockModelProvider([
-        {"content": "reply0"},
-        {"content": "reply1"},
-        {"content": "reply2"},
-        {"content": "reply3"},
-    ])
+    test_agent.provider = MockModelProvider(
+        [
+            {"content": "reply0"},
+            {"content": "reply1"},
+            {"content": "reply2"},
+            {"content": "reply3"},
+        ]
+    )
 
     # Run 4 turns with large messages to exceed token threshold
     for i in range(4):

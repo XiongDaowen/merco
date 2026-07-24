@@ -2,6 +2,7 @@
 
 边界：仅作为异常 handler 注册表。工具错误走 merco.tools.errors，LLM 错误走 merco.core.llm.errors。
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,7 +24,9 @@ def register_handler(exc_type: type, handler: Callable) -> None:
 
 
 def _apply_custom_handlers(
-    exc: Exception, tool_name: str, tool_schema: dict | None,
+    exc: Exception,
+    tool_name: str,
+    tool_schema: dict | None,
 ) -> dict | None:
     """依次尝试注册的自定义 handler"""
     for exc_type, handler in _extra_handlers.items():

@@ -1,4 +1,5 @@
 """CLI 测试共享 fixture — capture_console / fake_agent"""
+
 import io
 from unittest.mock import AsyncMock, MagicMock
 
@@ -85,10 +86,15 @@ def make_fake_agent(
         agent.run = AsyncMock(return_value="default response")
 
     # token tracker / session 占位（dashboard 可能调用）
-    agent.get_context_stats = MagicMock(return_value={
-        "ratio": 0.0, "threshold": 0.8, "current": 0, "max": 1000,
-        "is_estimate": False,
-    })
+    agent.get_context_stats = MagicMock(
+        return_value={
+            "ratio": 0.0,
+            "threshold": 0.8,
+            "current": 0,
+            "max": 1000,
+            "is_estimate": False,
+        }
+    )
     agent.session = MagicMock()
     agent.session.id = "test-session-id"
     agent.session.title = "测试会话"

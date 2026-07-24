@@ -17,16 +17,21 @@ class CommandRegistry:
     def __init__(self):
         self._commands: dict[str, CommandDef] = {}
 
-    def register(self, name: str, description: str, handler=None, *,
-                 sub: dict[str, str] | None = None,
-                 group: str = "general"):
+    def register(
+        self, name: str, description: str, handler=None, *, sub: dict[str, str] | None = None, group: str = "general"
+    ):
         """注册命令。可做装饰器用。"""
+
         def decorator(fn):
             self._commands[name] = CommandDef(
-                name=name, description=description, handler=fn,
-                sub_commands=sub or {}, group=group,
+                name=name,
+                description=description,
+                handler=fn,
+                sub_commands=sub or {},
+                group=group,
             )
             return fn
+
         if handler is not None:
             return decorator(handler)
         return decorator
@@ -52,9 +57,7 @@ class CommandRegistry:
     def get_help_text(self) -> str:
         groups: dict[str, list[str]] = {}
         for cmd in sorted(self._commands.values(), key=lambda c: c.name):
-            groups.setdefault(cmd.group, []).append(
-                f"{cmd.name:14s} - {cmd.description}"
-            )
+            groups.setdefault(cmd.group, []).append(f"{cmd.name:14s} - {cmd.description}")
         lines = ["[bold]可用命令[/bold]\n"]
         for grp, entries in groups.items():
             lines.append(f"[bold]{grp}[/bold]")

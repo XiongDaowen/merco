@@ -1,4 +1,5 @@
 """Tests for MCPServerManager lifecycle."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -148,9 +149,7 @@ class TestMCPServerManager:
             with patch.object(manager, "_connect_stdio", side_effect=mock_connect_stdio):
                 await manager.connect("myserver", cfg)
 
-        hooks.emit.assert_called_once_with(
-            "mcp.connect", server="myserver", tools=1
-        )
+        hooks.emit.assert_called_once_with("mcp.connect", server="myserver", tools=1)
 
     @pytest.mark.asyncio
     async def test_connect_exception_returns_false(self, manager, registry):
@@ -206,10 +205,12 @@ class TestMCPServerManager:
     def test_status_returns_connected_info(self, manager, registry):
         """status() returns dict with connected servers info."""
         # Simulate a connected server
-        tool_a = MCPServerTool({"name": "tool_a", "description": "A", "inputSchema": {}},
-                               server_name="srv", handler=None)
-        tool_b = MCPServerTool({"name": "tool_b", "description": "B", "inputSchema": {}},
-                               server_name="srv", handler=None)
+        tool_a = MCPServerTool(
+            {"name": "tool_a", "description": "A", "inputSchema": {}}, server_name="srv", handler=None
+        )
+        tool_b = MCPServerTool(
+            {"name": "tool_b", "description": "B", "inputSchema": {}}, server_name="srv", handler=None
+        )
         cfg = MCPServerConfig(name="srv", command="echo", enabled=True)
         manager._servers["srv"] = {"config": cfg, "tools": [tool_a, tool_b]}
 
@@ -272,12 +273,12 @@ class TestMCPServerManager:
     async def test_call_tool_finds_and_delegates(self, manager):
         """_call_tool finds the tool and delegates to _call_stdio_tool."""
         cfg = MCPServerConfig(name="srv", command="echo")
-        tool = MCPServerTool({"name": "tool_x", "inputSchema": {}},
-                             server_name="srv", handler=None)
+        tool = MCPServerTool({"name": "tool_x", "inputSchema": {}}, server_name="srv", handler=None)
         manager._servers["srv"] = {"config": cfg, "tools": [tool]}
 
-        with patch.object(manager, "_call_stdio_tool", new_callable=AsyncMock,
-                          return_value={"result": "ok"}) as mock_call:
+        with patch.object(
+            manager, "_call_stdio_tool", new_callable=AsyncMock, return_value={"result": "ok"}
+        ) as mock_call:
             result = await manager._call_tool("tool_x", {"arg": 1})
 
         assert result == {"result": "ok"}
@@ -287,12 +288,12 @@ class TestMCPServerManager:
     async def test_call_tool_http_delegates(self, manager):
         """_call_tool delegates to _call_http_tool for URL-based configs."""
         cfg = MCPServerConfig(name="srv", url="http://localhost/mcp")
-        tool = MCPServerTool({"name": "tool_h", "inputSchema": {}},
-                             server_name="srv", handler=None)
+        tool = MCPServerTool({"name": "tool_h", "inputSchema": {}}, server_name="srv", handler=None)
         manager._servers["srv"] = {"config": cfg, "tools": [tool]}
 
-        with patch.object(manager, "_call_http_tool", new_callable=AsyncMock,
-                          return_value={"data": "http_result"}) as mock_call:
+        with patch.object(
+            manager, "_call_http_tool", new_callable=AsyncMock, return_value={"data": "http_result"}
+        ) as mock_call:
             result = await manager._call_tool("tool_h", {})
 
         assert result == {"data": "http_result"}
@@ -303,10 +304,8 @@ class TestMCPServerManager:
     @pytest.mark.asyncio
     async def test_unregister_tools_clears_registry(self, manager, registry):
         """_unregister_tools removes all tools from registry for a server."""
-        tool_a = MCPServerTool({"name": "a", "inputSchema": {}},
-                               server_name="srv", handler=None)
-        tool_b = MCPServerTool({"name": "b", "inputSchema": {}},
-                               server_name="srv", handler=None)
+        tool_a = MCPServerTool({"name": "a", "inputSchema": {}}, server_name="srv", handler=None)
+        tool_b = MCPServerTool({"name": "b", "inputSchema": {}}, server_name="srv", handler=None)
         registry.register(tool_a)
         registry.register(tool_b)
         manager._servers["srv"] = {"config": MagicMock(), "tools": [tool_a, tool_b]}
@@ -326,6 +325,7 @@ class TestMCPImportHandling:
     def test_import_missing_handled(self):
         """Verify _MCP_AVAILABLE exists as a module-level boolean."""
         from merco.mcp import manager as mcp_manager
+
         assert hasattr(mcp_manager, "_MCP_AVAILABLE")
         assert isinstance(mcp_manager._MCP_AVAILABLE, bool)
 

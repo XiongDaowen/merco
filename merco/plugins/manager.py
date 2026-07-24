@@ -1,4 +1,5 @@
 """PluginManager - plugin lifecycle management"""
+
 from __future__ import annotations
 
 import logging

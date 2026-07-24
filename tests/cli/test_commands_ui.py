@@ -1,4 +1,5 @@
 """commands.py 全部斜杠命令输出测试"""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -7,6 +8,7 @@ from cli import commands
 from tests.cli.conftest import make_fake_agent
 
 # ─────────── INFO GROUP ───────────
+
 
 @pytest.mark.asyncio
 async def test_help_renders_panel_with_help_text(capture_console):
@@ -34,10 +36,15 @@ async def test_context_command_renders_bar_and_threshold(capture_console):
     """/context 输出进度条和阈值"""
     capture, buf = capture_console
     agent = make_fake_agent()
-    agent.get_context_stats = MagicMock(return_value={
-        "ratio": 0.3, "threshold": 0.8, "current": 300, "max": 1000,
-        "is_estimate": False,
-    })
+    agent.get_context_stats = MagicMock(
+        return_value={
+            "ratio": 0.3,
+            "threshold": 0.8,
+            "current": 300,
+            "max": 1000,
+            "is_estimate": False,
+        }
+    )
     await commands.cmd_context(agent, "")
     text = capture.export_text()
     assert "阈值" in text
@@ -50,16 +57,22 @@ async def test_context_command_shows_estimate_label(capture_console):
     """is_estimate=True 时显示'是'"""
     capture, buf = capture_console
     agent = make_fake_agent()
-    agent.get_context_stats = MagicMock(return_value={
-        "ratio": 0.0, "threshold": 0.8, "current": 0, "max": 1000,
-        "is_estimate": True,
-    })
+    agent.get_context_stats = MagicMock(
+        return_value={
+            "ratio": 0.0,
+            "threshold": 0.8,
+            "current": 0,
+            "max": 1000,
+            "is_estimate": True,
+        }
+    )
     await commands.cmd_context(agent, "")
     text = buf.getvalue()
     assert "是" in text
 
 
 # ─────────── TOOLS ───────────
+
 
 @pytest.mark.asyncio
 async def test_tools_no_tools_shows_message(capture_console):
@@ -142,6 +155,7 @@ async def test_tools_skips_inactive(capture_console):
 
 # ─────────── REPORT / RELOAD-MCP / MCP-STATUS ───────────
 
+
 @pytest.mark.asyncio
 async def test_report_renders_session_report_panel(capture_console):
     """/report 渲染 Session Report Panel"""
@@ -180,10 +194,12 @@ async def test_reload_mcp_success_shows_server_count(capture_console):
     agent = make_fake_agent()
     mcp = MagicMock()
     mcp.reload = AsyncMock()
-    mcp.status = MagicMock(return_value={
-        "fs": {"tools_count": 5},
-        "git": {"tools_count": 3},
-    })
+    mcp.status = MagicMock(
+        return_value={
+            "fs": {"tools_count": 5},
+            "git": {"tools_count": 3},
+        }
+    )
     agent.mcp_manager = mcp
     await commands.cmd_reload_mcp(agent, "")
     text = capture.export_text()
@@ -217,10 +233,12 @@ async def test_mcp_status_lists_with_icon(capture_console):
     """/mcp-status 列出服务器，🟢 / 🔴 按 connected 状态切换"""
     capture, buf = capture_console
     agent = make_fake_agent()
-    agent.mcp_manager.status = MagicMock(return_value={
-        "ok": {"connected": True, "tools_count": 5},
-        "bad": {"connected": False, "tools_count": 0},
-    })
+    agent.mcp_manager.status = MagicMock(
+        return_value={
+            "ok": {"connected": True, "tools_count": 5},
+            "bad": {"connected": False, "tools_count": 0},
+        }
+    )
     await commands.cmd_mcp_status(agent, "")
     text = buf.getvalue()
     assert "🟢 ok" in text
@@ -229,6 +247,7 @@ async def test_mcp_status_lists_with_icon(capture_console):
 
 
 # ─────────── SESSIONS ───────────
+
 
 @pytest.mark.asyncio
 async def test_sessions_empty(capture_console):
@@ -245,10 +264,12 @@ async def test_sessions_lists_with_index_and_marker(capture_console):
     """/sessions 列出历史，当前会话标记 ← 当前"""
     capture, buf = capture_console
     agent = make_fake_agent()
-    agent._session_store.list_sessions = MagicMock(return_value=[
-        {"id": "abc", "title": "历史 1", "message_count": 5, "updated_at": "2026-07-16T10:00:00"},
-        {"id": "test-session-id", "title": "测试会话", "message_count": 3, "updated_at": "2026-07-16T11:00:00"},
-    ])
+    agent._session_store.list_sessions = MagicMock(
+        return_value=[
+            {"id": "abc", "title": "历史 1", "message_count": 5, "updated_at": "2026-07-16T10:00:00"},
+            {"id": "test-session-id", "title": "测试会话", "message_count": 3, "updated_at": "2026-07-16T11:00:00"},
+        ]
+    )
     await commands.cmd_sessions(agent, "")
     text = capture.export_text()
     assert "📋 历史会话" in text
@@ -262,9 +283,11 @@ async def test_sessions_switch_invalid_index(capture_console):
     """/sessions 999 显示'无效的会话序号'红字"""
     capture, buf = capture_console
     agent = make_fake_agent()
-    agent._session_store.list_sessions = MagicMock(return_value=[
-        {"id": "abc", "title": "a", "message_count": 0, "updated_at": "2026-07-16T10:00:00"},
-    ])
+    agent._session_store.list_sessions = MagicMock(
+        return_value=[
+            {"id": "abc", "title": "a", "message_count": 0, "updated_at": "2026-07-16T10:00:00"},
+        ]
+    )
     await commands.cmd_sessions(agent, "999")
     assert "[red]无效的会话序号[/red]" in capture.get_markup()
 
@@ -274,14 +297,17 @@ async def test_sessions_switch_same_session(capture_console):
     """/sessions 切到当前会话显示[dim]已经是当前会话[/dim]"""
     capture, buf = capture_console
     agent = make_fake_agent()
-    agent._session_store.list_sessions = MagicMock(return_value=[
-        {"id": "test-session-id", "title": "测试会话", "message_count": 3, "updated_at": "2026-07-16T11:00:00"},
-    ])
+    agent._session_store.list_sessions = MagicMock(
+        return_value=[
+            {"id": "test-session-id", "title": "测试会话", "message_count": 3, "updated_at": "2026-07-16T11:00:00"},
+        ]
+    )
     await commands.cmd_sessions(agent, "1")
     assert "[dim]已经是当前会话[/dim]" in capture.get_markup()
 
 
 # ─────────── EXIT / FORK ───────────
+
 
 @pytest.mark.asyncio
 async def test_exit_command_returns_false_and_prints_goodbye(capture_console):

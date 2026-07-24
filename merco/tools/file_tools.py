@@ -50,8 +50,9 @@ class ReadFile(BaseTool):
         "required": ["path"],
     }
 
-    async def execute(self, path: str, limit: int = None, offset: int = None,
-                      head: int = None, tail: int = None) -> dict:
+    async def execute(
+        self, path: str, limit: int = None, offset: int = None, head: int = None, tail: int = None
+    ) -> dict:
         file_path = Path(path)
         if not file_path.exists():
             return {"error": f"文件 '{path}' 不存在"}
@@ -84,7 +85,7 @@ class ReadFile(BaseTool):
     def _read_by_lines(self, file_path: Path, start_line: int, limit: int | None) -> dict:
         """从 start_line 开始逐行读取，读到 limit 行或 EOF 即停"""
         try:
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            with open(file_path, encoding="utf-8", errors="replace") as f:
                 # 跳过 start_line - 1 行
                 for _ in range(start_line - 1):
                     if not f.readline():
@@ -108,9 +109,10 @@ class ReadFile(BaseTool):
         end_line = start_line + len(lines) - 1
         mtime = file_path.stat().st_mtime
 
-        hint = "" if not has_more else (
-            f"已返回 {start_line}-{end_line} 行，文件未完。"
-            f"用 offset={end_line + 1} 继续翻页。"
+        hint = (
+            ""
+            if not has_more
+            else (f"已返回 {start_line}-{end_line} 行，文件未完。用 offset={end_line + 1} 继续翻页。")
         )
 
         return {
@@ -127,7 +129,7 @@ class ReadFile(BaseTool):
     def _read_tail(self, file_path: Path, n: int) -> dict:
         """读取文件最后 N 行 — 用固定大小的双端队列，内存 O(n)"""
         try:
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            with open(file_path, encoding="utf-8", errors="replace") as f:
                 last_n = deque(f, maxlen=n)
         except OSError as e:
             return {"error": f"读取失败: {e}"}

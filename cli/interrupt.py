@@ -13,22 +13,25 @@ logger = logging.getLogger("merco.cli.interrupt")
 
 class InterruptState(Enum):
     """中断时的系统状态。"""
-    IDLE = "idle"              # 输入框为空
-    INPUT_HAS_TEXT = "input"   # 输入框有内容
-    AGENT_RUNNING = "agent"    # Agent 任务运行中
+
+    IDLE = "idle"  # 输入框为空
+    INPUT_HAS_TEXT = "input"  # 输入框有内容
+    AGENT_RUNNING = "agent"  # Agent 任务运行中
 
 
 @dataclass
 class InterruptContext:
     """中断处理上下文。"""
+
     state: InterruptState
     task: asyncio.Task | None = None
-    exit_count: int = 0        # 二次确认计数器
+    exit_count: int = 0  # 二次确认计数器
     handled: bool = False
 
 
 class InterruptStrategy(ABC):
     """中断处理策略基类。"""
+
     name: str = ""
 
     @abstractmethod
@@ -45,6 +48,7 @@ class InterruptStrategy(ABC):
 
 class CancelTaskStrategy(InterruptStrategy):
     """取消运行中的 Agent 任务。"""
+
     name = "cancel_task"
 
     async def handle(self, ctx: InterruptContext) -> bool:
@@ -65,6 +69,7 @@ class CancelTaskStrategy(InterruptStrategy):
 
 class ClearInputStrategy(InterruptStrategy):
     """清空输入框。"""
+
     name = "clear_input"
 
     def __init__(self, on_clear: Callable[[], None]):
@@ -88,6 +93,7 @@ class ClearInputStrategy(InterruptStrategy):
 
 class ExitWithHooksStrategy(InterruptStrategy):
     """优雅退出。"""
+
     name = "exit_with_hooks"
 
     def __init__(self, on_exit: Callable[[], Any]):
