@@ -5,13 +5,13 @@
 
 import httpx
 import pytest
+from openai import APIStatusError
+
 from merco.core.pipeline import RecoveryPipeline
 from merco.core.recovery.wait import WaitRecovery
 from merco.core.session import Session
-from merco.sandbox.guard import ToolGuard, GuardAction
-from openai import APIStatusError
+from merco.sandbox.guard import GuardAction, ToolGuard
 from tests.conftest import MockModelProvider
-
 
 # ═══════════════════════════════════════════════════════════
 # 基础对话

@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import logging
-from .pipeline import EmptyResponseStrategy, EmptyResponseContext
+
+from .pipeline import EmptyResponseContext, EmptyResponseStrategy
 
 logger = logging.getLogger("merco.pipeline")
 

@@ -1,6 +1,7 @@
 """LoopPolicy 集成测试"""
 import pytest
-from merco.core.loop_policy import LoopPolicy, LoopDecision
+
+from merco.core.loop_policy import LoopDecision, LoopPolicy
 from tests.conftest import MockModelProvider
 
 

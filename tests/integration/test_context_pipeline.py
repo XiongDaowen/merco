@@ -1,6 +1,6 @@
 """Context Pipeline 端到端集成测试"""
-from merco.context.processors.compress import CompressProcessor
 from merco.context.processors.cache_optimize import CacheOptimizeProcessor
+from merco.context.processors.compress import CompressProcessor
 
 
 async def test_pipeline_with_compress(test_agent):

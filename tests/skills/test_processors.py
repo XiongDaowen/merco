@@ -1,7 +1,8 @@
 """技能处理器单元测试"""
 import pytest
-from merco.skills.processors import SkillViewProcessor
+
 from merco.core.pipeline import ProcessContext
+from merco.skills.processors import SkillViewProcessor
 
 
 class TestSkillViewProcessor:

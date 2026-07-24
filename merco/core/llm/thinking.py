@@ -3,7 +3,6 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any
 
-
 # ── Thinking 提取策略体系 ─────────────────────────────────────────
 
 # 统一的 think 标签对配置（开标签 → 闭标签）

@@ -1,7 +1,9 @@
 """网络工具单元测试"""
-from unittest.mock import AsyncMock, MagicMock, patch
 import sys
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
+
 from merco.tools.web_tools import WebFetch, WebSearch
 
 

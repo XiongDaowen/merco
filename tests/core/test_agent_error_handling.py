@@ -1,8 +1,9 @@
 """Tests for Agent streaming error handling: error flag, panel display, re-raise."""
 import asyncio
-import pytest
 from io import StringIO
 from unittest.mock import MagicMock, patch
+
+import pytest
 from rich.console import Console
 
 from merco.core.agent import Agent, StreamingProvider
@@ -209,6 +210,7 @@ class TestStreamLoggerNoTracebackLeak:
         logger.warning 不应出现（已被 logger.info 替代）。
         """
         import inspect
+
         from merco.core.agent import StreamingProvider
         source = inspect.getsource(StreamingProvider.get_response)
         assert "StreamingProvider API 错误" in source

@@ -1,8 +1,9 @@
 """Tests for Agent recall integration into _build_system_prompt."""
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from merco.core.agent import Agent
 from merco.core.config import MercoConfig
@@ -378,8 +379,8 @@ async def test_agent_create_restores_observer_snapshot_after_plugin_activation(m
     """Factory path restores observer snapshot after ObservabilityPlugin creates observer."""
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
-    from merco.memory.session_store import SessionStore
     from merco.core.session import Session
+    from merco.memory.session_store import SessionStore
     from tests.conftest import make_test_registry
 
     db_path = str(tmp_path / "factory.db")
@@ -498,9 +499,9 @@ def test_agent_init_no_longer_accepts_skill_registry(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_agent_create_initializes_sub_agent_manager(monkeypatch, tmp_path):
     """Agent.create initializes SubAgentManager via SubAgentPlugin."""
+    from merco.agents.subagent import SubAgentManager
     from merco.core.agent import Agent
     from merco.core.config import MercoConfig
-    from merco.agents.subagent import SubAgentManager
     from merco.todo.manager import TodoManager
     from tests.conftest import make_test_registry
 
@@ -644,6 +645,7 @@ async def test_observer_available_before_restore(monkeypatch, tmp_path):
 async def test_agent_no_hardcoded_plugin_imports():
     """agent.py 不再硬编码 import / register 任何 builtin 插件"""
     import inspect
+
     from merco.core import agent as agent_mod
     src = inspect.getsource(agent_mod)
     for name in ["observability", "skills", "mcp", "subagent", "web", "gateway", "scheduler", "superpower"]:

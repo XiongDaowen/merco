@@ -1,5 +1,6 @@
 """ModelProvider ABC + ModelProviderInfo."""
 import pytest
+
 from merco.core.llm.base import ModelProvider, ModelProviderInfo
 
 

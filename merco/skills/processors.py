@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import logging
-from merco.core.pipeline import Processor, ProcessContext
+
+from merco.core.pipeline import ProcessContext, Processor
 
 logger = logging.getLogger("merco.pipeline")
 

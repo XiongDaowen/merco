@@ -1,5 +1,6 @@
 """ToolMiddleware + Chain 单测"""
 import pytest
+
 from merco.tools.middleware import ToolContext, ToolMiddleware, ToolMiddlewareChain
 
 
@@ -197,8 +198,8 @@ async def test_chain_before_returns_context_continues():
 
 # ── Task 2: GuardMiddleware + ErrorHandlingMiddleware ───────
 
-from merco.tools.middleware import GuardMiddleware, ErrorHandlingMiddleware
-from merco.sandbox.guard import GuardAction, GuardResult, GuardConfirmationRequired
+from merco.sandbox.guard import GuardAction, GuardConfirmationRequired, GuardResult
+from merco.tools.middleware import ErrorHandlingMiddleware, GuardMiddleware
 
 
 class StubGuard:
@@ -254,7 +255,7 @@ async def test_error_handling_returns_tool_error():
 
 
 def test_tools_errors_module_imports():
-    from merco.tools.errors import tool_error, classify_error, empty_response
+    from merco.tools.errors import classify_error, empty_response, tool_error
     assert tool_error.__name__ == "tool_error"
     assert classify_error.__name__ == "classify_error"
     assert empty_response.__name__ == "empty_response"

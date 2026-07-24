@@ -2,8 +2,8 @@
 import pytest
 
 from merco.sandbox import snapshot
-from merco.scheduler.cron import CronScheduler
 from merco.sandbox.guard import ToolGuard
+from merco.scheduler.cron import CronScheduler
 from merco.skills.registry import SkillRegistry
 
 

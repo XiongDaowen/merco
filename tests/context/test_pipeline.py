@@ -1,6 +1,7 @@
 """ContextPipeline 单测"""
 import pytest
-from merco.context.pipeline import ContextProcessor, ContextPipeline
+
+from merco.context.pipeline import ContextPipeline, ContextProcessor
 
 
 class AppendProcessor(ContextProcessor):

@@ -1,7 +1,7 @@
 """工具注册测试"""
 
-from merco.tools.registry import ToolRegistry
 from merco.tools.base import BaseTool
+from merco.tools.registry import ToolRegistry
 
 
 class MockTool(BaseTool):

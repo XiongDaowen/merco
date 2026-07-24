@@ -2,10 +2,10 @@
 
 import pytest
 
+from merco.agents.subagent import SubAgentManager
 from merco.plugins.base import PluginContext
 from merco.plugins.builtin.subagent.plugin import SubAgentPlugin
 from merco.todo.manager import TodoManager
-from merco.agents.subagent import SubAgentManager
 
 
 class FakeTaskTool:
@@ -25,14 +25,15 @@ class FakeAgent:
 @pytest.fixture
 def ctx(tmp_path):
     """Construct PluginContext with a fake agent and tool_registry containing a task tool."""
-    from merco.hooks.registry import HookRegistry
-    from merco.tools.registry import ToolRegistry
-    from merco.core.agent import PromptBuilder
-    from merco.memory.store import MemoryStore
-    from merco.memory.save_pipeline import MemorySavePipeline
-    from merco.memory.recall import HybridRecaller
-    from merco.core.config import MercoConfig
     from unittest.mock import MagicMock
+
+    from merco.core.agent import PromptBuilder
+    from merco.core.config import MercoConfig
+    from merco.hooks.registry import HookRegistry
+    from merco.memory.recall import HybridRecaller
+    from merco.memory.save_pipeline import MemorySavePipeline
+    from merco.memory.store import MemoryStore
+    from merco.tools.registry import ToolRegistry
 
     hooks = HookRegistry()
     tool_registry = ToolRegistry()
@@ -64,15 +65,16 @@ def ctx(tmp_path):
 
 def test_plugin_context_todo_and_subagent_defaults_none():
     """PluginContext exposes todo_manager and sub_agent_manager with default None."""
-    from merco.hooks.registry import HookRegistry
-    from merco.tools.registry import ToolRegistry
-    from merco.core.agent import PromptBuilder
-    from merco.memory.store import MemoryStore
-    from merco.memory.save_pipeline import MemorySavePipeline
-    from merco.memory.recall import HybridRecaller
-    from merco.core.config import MercoConfig
-    from unittest.mock import MagicMock
     from tempfile import TemporaryDirectory
+    from unittest.mock import MagicMock
+
+    from merco.core.agent import PromptBuilder
+    from merco.core.config import MercoConfig
+    from merco.hooks.registry import HookRegistry
+    from merco.memory.recall import HybridRecaller
+    from merco.memory.save_pipeline import MemorySavePipeline
+    from merco.memory.store import MemoryStore
+    from merco.tools.registry import ToolRegistry
 
     with TemporaryDirectory() as tmp:
         hooks = HookRegistry()
@@ -134,15 +136,16 @@ async def test_subagent_plugin_injects_into_task_tool(ctx):
 
 async def test_subagent_plugin_skips_when_no_task_tool(tmp_path):
     """SubAgentPlugin safely handles absence of task tool."""
-    from merco.hooks.registry import HookRegistry
-    from merco.tools.registry import ToolRegistry
-    from merco.core.agent import PromptBuilder
-    from merco.memory.store import MemoryStore
-    from merco.memory.save_pipeline import MemorySavePipeline
-    from merco.memory.recall import HybridRecaller
-    from merco.core.config import MercoConfig
     from unittest.mock import MagicMock
+
     from merco.agents.profile import AgentProfileRegistry
+    from merco.core.agent import PromptBuilder
+    from merco.core.config import MercoConfig
+    from merco.hooks.registry import HookRegistry
+    from merco.memory.recall import HybridRecaller
+    from merco.memory.save_pipeline import MemorySavePipeline
+    from merco.memory.store import MemoryStore
+    from merco.tools.registry import ToolRegistry
 
     hooks = HookRegistry()
     tool_registry = ToolRegistry()  # no task tool

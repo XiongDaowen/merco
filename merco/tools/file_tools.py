@@ -3,6 +3,7 @@
 import logging
 from collections import deque
 from pathlib import Path
+
 from .base import BaseTool
 
 logger = logging.getLogger("merco.tools.file")
@@ -169,5 +170,6 @@ class WriteFile(BaseTool):
 
 
 from .registry import tool_registry  # noqa: E402 — 模块末尾自注册
+
 tool_registry.register(ReadFile())
 tool_registry.register(WriteFile())

@@ -108,7 +108,7 @@ def test_init_command_creates_config(tmp_path):
 
 def test_dashboard_renders_key_info():
     """Dashboard 调用 render 返回欢迎信息与帮助提示"""
-    from cli.main import Dashboard, WelcomeSection, HintSection
+    from cli.main import Dashboard, HintSection, WelcomeSection
 
     dashboard = (Dashboard()
         .use(WelcomeSection())

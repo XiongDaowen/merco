@@ -4,9 +4,11 @@ import os
 import tempfile
 import time
 from unittest.mock import patch
+
 import pytest
-from merco.tools.processors.truncation import TruncationProcessor
+
 from merco.core.pipeline import ProcessContext
+from merco.tools.processors.truncation import TruncationProcessor
 
 
 class TestTruncationProcessor:

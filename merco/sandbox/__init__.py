@@ -1,6 +1,6 @@
 """沙箱系统"""
 
-from .guard import ToolGuard, GuardRule, _DEFAULT_RULES
+from .guard import _DEFAULT_RULES, GuardRule, ToolGuard
 
 
 def create_tool_guard(config=None) -> ToolGuard:

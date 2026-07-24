@@ -1,6 +1,7 @@
 """SubAgentManager 单测"""
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 
 class TestSubAgentManager:
@@ -22,9 +23,10 @@ class TestSubAgentManager:
     @pytest.mark.asyncio
     async def test_dispatch_updates_todo(self, test_agent):
         """派发子代理更新 Todo 状态"""
+        import tempfile
+
         from merco.agents.subagent import SubAgentManager
         from merco.todo.manager import TodoManager
-        import tempfile
 
         with tempfile.TemporaryDirectory() as td:
             todo_manager = TodoManager(f"{td}/todos.db")

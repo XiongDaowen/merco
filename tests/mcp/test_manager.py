@@ -1,9 +1,10 @@
 """Tests for MCPServerManager lifecycle."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from merco.mcp.manager import MCPServerManager
+import pytest
+
 from merco.mcp.config import MCPServerConfig
+from merco.mcp.manager import MCPServerManager
 from merco.mcp.tool import MCPServerTool
 from merco.tools.registry import ToolRegistry
 

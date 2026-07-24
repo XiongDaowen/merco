@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+
 from merco.context.pipeline import ContextProcessor
 from merco.core.context import msg_tokens
 

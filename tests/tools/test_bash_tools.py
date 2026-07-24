@@ -1,5 +1,6 @@
 """Bash工具单元测试"""
 import pytest
+
 from merco.tools.bash_tools import BashTool
 
 

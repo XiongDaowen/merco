@@ -1,5 +1,5 @@
 """上下文处理管线"""
 
-from .pipeline import ContextProcessor, ContextPipeline
+from .pipeline import ContextPipeline, ContextProcessor
 
 __all__ = ["ContextProcessor", "ContextPipeline"]

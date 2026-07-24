@@ -12,12 +12,12 @@ import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from rich.live import Live
-from rich.panel import Panel
 from rich.console import Group
+from rich.live import Live
 from rich.markdown import Markdown
+from rich.panel import Panel
 
-from merco.core.llm.error_ui import classify_error, build_error_panel
+from merco.core.llm.error_ui import build_error_panel, classify_error
 
 if TYPE_CHECKING:
     from merco.core.agent import Agent

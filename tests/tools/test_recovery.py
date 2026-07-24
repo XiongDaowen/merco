@@ -1,7 +1,8 @@
 """工具精简恢复器单元测试"""
 import pytest
-from merco.tools.recovery import ToolReduceRecovery
+
 from merco.core.pipeline import RecoveryContext
+from merco.tools.recovery import ToolReduceRecovery
 
 
 class TestToolReduceRecovery:

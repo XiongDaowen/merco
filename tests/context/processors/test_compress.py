@@ -1,6 +1,8 @@
 """上下文压缩处理器单元测试"""
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
+
 from merco.context.processors.compress import CompressProcessor
 
 

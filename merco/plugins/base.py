@@ -3,32 +3,32 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from merco.hooks.registry import HookRegistry
-    from merco.tools.registry import ToolRegistry
-    from merco.core.agent import PromptBuilder, PromptChunk, Agent
-    from merco.core.pipeline import RecoveryPipeline, ResultPipeline
-    from merco.memory.save_pipeline import MemorySavePipeline
-    from merco.memory.recall import HybridRecaller, BaseRecaller
-    from merco.core.config import MercoConfig
-    from merco.observability.observer import Observer
-    from merco.tools.base import BaseTool
-    from merco.todo.manager import TodoManager
     from merco.agents.profile import AgentProfileRegistry
     from merco.agents.subagent import SubAgentManager
     from merco.context.pipeline import ContextPipeline
-    from merco.memory.backend import MemoryBackendRegistry
-    from merco.core.loop_policy import LoopPolicyRegistry
-    from merco.skills.registry import SkillRegistry
-    from merco.mcp.manager import MCPServerManager
-    from merco.scheduler.cron import CronScheduler
-    from merco.sandbox.guard import PolicyPipeline as PermissionPipeline
-    from merco.core.llm.registry import ModelRegistry
+    from merco.core.agent import Agent, PromptBuilder, PromptChunk
+    from merco.core.config import MercoConfig
     from merco.core.llm.base import ModelProviderInfo
+    from merco.core.llm.registry import ModelRegistry
+    from merco.core.loop_policy import LoopPolicyRegistry
+    from merco.core.pipeline import RecoveryPipeline, ResultPipeline
     from merco.gateway.base import GatewayAdapter
     from merco.gateway.registry import GatewayRegistry
+    from merco.hooks.registry import HookRegistry
+    from merco.mcp.manager import MCPServerManager
+    from merco.memory.backend import MemoryBackendRegistry
+    from merco.memory.recall import BaseRecaller, HybridRecaller
+    from merco.memory.save_pipeline import MemorySavePipeline
+    from merco.observability.observer import Observer
+    from merco.sandbox.guard import PolicyPipeline as PermissionPipeline
+    from merco.scheduler.cron import CronScheduler
+    from merco.skills.registry import SkillRegistry
+    from merco.todo.manager import TodoManager
+    from merco.tools.base import BaseTool
+    from merco.tools.registry import ToolRegistry
 
 
 _PIPELINE_WHITELIST = {

@@ -5,9 +5,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from merco.sandbox.guard import GuardAction
-from merco.sandbox.confirm import confirm_edit
 import merco.sandbox.snapshot as snapshot
+from merco.sandbox.confirm import confirm_edit
+from merco.sandbox.guard import GuardAction
 
 
 @dataclass

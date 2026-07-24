@@ -1,6 +1,8 @@
 """技能工具单元测试"""
 from unittest.mock import MagicMock
+
 import pytest
+
 from merco.tools.skill_tools import SkillViewTool
 
 

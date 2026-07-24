@@ -2,7 +2,9 @@
 
 import os
 import tempfile
+
 import pytest
+
 from merco.memory.session_store import SessionStore, SessionWriteError
 
 

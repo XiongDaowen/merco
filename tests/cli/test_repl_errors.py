@@ -1,11 +1,12 @@
 """_run_one_turn() 异常路径测试 — 用户最关心的 LLM 失败友好性"""
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from cli.main import _run_one_turn, PromptArea
-from tests.cli.conftest import make_fake_agent
+import pytest
+
+from cli.main import PromptArea, _run_one_turn
 from merco.core.config import StreamingConfig
+from tests.cli.conftest import make_fake_agent
 
 
 class FakeDriver:

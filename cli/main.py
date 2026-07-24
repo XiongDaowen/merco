@@ -5,15 +5,21 @@ import logging
 import os
 import signal
 import sys
+
 import typer
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from cli.registry import cmd_registry
+
 from cli.interrupt import (
-    InterruptPipeline, InterruptContext, InterruptState,
-    CancelTaskStrategy, ClearInputStrategy, ExitWithHooksStrategy
+    CancelTaskStrategy,
+    ClearInputStrategy,
+    ExitWithHooksStrategy,
+    InterruptContext,
+    InterruptPipeline,
+    InterruptState,
 )
+from cli.registry import cmd_registry
 
 console = Console()
 
@@ -27,7 +33,9 @@ app = typer.Typer(
 # ── 启动首页 Dashboard ──────────────────────────────────────────────
 
 from abc import ABC, abstractmethod
+
 import merco
+
 
 class DashboardSection(ABC):
     """首页展示区块基类。新增条目：继承 + 实现 render() + dashboard.use()"""
@@ -415,7 +423,7 @@ def run_repl(runtime, dashboard=None, config_source=""):
     _on_exit(_save_on_exit)
 
     import cli.commands  # noqa: F401 - triggers all @cmd_registry.register decorators
-    from cli.input_driver import PromptToolkitInput, InputInterrupt
+    from cli.input_driver import InputInterrupt, PromptToolkitInput
     driver = PromptToolkitInput([c.name for c in cmd_registry.get_all()])
 
     # ── 中断处理管线 ──
@@ -570,6 +578,7 @@ def run_cmd(
 @app.command("init")
 def init_cmd(path: str = typer.Argument(".", help="项目路径")):
     from pathlib import Path
+
     from merco.core.config import MercoConfig
 
     config_path = Path(path) / "merco.json"

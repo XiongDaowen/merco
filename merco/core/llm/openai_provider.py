@@ -17,8 +17,9 @@ from merco.core.llm.errors import (
     RateLimitError,
 )
 from merco.core.llm.thinking import (
+    _clean_content,
+    _strip_think_tags,
     make_thinking_extractor,
-    _strip_think_tags, _clean_content,
 )
 
 logger = logging.getLogger("merco.llm.openai")

@@ -1,14 +1,15 @@
 """Tests for memory recall interfaces."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from merco.memory.recall import (
-    RecallResult,
     BaseRecaller,
     FTS5Recaller,
-    MemoryRecaller,
     HybridRecaller,
+    MemoryRecaller,
+    RecallResult,
 )
 
 
@@ -351,9 +352,9 @@ class TestHybridRecaller:
     @pytest.mark.asyncio
     async def test_hybrid_with_real_store_and_search(self, tmp_path):
         """HybridRecaller 聚合 FTS5Recaller + MemoryRecaller，从真实数据召回"""
-        from merco.memory.store import MemoryStore
-        from merco.memory.session_store import SessionStore
         from merco.memory.session_search import SessionSearch
+        from merco.memory.session_store import SessionStore
+        from merco.memory.store import MemoryStore
 
         # 真实 store
         session_store = SessionStore(str(tmp_path / "sess.db"))

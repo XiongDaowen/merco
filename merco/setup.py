@@ -2,14 +2,15 @@
 
 import os
 from pathlib import Path
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from merco.core.config import MercoConfig
 from merco.core.llm.base import ModelProviderInfo
-from merco.core.llm.registry import ModelRegistry
 from merco.core.llm.openai_provider import OpenAICompatibleProvider
+from merco.core.llm.registry import ModelRegistry
 
 console = Console()
 
@@ -117,7 +118,7 @@ def _ask_api_key(provider: ModelProviderInfo) -> str:
 
 def _ask_model(provider: ModelProviderInfo) -> str:
     """选择或输入模型名"""
-    console.print(f"\n[bold]第三步：选择模型[/bold]")
+    console.print("\n[bold]第三步：选择模型[/bold]")
 
     if provider.models:
         console.print(f"[dim]{provider.display_name} 已知模型:[/dim]")
@@ -146,7 +147,7 @@ def _ask_model(provider: ModelProviderInfo) -> str:
 
 def _ask_base_url(provider: ModelProviderInfo) -> str:
     """输入或确认 base_url"""
-    console.print(f"\n[bold]第四步：API 端点[/bold]")
+    console.print("\n[bold]第四步：API 端点[/bold]")
     if provider.base_url:
         console.print(f"[dim]默认: {provider.base_url}[/dim]")
         choice = console.input("[bold yellow]base_url (按 Enter 使用默认)[/bold yellow]: ").strip()
@@ -161,7 +162,7 @@ def _ask_base_url(provider: ModelProviderInfo) -> str:
 
 def _confirm_and_save(provider: ModelProviderInfo, api_key: str, model: str, base_url: str) -> None:
     """确认配置并写入 merco.json"""
-    console.print(f"\n[bold]确认配置[/bold]")
+    console.print("\n[bold]确认配置[/bold]")
     console.print(f"  平台:     {provider.display_name}")
     console.print(f"  模型:     {model}")
     console.print(f"  API Key:  {'(环境变量)' if not api_key else api_key[:8] + '...' if len(api_key) > 8 else api_key}")

@@ -1,8 +1,9 @@
 """ToolMiddleware 集成测试"""
 import pytest
+
+from merco.tools.base import BaseTool
 from merco.tools.middleware import ToolMiddleware
 from merco.tools.registry import ToolRegistry
-from merco.tools.base import BaseTool
 
 
 class RecordArgsTool(BaseTool):

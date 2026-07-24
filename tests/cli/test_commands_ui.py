@@ -1,10 +1,10 @@
 """commands.py 全部斜杠命令输出测试"""
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 from cli import commands
 from tests.cli.conftest import make_fake_agent
-
 
 # ─────────── INFO GROUP ───────────
 
@@ -297,6 +297,7 @@ async def test_fork_success_shows_green(capture_console):
     """/fork 成功显示 green 提示 使用 patch 接管 Session.fork"""
     capture, buf = capture_console
     from unittest.mock import patch
+
     from merco.core.session import Session
 
     agent = make_fake_agent()
@@ -315,6 +316,7 @@ async def test_fork_failure_shows_red(capture_console):
     """/fork 失败显示 red 提示"""
     capture, buf = capture_console
     from unittest.mock import patch
+
     from merco.core.session import Session
 
     agent = make_fake_agent()

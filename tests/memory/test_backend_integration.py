@@ -1,8 +1,8 @@
 """MemoryBackend backward compatibility integration tests"""
 import os
 
-from merco.memory.store import MemoryStore
 from merco.memory.backends.json_backend import JSONBackend
+from merco.memory.store import MemoryStore
 
 
 def test_memory_store_no_backend_uses_json_default(tmp_path):

@@ -4,12 +4,14 @@ import asyncio
 import difflib
 import logging
 import shutil
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
+
 from merco.core.config import MercoConfig
 
 console = Console()

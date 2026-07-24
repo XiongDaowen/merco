@@ -1,6 +1,9 @@
 """merco LLM exception types - provider-translated, SDK-agnostic."""
 from merco.core.llm.errors import (
-    ProviderError, RateLimitError, AuthError, ConnectionError,
+    AuthError,
+    ConnectionError,
+    ProviderError,
+    RateLimitError,
 )
 from merco.core.llm.openai_provider import translate_openai_error
 

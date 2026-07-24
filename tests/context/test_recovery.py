@@ -1,6 +1,8 @@
 """上下文压缩恢复策略单元测试"""
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from merco.context.recovery import ContextCompressRecovery
 
 

@@ -1,5 +1,6 @@
 """Tests for MCPServerTool adapter."""
 import pytest
+
 from merco.mcp.tool import MCPServerTool
 
 

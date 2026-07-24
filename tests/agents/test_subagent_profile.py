@@ -1,5 +1,6 @@
 """SubAgentManager profile 单测"""
 import pytest
+
 from merco.agents.profile import AgentProfile
 
 
@@ -7,8 +8,8 @@ class TestSubAgentProfile:
     @pytest.mark.asyncio
     async def test_create_with_researcher_profile(self, test_agent):
         """researcher profile 工具过滤"""
+        from merco.agents.profile import BUILTIN_PROFILES, AgentProfileRegistry
         from merco.agents.subagent import SubAgentManager
-        from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
 
         reg = AgentProfileRegistry()
         for p in BUILTIN_PROFILES:
@@ -25,8 +26,8 @@ class TestSubAgentProfile:
     @pytest.mark.asyncio
     async def test_default_when_profile_not_found(self, test_agent):
         """不存在的 profile 回退到 default"""
+        from merco.agents.profile import BUILTIN_PROFILES, AgentProfileRegistry
         from merco.agents.subagent import SubAgentManager
-        from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
 
         reg = AgentProfileRegistry()
         for p in BUILTIN_PROFILES:
@@ -40,8 +41,8 @@ class TestSubAgentProfile:
     @pytest.mark.asyncio
     async def test_profile_prompt_injected(self, test_agent):
         """profile prompt chunk 被注入"""
+        from merco.agents.profile import BUILTIN_PROFILES, AgentProfileRegistry
         from merco.agents.subagent import SubAgentManager
-        from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
 
         reg = AgentProfileRegistry()
         for p in BUILTIN_PROFILES:
@@ -55,8 +56,8 @@ class TestSubAgentProfile:
     @pytest.mark.asyncio
     async def test_model_override_from_profile(self, test_agent):
         """profile 指定 model 时覆盖子代理的 config"""
-        from merco.agents.subagent import SubAgentManager
         from merco.agents.profile import AgentProfileRegistry
+        from merco.agents.subagent import SubAgentManager
 
         reg = AgentProfileRegistry()
         reg.register(AgentProfile(
@@ -76,8 +77,8 @@ class TestSubAgentProfile:
     @pytest.mark.asyncio
     async def test_limits_applied(self, test_agent):
         """profile.limits.max_tool_calls 覆盖子代理限制"""
-        from merco.agents.subagent import SubAgentManager
         from merco.agents.profile import AgentProfileRegistry
+        from merco.agents.subagent import SubAgentManager
 
         reg = AgentProfileRegistry()
         reg.register(AgentProfile(

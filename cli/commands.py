@@ -1,10 +1,12 @@
 """CLI 命令定义 — 所有 REPL 命令从 handle_command() 迁移至此"""
 
 import asyncio
+
 from rich.console import Console
 from rich.panel import Panel
-from cli.registry import cmd_registry
+
 from cli.main import ContextBar
+from cli.registry import cmd_registry
 
 console = Console()
 

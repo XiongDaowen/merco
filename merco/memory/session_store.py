@@ -198,9 +198,9 @@ class SessionStore:
 
         # 3 次全部失败
         logger.warning(
-            f"⚠️ Session 写入失败（已重试 3 次）\n"
-            f"   可能是磁盘满或权限问题\n"
-            f"   建议：检查 ~/.merco/ 目录"
+            "⚠️ Session 写入失败（已重试 3 次）\n"
+            "   可能是磁盘满或权限问题\n"
+            "   建议：检查 ~/.merco/ 目录"
         )
         raise SessionWriteError(f"写入失败: {last_error}")
 

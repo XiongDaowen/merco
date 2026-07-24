@@ -2,7 +2,9 @@
 import pytest
 
 from merco.core.llm.error_ui import (
-    ErrorInfo, classify_error, sanitize_message,
+    ErrorInfo,
+    classify_error,
+    sanitize_message,
 )
 
 
@@ -194,9 +196,11 @@ class TestRetrySpinner:
     @pytest.mark.asyncio
     async def test_short_wait_is_no_op(self):
         """For seconds <= 1, spinner should yield immediately without creating Live."""
-        from merco.core.llm.error_ui import retry_spinner
         from io import StringIO
+
         from rich.console import Console
+
+        from merco.core.llm.error_ui import retry_spinner
         con = Console(file=StringIO(), force_terminal=True, width=120)
         entered = False
         async with retry_spinner("x", 0.5, con):
@@ -209,9 +213,11 @@ class TestRetrySpinner:
     async def test_spinner_updates_during_wait(self):
         """For seconds > 1, spinner should be a working async ctx manager."""
         import asyncio
-        from merco.core.llm.error_ui import retry_spinner
         from io import StringIO
+
         from rich.console import Console
+
+        from merco.core.llm.error_ui import retry_spinner
         con = Console(file=StringIO(), force_terminal=True, width=120)
         async with retry_spinner("请求限流", 1.2, con):
             await asyncio.sleep(0.3)

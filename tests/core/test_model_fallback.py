@@ -1,8 +1,9 @@
 """ModelFallbackRecovery - cross-provider fallback via ModelConfig."""
 import pytest
+
 from merco.core.config import ModelConfig
-from merco.core.recovery.model_fallback import ModelFallbackRecovery
 from merco.core.pipeline import RecoveryContext
+from merco.core.recovery.model_fallback import ModelFallbackRecovery
 
 
 @pytest.mark.asyncio

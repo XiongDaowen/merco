@@ -1,6 +1,6 @@
 """CLI 测试共享 fixture — capture_console / fake_agent"""
 import io
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from rich.console import Console
@@ -32,7 +32,7 @@ def capture_console(monkeypatch):
             (capture 对象, ANSI 内容缓冲)
             — capture 提供 get_markup() 方法，返回 print() 接收到的原始 markup 文本
     """
-    from cli import main, commands
+    from cli import commands, main
 
     buf = io.StringIO()
     capture = _CaptureConsole(
@@ -47,6 +47,7 @@ def capture_console(monkeypatch):
 
 
 from merco.core.config import StreamingConfig
+
 
 def make_fake_agent(
     run_return=None,

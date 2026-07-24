@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Optional
+
 from .backend import MemoryBackend
 from .backends.json_backend import JSONBackend
 

@@ -1,8 +1,8 @@
 """消息处理与格式化"""
 
 from dataclasses import dataclass, field
-from typing import Optional
 from enum import Enum
+from typing import Optional
 
 
 class MessageRole(str, Enum):

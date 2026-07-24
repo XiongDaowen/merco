@@ -1,8 +1,9 @@
 """Observer 计数与报告的核心逻辑测试。"""
 
 import pytest
-from merco.observability.observer import Observer
+
 from merco.hooks.registry import HookRegistry
+from merco.observability.observer import Observer
 from tests.conftest import MockModelProvider
 
 
@@ -196,6 +197,7 @@ async def test_observer_counts_hook_events_in_agent_loop(test_agent, monkeypatch
     - agent_starts, agent_stops
     """
     from io import StringIO
+
     from rich.console import Console
 
     # 替换 console 避免噪声

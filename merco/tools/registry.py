@@ -1,8 +1,10 @@
 """工具注册中心 — 管理所有可用工具，支持 toolset 过滤、可用性检查、动态描述"""
 
 from typing import Optional
-from .base import BaseTool
+
 from merco.tools.middleware import ToolContext, ToolMiddlewareChain
+
+from .base import BaseTool
 
 
 class ToolRegistry:

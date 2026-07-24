@@ -1,6 +1,7 @@
 """工具辅助函数单元测试"""
 from pathlib import Path
-from merco.utils.helpers import expand_path, truncate, extract_urls, slugify, format_bytes
+
+from merco.utils.helpers import expand_path, extract_urls, format_bytes, slugify, truncate
 
 
 class TestExpandPath:

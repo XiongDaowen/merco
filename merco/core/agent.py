@@ -1,29 +1,39 @@
 """Agent 主循环与核心逻辑"""
 
-import json
-import re
 import asyncio
+import json
 import logging
+import re
 import shutil
 import time
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+from merco.sandbox.guard import GuardConfirmationRequired
+
 from .config import MercoConfig
+from .context import ContextManager, msg_tokens
+from .context import estimate_tokens as est_tk
+from .interrupt import (
+    CleanupContext,
+    CloseMCPConnections,
+    EmitInterruptHooks,
+    InjectCancelMessages,
+    InterruptCleanupPipeline,
+    SavePartialState,
+    TerminateSubprocesses,
+)
 from .llm.errors import ProviderError
 from .llm.response import (
-    ResponseProvider, NonStreamingProvider, StreamingProvider, _build_reasoning_panel,
+    NonStreamingProvider,
+    ResponseProvider,
+    StreamingProvider,
+    _build_reasoning_panel,
 )
-from .session import Session
-from .context import ContextManager, msg_tokens, estimate_tokens as est_tk
 from .pipeline import ProcessContext
-from .interrupt import (
-    InterruptCleanupPipeline, CleanupContext,
-    InjectCancelMessages, TerminateSubprocesses,
-    CloseMCPConnections, EmitInterruptHooks, SavePartialState
-)
-from merco.sandbox.guard import GuardConfirmationRequired
+from .session import Session
 
 console = Console()
 logger = logging.getLogger("merco.agent")
@@ -133,9 +143,7 @@ class Agent:
         self.observer = Observer(self.hooks)
 
         # ── 守卫：敏感命令执行前确认 ──
-        from merco.sandbox.guard import (
-            ToolGuard, PolicyPipeline, BuiltinDefaultPolicy
-        )
+        from merco.sandbox.guard import BuiltinDefaultPolicy, PolicyPipeline, ToolGuard
         self._security_pipeline = PolicyPipeline()
         self._security_pipeline.use(BuiltinDefaultPolicy(
             mode=config.sandbox_mode,
@@ -144,14 +152,14 @@ class Agent:
         self.guard = ToolGuard(pipeline=self._security_pipeline)
 
         # ── Middleware：Guard + EditApply + ErrorHandling 装配到 ToolRegistry ──
-        from merco.tools.middleware import GuardMiddleware, EditApplyMiddleware, ErrorHandlingMiddleware
+        from merco.tools.middleware import EditApplyMiddleware, ErrorHandlingMiddleware, GuardMiddleware
         self.tool_registry.use(GuardMiddleware(self.guard))
         self.tool_registry.use(EditApplyMiddleware(diff_view=config.diff_view))
         self.tool_registry.use(ErrorHandlingMiddleware())
 
         # ── 会话持久化 ──
-        from merco.memory.session_store import SessionStore
         from merco.memory.session_search import SessionSearch
+        from merco.memory.session_store import SessionStore
         self._session_store = SessionStore(_get_db_path())
         self._search = SessionSearch(self._session_store)
         self.session = Session.resume_or_create(self._session_store)
@@ -164,12 +172,13 @@ class Agent:
             self._response_provider: ResponseProvider = NonStreamingProvider()
 
         # ── Pipeline 初始化 ──
-        from .pipeline import ResultPipeline, RecoveryPipeline, EmptyResponsePipeline
-        from merco.tools.processors.truncation import TruncationProcessor
-        from merco.skills.processors import SkillViewProcessor
-        from merco.core.recovery.wait import WaitRecovery
         from merco.context.recovery import ContextCompressRecovery
         from merco.core.empty_response import CallbackEmptyResponse
+        from merco.core.recovery.wait import WaitRecovery
+        from merco.skills.processors import SkillViewProcessor
+        from merco.tools.processors.truncation import TruncationProcessor
+
+        from .pipeline import EmptyResponsePipeline, RecoveryPipeline, ResultPipeline
         self.result_pipeline = ResultPipeline()
         self.result_pipeline.use(TruncationProcessor(max_bytes=16000))
         self.result_pipeline.use(SkillViewProcessor())
@@ -189,10 +198,10 @@ class Agent:
         self.prompt_builder.use(TimeContextChunk())
 
         # ── Memory 召回 ──
-        from merco.memory.recall import HybridRecaller, FTS5Recaller, MemoryRecaller
-        from merco.memory.store import MemoryStore
         from merco.memory.backend import MemoryBackendRegistry
         from merco.memory.backends.json_backend import JSONBackend
+        from merco.memory.recall import FTS5Recaller, HybridRecaller, MemoryRecaller
+        from merco.memory.store import MemoryStore
 
         self.memory_backends = MemoryBackendRegistry()
         self.memory_backends.register(JSONBackend(config.memory_path))
@@ -211,7 +220,8 @@ class Agent:
         # ── Memory 保存链（让 /remember 和 session 结束抽取可写入）──
         from merco.memory.save_pipeline import MemorySavePipeline
         from merco.memory.strategy import (
-            ExplicitRememberStrategy, SessionEndExtractStrategy,
+            ExplicitRememberStrategy,
+            SessionEndExtractStrategy,
         )
 
         self._memory_store = MemoryStore(backend=selected_backend)
@@ -235,14 +245,13 @@ class Agent:
             strat.subscribe(self.hooks)
 
         # ── 插件系统（动态发现 + 注册）──
-        from merco.plugins.base import PluginContext
-        from merco.plugins.manager import PluginManager
-        from merco.plugins.discovery import PluginDiscovery
-
         # ── Context Pipeline ──
         from merco.context.pipeline import ContextPipeline
-        from merco.context.processors.compress import CompressProcessor
         from merco.context.processors.cache_optimize import CacheOptimizeProcessor
+        from merco.context.processors.compress import CompressProcessor
+        from merco.plugins.base import PluginContext
+        from merco.plugins.discovery import PluginDiscovery
+        from merco.plugins.manager import PluginManager
 
         self.context_pipeline = ContextPipeline()
         self.context_pipeline.use(CacheOptimizeProcessor())
@@ -252,20 +261,20 @@ class Agent:
         ))
 
         # ── AgentProfile Registry ──
-        from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
+        from merco.agents.profile import BUILTIN_PROFILES, AgentProfileRegistry
 
         self.agent_profiles = AgentProfileRegistry()
         for p in BUILTIN_PROFILES:
             self.agent_profiles.register(p)
 
         # Todo + SubAgent 由 SubAgentPlugin 激活时接管
-        from merco.todo.manager import TodoManager
         from merco.agents.subagent import SubAgentManager
+        from merco.todo.manager import TodoManager
         self.todo_manager = TodoManager(f"{config.memory_path}/../todos.db")
         self.sub_agent_manager = SubAgentManager(self, self.agent_profiles)
 
         # ── Loop Policy ──
-        from merco.core.loop_policy import LoopPolicyRegistry, DefaultLoopPolicy
+        from merco.core.loop_policy import DefaultLoopPolicy, LoopPolicyRegistry
         self.loop_policies = LoopPolicyRegistry()
         self.loop_policies.register(DefaultLoopPolicy())
         self.loop_policies.set_active("default")
@@ -695,9 +704,10 @@ class Agent:
                     elapsed = time.monotonic() - t0
                     console.print(f"[bright_black]  ✓ {tool_name} ({progress}) {arg_str}  {elapsed:.1f}s[/bright_black]")
                 else:
+                    import itertools
+
                     from rich.live import Live
                     from rich.text import Text
-                    import itertools
                     with Live(Text.from_markup(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]"), refresh_per_second=8, transient=False) as live:
                         spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
                         async def _run_with_spinner():

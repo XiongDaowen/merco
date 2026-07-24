@@ -1,7 +1,7 @@
 """AgentProfile 端到端集成测试"""
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
-from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
+from merco.agents.profile import BUILTIN_PROFILES, AgentProfileRegistry
 from merco.agents.subagent import SubAgentManager
 
 

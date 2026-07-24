@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import os
 
+from merco.core.llm.anthropic_provider import AnthropicNativeProvider
 from merco.core.llm.base import ModelProvider, ModelProviderInfo
 from merco.core.llm.openai_provider import OpenAICompatibleProvider
-from merco.core.llm.anthropic_provider import AnthropicNativeProvider
-
 
 _BUILTIN_PROVIDERS: list[ModelProviderInfo] = [
     ModelProviderInfo(

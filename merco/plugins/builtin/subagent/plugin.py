@@ -21,8 +21,8 @@ class SubAgentPlugin(Plugin):
     priority = 40
 
     async def activate(self, ctx: "PluginContext") -> None:
-        from merco.todo.manager import TodoManager
         from merco.agents.subagent import SubAgentManager
+        from merco.todo.manager import TodoManager
 
         todo_manager = TodoManager(f"{ctx.config.memory_path}/../todos.db")
         sub_agent_manager = SubAgentManager(ctx.agent, ctx.agent_profiles)

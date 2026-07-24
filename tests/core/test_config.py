@@ -1,6 +1,9 @@
 """ModelConfig + StreamingConfig cleanup."""
-import json, tempfile, os
-from merco.core.config import ModelConfig, StreamingConfig, MercoConfig
+import json
+import os
+import tempfile
+
+from merco.core.config import MercoConfig, ModelConfig, StreamingConfig
 
 
 def test_model_config_defaults():

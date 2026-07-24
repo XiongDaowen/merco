@@ -3,13 +3,13 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from merco.core.llm.thinking import (
-    ThinkingExtractor,
-    make_thinking_extractor,
-    ThinkTagStrategy,
     DirectFieldStrategy,
     ModelExtraStrategy,
-    _strip_think_tags,
+    ThinkingExtractor,
+    ThinkTagStrategy,
     _clean_content,
+    _strip_think_tags,
+    make_thinking_extractor,
 )
 
 

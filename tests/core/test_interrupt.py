@@ -1,8 +1,8 @@
 """InterruptCleanupPipeline 单元测试"""
 
-import pytest
-
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from merco.core.interrupt import (
     CleanupContext,

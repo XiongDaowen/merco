@@ -16,17 +16,17 @@ mocks ``provider.client.messages`` and how ``tests/integration/test_stream_scena
 mocks streaming providers.
 """
 
-import pytest
 from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from merco.core.agent import Agent
 from merco.core.config import MercoConfig, StreamingConfig
 from merco.core.llm.anthropic_provider import AnthropicNativeProvider
 from merco.tools.base import BaseTool
 from merco.tools.registry import ToolRegistry
-
 
 # ── Recording test tool ──────────────────────────────────────────────
 

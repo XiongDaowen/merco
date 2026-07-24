@@ -1,5 +1,6 @@
 """快照恢复集成测试 — 覆盖文件编辑前后快照记录与回滚。"""
 import pytest
+
 from merco.sandbox import snapshot
 from tests.integration.core.programmable_mock import Response
 

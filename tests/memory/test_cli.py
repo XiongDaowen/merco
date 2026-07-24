@@ -1,7 +1,8 @@
 """CLI 记忆命令单测"""
 import pytest
-from merco.memory.store import MemoryStore
+
 from merco.memory.save_pipeline import MemorySavePipeline
+from merco.memory.store import MemoryStore
 
 
 class FakeHooks:

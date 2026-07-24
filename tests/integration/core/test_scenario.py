@@ -1,6 +1,7 @@
 """TestScenario上下文对象测试"""
 import pytest
 
+
 class TestBuildScenarioAgent:
     @pytest.mark.asyncio
     async def test_returns_agent_with_programmable_provider(self, programmable_provider, tmp_path, monkeypatch):

@@ -1,5 +1,5 @@
 """Recovery strategies."""
-from .wait import WaitRecovery
 from .model_fallback import ModelFallbackRecovery
+from .wait import WaitRecovery
 
 __all__ = ["WaitRecovery", "ModelFallbackRecovery"]

@@ -1,9 +1,9 @@
 """LLM 错误 UI 单元测试"""
 from merco.core.llm.error_ui import (
-    classify_error,
-    sanitize_message,
-    error_message,
     build_retry_line,
+    classify_error,
+    error_message,
+    sanitize_message,
 )
 
 

@@ -1,6 +1,7 @@
 """MCP Server lifecycle manager — connect, discover tools, register."""
 import logging
 import time
+
 from .config import MCPServerConfig
 from .tool import MCPServerTool
 

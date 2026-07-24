@@ -38,7 +38,7 @@ class SkillViewTool(BaseTool):
         if registry:
             skills = registry.list_skills()
             if skills:
-                lines = [f"\n\n可用技能："]
+                lines = ["\n\n可用技能："]
                 for s in skills:
                     lines.append(f"- **{s['name']}**: {s.get('description', '')}")
                 base += "\n".join(lines)

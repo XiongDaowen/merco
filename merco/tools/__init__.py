@@ -5,8 +5,8 @@ import logging
 import os
 from pathlib import Path
 
-from .registry import ToolRegistry, tool_registry
 from .base import BaseTool
+from .registry import ToolRegistry, tool_registry
 
 logger = logging.getLogger("merco.tools")
 

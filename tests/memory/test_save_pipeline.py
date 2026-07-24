@@ -1,6 +1,7 @@
 """MemorySavePipeline 单测"""
 import pytest
-from merco.memory.save_pipeline import SaveItem, SOURCE_PRIORITY
+
+from merco.memory.save_pipeline import SOURCE_PRIORITY, SaveItem
 
 
 def test_save_item_creation():
@@ -21,6 +22,7 @@ def test_source_priority_ordering():
 
 
 import pytest
+
 from merco.memory.save_pipeline import SourceEnricher
 
 

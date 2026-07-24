@@ -2,8 +2,10 @@
 import json
 import tempfile
 from datetime import datetime
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
+
 from merco.sandbox import snapshot
 
 

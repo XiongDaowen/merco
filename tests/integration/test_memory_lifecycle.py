@@ -1,12 +1,15 @@
 """Memory 全链路端到端测试"""
 import json
+
 import pytest
-from merco.memory.store import MemoryStore
-from merco.memory.save_pipeline import MemorySavePipeline, SaveItem
-from merco.memory.strategy import (
-    ExplicitRememberStrategy, SessionEndExtractStrategy,
-)
+
 from merco.hooks.registry import HookRegistry
+from merco.memory.save_pipeline import MemorySavePipeline, SaveItem
+from merco.memory.store import MemoryStore
+from merco.memory.strategy import (
+    ExplicitRememberStrategy,
+    SessionEndExtractStrategy,
+)
 from tests.conftest import MockModelProvider
 
 

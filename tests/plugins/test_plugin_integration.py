@@ -1,5 +1,6 @@
 """插件系统端到端集成测试"""
 import pytest
+
 from merco.plugins.base import Plugin, PluginContext
 from merco.plugins.manager import PluginManager
 
@@ -114,6 +115,7 @@ async def test_external_dir_plugin_registers_via_convenience_methods(tmp_path, m
     委托到 agent_profiles/memory_backends/security_pipeline。
     """
     from unittest.mock import AsyncMock, MagicMock
+
     from merco.plugins.discovery import PluginDiscovery
 
     # 1. 造一个外部插件目录（plugin.toml + main.py）
@@ -176,8 +178,8 @@ async def test_external_dir_plugin_registers_via_convenience_methods(tmp_path, m
 @pytest.mark.asyncio
 async def test_plugin_can_register_model_provider(test_agent):
     """Third-party provider registers via ctx.register_model_provider."""
-    from merco.plugins.base import Plugin
     from merco.core.llm.base import ModelProvider, ModelProviderInfo
+    from merco.plugins.base import Plugin
 
     class FakeProvider(ModelProvider):
         name = "fake"

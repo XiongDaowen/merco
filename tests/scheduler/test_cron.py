@@ -3,7 +3,9 @@ import asyncio
 import logging
 from datetime import datetime
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from merco.scheduler.cron import CronJob, CronScheduler
 
 

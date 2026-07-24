@@ -9,7 +9,6 @@ import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
-
 _SENSITIVE_KEYWORDS = ("api_key", "token", "secret", "authorization", "bearer")
 
 
@@ -179,6 +178,7 @@ async def retry_spinner(label: str, seconds: float, console):
     """
     import asyncio
     import itertools
+
     from rich.live import Live
     from rich.text import Text
 

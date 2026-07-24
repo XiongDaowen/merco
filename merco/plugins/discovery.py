@@ -1,9 +1,9 @@
 """PluginDiscovery - 从 entry_points + 目录扫描发现插件，产 PluginSpec 列表。"""
 from __future__ import annotations
 
+import importlib.util
 import logging
 import tomllib
-import importlib.util
 from importlib.metadata import entry_points
 from pathlib import Path
 

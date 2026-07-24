@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
-import logging
 from pathlib import Path
 
-from merco.core.pipeline import Processor, ProcessContext, _walk_truncate, _is_reading_trunc_file
+from merco.core.pipeline import ProcessContext, Processor, _is_reading_trunc_file, _walk_truncate
 
 logger = logging.getLogger("merco.pipeline")
 

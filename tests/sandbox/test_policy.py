@@ -1,8 +1,12 @@
 """PermissionPolicy + PolicyPipeline 单测"""
 import pytest
+
 from merco.sandbox.guard import (
-    PermissionPolicy, PolicyPipeline, GuardResult, GuardAction,
     BuiltinDefaultPolicy,
+    GuardAction,
+    GuardResult,
+    PermissionPolicy,
+    PolicyPipeline,
 )
 
 

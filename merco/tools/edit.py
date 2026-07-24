@@ -3,6 +3,7 @@
 import difflib
 import logging
 from pathlib import Path
+
 from .base import BaseTool
 from .registry import tool_registry
 

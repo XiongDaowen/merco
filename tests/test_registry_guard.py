@@ -1,16 +1,18 @@
 """ToolRegistry 与 ToolGuard 集成测试"""
 
 import sys
+
 import pytest
 
 sys.path.insert(0, ".")
 
 # 导入工具模块以注册工具到 tool_registry 单例
-from merco.tools import bash_tools  # noqa: F401
-from merco.tools import file_tools  # noqa: F401
-from merco.tools import edit  # noqa: F401
-
-from merco.sandbox.guard import ToolGuard, GuardResult, GuardAction, GuardConfirmationRequired
+from merco.sandbox.guard import GuardAction, GuardConfirmationRequired, GuardResult, ToolGuard
+from merco.tools import (
+    bash_tools,  # noqa: F401
+    edit,  # noqa: F401
+    file_tools,  # noqa: F401
+)
 from merco.tools.middleware import GuardMiddleware
 from merco.tools.registry import tool_registry
 

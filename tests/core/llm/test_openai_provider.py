@@ -1,13 +1,15 @@
 """OpenAICompatibleProvider transport tests."""
-import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from merco.core.llm.errors import RateLimitError
 from merco.core.llm.openai_provider import (
     OpenAICompatibleProvider,
     _clean_surrogates,
     _extract_usage,
 )
-from merco.core.llm.errors import RateLimitError
 
 
 def _fake_choice(content="hi", finish="stop", tool_calls=None, reasoning=""):
@@ -40,7 +42,8 @@ async def test_chat_returns_normalized_dict():
 
 @pytest.mark.asyncio
 async def test_chat_translates_rate_limit_to_provider_error():
-    import openai, httpx
+    import httpx
+    import openai
     provider = OpenAICompatibleProvider(api_key="k", model="gpt-4o")
     provider.client = MagicMock()
     req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")

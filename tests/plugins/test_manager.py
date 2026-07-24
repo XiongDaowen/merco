@@ -1,6 +1,8 @@
 """插件管理器单元测试"""
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
+
 from merco.plugins.manager import PluginManager
 
 
@@ -317,7 +319,7 @@ class TestPluginManager:
     @pytest.mark.asyncio
     async def test_activate_from_spec_lazy(self, mock_context):
         """register_all 后 activate 能从 spec 懒实例化并激活"""
-        from merco.plugins.base import PluginSpec, Plugin
+        from merco.plugins.base import Plugin, PluginSpec
 
         class P(Plugin):
             name = "lazy"
@@ -335,7 +337,7 @@ class TestPluginManager:
     @pytest.mark.asyncio
     async def test_dep_active_check_skips(self, mock_context, caplog):
         """dep 未激活时跳过依赖它的插件"""
-        from merco.plugins.base import PluginSpec, Plugin
+        from merco.plugins.base import Plugin, PluginSpec
 
         class Dep(Plugin):
             name = "dep"
@@ -358,7 +360,7 @@ class TestPluginManager:
     @pytest.mark.asyncio
     async def test_activate_boot_only_high_priority(self, mock_context):
         """activate_boot 只激活 priority>=100"""
-        from merco.plugins.base import PluginSpec, Plugin
+        from merco.plugins.base import Plugin, PluginSpec
 
         class Boot(Plugin):
             name = "boot"
@@ -382,7 +384,7 @@ class TestPluginManager:
     @pytest.mark.asyncio
     async def test_activate_all_idempotent_for_boot(self, mock_context):
         """activate_all 对已激活的 boot 插件幂等"""
-        from merco.plugins.base import PluginSpec, Plugin
+        from merco.plugins.base import Plugin, PluginSpec
 
         calls = {"n": 0}
 
@@ -401,7 +403,7 @@ class TestPluginManager:
     @pytest.mark.asyncio
     async def test_activate_boot_respects_config_disabled(self, mock_context):
         """activate_boot 遵守 config.plugins.<boot>.enabled=False：禁用的 boot 插件不激活。"""
-        from merco.plugins.base import PluginSpec, Plugin
+        from merco.plugins.base import Plugin, PluginSpec
 
         class Boot(Plugin):
             name = "boot"
@@ -421,7 +423,7 @@ class TestPluginManager:
     @pytest.mark.asyncio
     async def test_activate_boot_failure_degrades_gracefully(self, mock_context):
         """boot 插件 activate 抛异常：捕获 + emit plugin.error，兄弟 boot 插件仍激活。"""
-        from merco.plugins.base import PluginSpec, Plugin
+        from merco.plugins.base import Plugin, PluginSpec
 
         class BadBoot(Plugin):
             name = "bad-boot"

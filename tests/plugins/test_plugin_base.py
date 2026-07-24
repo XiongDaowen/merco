@@ -1,5 +1,6 @@
 """Plugin base class + PluginContext unit tests"""
 import pytest
+
 from merco.plugins.base import Plugin, PluginContext
 from merco.tools.base import BaseTool
 
@@ -111,15 +112,16 @@ def test_add_processor_allows_context_pipeline(ctx):
 @pytest.fixture
 def ctx(tmp_path):
     """Construct PluginContext"""
-    from merco.hooks.registry import HookRegistry
-    from merco.tools.registry import ToolRegistry
-    from merco.core.agent import PromptBuilder
-    from merco.memory.store import MemoryStore
-    from merco.memory.save_pipeline import MemorySavePipeline
-    from merco.memory.recall import HybridRecaller
-    from merco.core.config import MercoConfig
-    from merco.context.pipeline import ContextPipeline
     from unittest.mock import MagicMock
+
+    from merco.context.pipeline import ContextPipeline
+    from merco.core.agent import PromptBuilder
+    from merco.core.config import MercoConfig
+    from merco.hooks.registry import HookRegistry
+    from merco.memory.recall import HybridRecaller
+    from merco.memory.save_pipeline import MemorySavePipeline
+    from merco.memory.store import MemoryStore
+    from merco.tools.registry import ToolRegistry
 
     hooks = HookRegistry()
     tool_registry = ToolRegistry()
@@ -165,6 +167,7 @@ def test_plugin_priority_overridable():
 def test_plugin_context_security_pipeline_exposed():
     """PluginContext 暴露 security_pipeline"""
     from unittest.mock import MagicMock
+
     from merco.plugins.base import PluginContext
     sec = MagicMock()
     ctx = PluginContext(
@@ -179,6 +182,7 @@ def test_plugin_context_security_pipeline_exposed():
 def test_convenience_methods_delegate():
     """4 个便捷方法委托到底层 registry/pipeline"""
     from unittest.mock import MagicMock
+
     from merco.plugins.base import PluginContext
     ctx = PluginContext(
         hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),
@@ -203,6 +207,7 @@ def test_convenience_methods_delegate():
 def test_add_security_policy_without_pipeline_raises():
     """security_pipeline 为 None 时 add_security_policy 抛 RuntimeError"""
     from unittest.mock import MagicMock
+
     from merco.plugins.base import PluginContext
     ctx = PluginContext(
         hooks=MagicMock(), tool_registry=MagicMock(), prompt_builder=MagicMock(),

@@ -6,7 +6,6 @@ from typing import Callable
 
 from merco.core.llm.base import ModelProvider
 
-
 _counter = [0]
 
 

@@ -1,7 +1,8 @@
 """调度器集成测试 — 覆盖 cron 任务调度、并发、异常隔离。"""
 import asyncio
-import pytest
 from datetime import datetime
+
+import pytest
 
 
 class TestJobScheduling:

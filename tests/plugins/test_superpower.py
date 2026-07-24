@@ -1,5 +1,6 @@
 """Superpower plugin unit tests"""
 import pytest
+
 from merco.plugins.base import PluginContext
 from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
 
@@ -7,14 +8,15 @@ from merco.plugins.builtin.superpower.plugin import SuperpowerPlugin
 @pytest.fixture
 def ctx(tmp_path):
     """Construct PluginContext"""
-    from merco.hooks.registry import HookRegistry
-    from merco.tools.registry import ToolRegistry
-    from merco.core.agent import PromptBuilder
-    from merco.memory.store import MemoryStore
-    from merco.memory.save_pipeline import MemorySavePipeline
-    from merco.memory.recall import HybridRecaller
-    from merco.core.config import MercoConfig
     from unittest.mock import MagicMock
+
+    from merco.core.agent import PromptBuilder
+    from merco.core.config import MercoConfig
+    from merco.hooks.registry import HookRegistry
+    from merco.memory.recall import HybridRecaller
+    from merco.memory.save_pipeline import MemorySavePipeline
+    from merco.memory.store import MemoryStore
+    from merco.tools.registry import ToolRegistry
 
     hooks = HookRegistry()
     tool_registry = ToolRegistry()

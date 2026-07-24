@@ -1,5 +1,6 @@
 """self_healing / errors module tests (updated after _is_retryable_llm_error removal)."""
 import pytest
+
 from merco.core.pipeline import RecoveryContext
 
 
@@ -98,6 +99,7 @@ def test_llm_errors_module_imports():
 def test_core_self_healing_does_not_import_openai():
     """core should not import openai (split to llm/error_ui.py)"""
     import inspect
+
     from merco.core import self_healing
     src = inspect.getsource(self_healing)
     assert "openai" not in src.lower()

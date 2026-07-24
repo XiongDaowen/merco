@@ -1,10 +1,10 @@
 """LLM 子系统：模型调用和错误处理。"""
 
-from .base import ModelProvider, ModelProviderInfo
-from .registry import ModelRegistry
-from .openai_provider import OpenAICompatibleProvider
 from .anthropic_provider import AnthropicNativeProvider
-from .errors import ProviderError, RateLimitError, AuthError, ConnectionError
+from .base import ModelProvider, ModelProviderInfo
+from .errors import AuthError, ConnectionError, ProviderError, RateLimitError
+from .openai_provider import OpenAICompatibleProvider
+from .registry import ModelRegistry
 
 __all__ = [
     "ModelProvider", "ModelProviderInfo", "ModelRegistry",

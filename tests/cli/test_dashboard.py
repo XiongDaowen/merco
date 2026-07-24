@@ -2,8 +2,14 @@
 from unittest.mock import MagicMock
 
 from cli.main import (
-    WelcomeSection, ModelSection, ToolsSection, SkillsSection,
-    ConfigSection, SessionSection, HintSection, Dashboard,
+    ConfigSection,
+    Dashboard,
+    HintSection,
+    ModelSection,
+    SessionSection,
+    SkillsSection,
+    ToolsSection,
+    WelcomeSection,
 )
 from tests.cli.conftest import make_fake_agent
 

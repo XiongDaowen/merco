@@ -1,5 +1,8 @@
 """SQLite SessionStore 测试 — 无 merco 依赖"""
-import sys, os, tempfile
+import os
+import sys
+import tempfile
+
 sys.path.insert(0, ".")
 
 # 直接 import，session_store.py 只依赖 stdlib
@@ -36,19 +39,19 @@ store.create_session("s1", "新标题")  # IGNORE
 store.update_title("s1", "新标题")    # title != '' → skip
 s2 = store.load_session("s1")
 assert s2["title"] == "测试标题"
-print(f"  title preserved  ✓")
+print("  title preserved  ✓")
 
 print("── 标题留空时才更新 ──")
 store.create_session("s_empty", "")
 store.update_title("s_empty", "自动标题")
 s3 = store.load_session("s_empty")
 assert s3["title"] == "自动标题"
-print(f"  auto-titled  ✓")
+print("  auto-titled  ✓")
 
 print("── 删除 ──")
 store.delete_session("s1")
 assert store.load_session("s1") is None
-print(f"  deleted  ✓")
+print("  deleted  ✓")
 
 os.remove(db)
 print("\n全部通过 ✓")

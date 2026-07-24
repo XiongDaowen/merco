@@ -5,8 +5,8 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from merco.core.agent import Agent
     from merco.agents.profile import AgentProfileRegistry
+    from merco.core.agent import Agent
 
 logger = logging.getLogger("merco.agents.subagent")
 
@@ -47,9 +47,9 @@ class SubAgentManager:
 
     async def _create_sub_agent(self, agent_name: str) -> "Agent":
         """创建子代理，根据 profile 配置 prompt/tools/model/limits"""
+        from merco.agents.profile import ProfilePromptChunk
         from merco.core.agent import Agent
         from merco.core.session import Session
-        from merco.agents.profile import ProfilePromptChunk
         from merco.tools.registry import ToolRegistry
 
         # 查找 profile

@@ -1,5 +1,6 @@
 """工具调用集成测试 — 端到端覆盖工具链路"""
 import pytest
+
 from merco.sandbox.guard import GuardAction, GuardConfirmationRequired
 from merco.tools.base import BaseTool
 from tests.integration.core.programmable_mock import Response
@@ -31,7 +32,7 @@ class TestToolCallChain:
                 name="read_file",
                 arguments={"path": str(test_file)}
             ),
-            Response.content(f"文件内容是：hello world")
+            Response.content("文件内容是：hello world")
         ])
 
         # 用户提问
@@ -62,7 +63,7 @@ class TestToolCallChain:
                     {"id": "call_2", "name": "read_file", "arguments": {"path": str(file_b)}},
                 ]
             ),
-            Response.content(f"两个文件内容分别是：content A 和 content B")
+            Response.content("两个文件内容分别是：content A 和 content B")
         ])
 
         # 用户提问
@@ -183,9 +184,9 @@ class TestBuiltinToolsE2E:
     @pytest.fixture(autouse=True)
     def _use_real_tools(self, scenario):
         """e2e 测试用真实工具替换 mock 工具"""
-        from merco.tools.file_tools import ReadFile, WriteFile
         from merco.tools.bash_tools import BashTool
         from merco.tools.edit import EditFile
+        from merco.tools.file_tools import ReadFile, WriteFile
 
         # 注销 mock 工具
         for name in ("read_file", "write_file", "bash", "edit_file"):

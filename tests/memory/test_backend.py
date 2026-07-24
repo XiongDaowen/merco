@@ -1,5 +1,6 @@
 """MemoryBackend + Registry 单测"""
 import pytest
+
 from merco.memory.backend import MemoryBackend, MemoryBackendRegistry
 
 

@@ -2,10 +2,12 @@
 
 import asyncio
 import sys
+
 import pytest
+
 sys.path.insert(0, ".")
 
-from merco.sandbox.guard import ToolGuard, GuardAction, GuardResult
+from merco.sandbox.guard import GuardAction, GuardResult, ToolGuard
 
 passed = 0
 failed = 0

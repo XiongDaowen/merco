@@ -2,6 +2,7 @@
 
 import asyncio
 import subprocess
+
 from .base import BaseTool
 
 
@@ -63,4 +64,5 @@ class BashTool(BaseTool):
 
 
 from .registry import tool_registry  # noqa: E402 — 模块末尾自注册
+
 tool_registry.register(BashTool())

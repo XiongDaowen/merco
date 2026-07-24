@@ -1,9 +1,7 @@
 """错误处理工具单元测试"""
 import pytest
-from merco.tools.errors import (
-    classify_error, tool_error, empty_response,
-    _public_message, _params_hint, _param_names
-)
+
+from merco.tools.errors import _param_names, _params_hint, _public_message, classify_error, empty_response, tool_error
 
 
 class TestErrorClassification:

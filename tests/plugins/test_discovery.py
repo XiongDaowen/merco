@@ -1,7 +1,8 @@
 """PluginDiscovery 单元测试"""
 from unittest.mock import MagicMock
-from merco.plugins.discovery import PluginDiscovery
+
 from merco.plugins.base import Plugin
+from merco.plugins.discovery import PluginDiscovery
 
 
 class _EPPlugin(Plugin):

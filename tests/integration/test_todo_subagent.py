@@ -1,9 +1,10 @@
 """Todo + SubAgent 端到端集成测试"""
-import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
-from merco.todo.manager import TodoManager
+import pytest
+
 from merco.agents.subagent import SubAgentManager
+from merco.todo.manager import TodoManager
 
 
 class TestTodoSubAgentE2E:

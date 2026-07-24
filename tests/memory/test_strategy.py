@@ -1,7 +1,9 @@
 """MemorySaveStrategy 单测"""
 import json
+
 import pytest
-from merco.memory.strategy import MemorySaveStrategy, ExplicitRememberStrategy, SessionEndExtractStrategy
+
+from merco.memory.strategy import ExplicitRememberStrategy, MemorySaveStrategy, SessionEndExtractStrategy
 
 
 class FakePipeline:

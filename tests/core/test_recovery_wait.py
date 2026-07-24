@@ -1,5 +1,6 @@
 """Tests for WaitRecovery and ContextCompressRecovery error policies."""
 import pytest
+
 from merco.core.pipeline import RecoveryContext
 
 

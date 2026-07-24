@@ -9,14 +9,15 @@ from merco.plugins.builtin.web.plugin import WebPlugin
 @pytest.fixture
 def ctx(tmp_path):
     """Construct PluginContext with tool_registry."""
-    from merco.hooks.registry import HookRegistry
-    from merco.tools.registry import ToolRegistry
-    from merco.core.agent import PromptBuilder
-    from merco.memory.store import MemoryStore
-    from merco.memory.save_pipeline import MemorySavePipeline
-    from merco.memory.recall import HybridRecaller
-    from merco.core.config import MercoConfig
     from unittest.mock import MagicMock
+
+    from merco.core.agent import PromptBuilder
+    from merco.core.config import MercoConfig
+    from merco.hooks.registry import HookRegistry
+    from merco.memory.recall import HybridRecaller
+    from merco.memory.save_pipeline import MemorySavePipeline
+    from merco.memory.store import MemoryStore
+    from merco.tools.registry import ToolRegistry
 
     hooks = HookRegistry()
     tool_registry = ToolRegistry()

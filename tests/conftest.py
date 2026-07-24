@@ -1,24 +1,23 @@
 """集成测试共享工厂 — Mock LLM + Agent Fixture"""
 
-import pytest
+import os as _os
 
 # 直导避免触发 openai 依赖
-import sys, os as _os
+import sys
+
+import pytest
+
 _merco = _os.path.join(_os.path.dirname(__file__), "..")
 if _merco not in sys.path:
     sys.path.insert(0, _merco)
 
-from merco.core.config import MercoConfig      # noqa: E402
-from merco.core.agent import Agent              # noqa: E402
-from merco.core.llm.base import ModelProvider   # noqa: E402
-
-from merco.tools.registry import ToolRegistry    # noqa: E402
-from merco.tools.base import BaseTool            # noqa: E402
+from merco.core.agent import Agent  # noqa: E402
+from merco.core.config import MercoConfig  # noqa: E402
+from merco.core.llm.base import ModelProvider  # noqa: E402
+from merco.tools.base import BaseTool  # noqa: E402
+from merco.tools.registry import ToolRegistry  # noqa: E402
 from merco.tools.skill_tools import SkillViewTool  # noqa: E402
-
-
 from merco.tools.task_tools import TaskTool  # noqa: E402
-
 
 # ── 内置测试工具 ──────────────────────────────────────────
 
