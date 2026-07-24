@@ -35,6 +35,7 @@ web = "merco.plugins.builtin.web.plugin:WebPlugin"
 scheduler = "merco.plugins.builtin.scheduler.plugin:SchedulerPlugin"
 gateway = "merco.plugins.builtin.gateway.plugin:GatewayPlugin"
 superpower = "merco.plugins.builtin.superpower.plugin:SuperpowerPlugin"
+minimax = "merco.plugins.builtin.minimax.plugin:MiniMaxPlugin"
 
 [build-system]
 requires = ["hatchling"]

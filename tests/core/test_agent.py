@@ -561,9 +561,10 @@ async def test_agent_create_injects_managers_into_task_tool(monkeypatch, tmp_pat
 
 # ── Task 12: plugin dynamic loading regression tests ─────────
 
-# 8 个 builtin 的期望激活序：boot(observability) 先于 restore，其余按 priority 降序
+# 9 个 builtin 的期望激活序：boot(observability) 先于 restore，其余按 priority 降序
 _EXPECTED_ACTIVATION_ORDER = [
     "observability",
+    "minimax",
     "skills",
     "mcp",
     "subagent",
@@ -576,7 +577,7 @@ _EXPECTED_ACTIVATION_ORDER = [
 
 @pytest.mark.asyncio
 async def test_builtin_plugins_activate_in_priority_order(monkeypatch, tmp_path):
-    """8 个 builtin 按 priority 真实激活序：observability(boot) 最先，其余 priority 降序。
+    """9 个 builtin 按 priority 真实激活序：observability(boot) 最先，其余 priority 降序。
 
     用 plugin.activated 钩子记录真实激活顺序——active_plugins 返回 list(set)，
     无法体现顺序，所以必须订阅钩子并在 _initialize_async_plugins 之前注册回调。
