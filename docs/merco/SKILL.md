@@ -24,26 +24,35 @@ config/merco.json.example        # 配置模板（git 跟踪，供参考）
 ## 架构概述
 
 ```
-用户 ─→ CLI (prompt_toolkit) ─→ Agent Loop
-                                     ├── _build_system_prompt (PromptBuilder)
-                                     ├── LLM Chat (流式/非流式)
-                                     ├── _dispatch_tool_calls → _execute_tool_calls
-                                     │        ├── ToolGuard.check() 守卫
-                                     │        │     ├── SecurityChecker 正则硬拦截
-                                     │        │     └── Guard 规则链 ask/deny/allow
-                                     │        └── ToolRegistry.execute()
-                                     └── context.add → session.save (SQLite)
+用户 ─→ CLI (prompt_toolkit) ─→ AgentRuntime (薄宿主, start/stop/submit/handle_inbound)
+                                          │
+                                          ├── Agent Loop (turn-loop)
+                                          │     ├── _build_system_prompt (PromptBuilder)
+                                          │     ├── LLM Chat via ModelProvider (OpenAICompatible / AnthropicNative, ModelRegistry.select())
+                                          │     ├── _dispatch_tool_calls → _execute_tool_calls
+                                          │     │        ├── ToolGuard.check() 守卫
+                                          │     │        │     ├── SecurityChecker 正则硬拦截
+                                          │     │        │     └── Guard 规则链 ask/deny/allow (28 条默认 ask 规则)
+                                          │     │        └── ToolRegistry.execute()
+                                          │     └── context.add → session.save (SQLite)
+                                          ├── GatewayRegistry (start_all/stop_all, per-adapter 失败隔离)
+                                          │     ├── WebhookGateway (FastAPI/uvicorn, port=0)
+                                          │     └── (第三方注册的 GatewayAdapter, e.g. Telegram/Discord)
+                                          └── CronScheduler (asyncio.create_task 后台跑)
 ```
 
 **关键组件：**
+- `AgentRuntime` (`merco/core/runtime.py`, ~116 行) — 生命周期宿主：owns Agent + CronScheduler + GatewayRegistry；`start()/stop()` 幂等；`submit(prompt)` 给 cron；`handle_inbound(source, chat_id, message)` 给 gateway inbound。
 - `ContextManager` — 上下文窗口（滑动窗口 + 压缩）
 - `Session` → `SessionStore` — SQLite 持久化（`sessions` + `messages` 表，WAL 模式）
+- `ModelProvider` ABC + `ModelRegistry` — 多模型接入（OpenAICompatible + AnthropicNative），`select()` 独占凭证解析
 - `Observer` — 可观察性：token 计数、工具调用统计、`/report` 报告
 - `RecoveryPipeline` — LLM 错误恢复（重试/上下文压缩/切换模型）
-- `ToolGuard` + `SecurityChecker` — 双层安全（SecurityChecker 正则硬拦截 + Guard 规则链）
+- `ToolGuard` + `SecurityChecker` — 双层安全（SecurityChecker 正则硬拦截 + Guard 28 条默认 ask 规则）
 - `MCPServerManager` — MCP 客户端（stdio + HTTP 传输，工具发现，自动注册）
 - `InterruptCleanupPipeline` — Ctrl+C 中断清理（注入消息/终止进程/关闭 MCP/save 状态）
 - `MemoryRecall` (HybridRecaller) — FTS5 全文搜索 + Memory JSON 文件双通道召回
+- **插件系统（8 个内置插件，经 entry_points 动态发现）**：`ObservabilityPlugin`(100, BOOT) / `SkillsPlugin`(60) / `MCPPlugin`(50) / `SubAgentPlugin`(40) / `WebPlugin`(30) / `GatewayPlugin`(25) / `SchedulerPlugin`(20) / `SuperpowerPlugin`(10)。`PluginContext` 注入 **23 属性 + 11 便捷方法**（含 `model_registry` + `register_model_provider` + `gateway_registry` + `register_gateway`）。
 
 ## 配置
 
@@ -59,16 +68,30 @@ config/merco.json.example        # 配置模板（git 跟踪，供参考）
   "model": {
     "provider": "openai",
     "model": "gpt-4",
-    "api_key": "...",
-    "base_url": "https://api.openai.com/v1",
+    "api_key": null,
+    "base_url": null,
     "temperature": 0.7,
     "max_tokens": 4096,
     "extra_params": {},
-    "headers": {}
+    "headers": {},
+    "request_cooldown": 0.3,
+    "fallbacks": [
+      {
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-4",
+        "temperature": 0.7,
+        "max_tokens": 4096
+      }
+    ]
   },
   "username": "user",
-  "streaming": true,
-  "stream_thinking": true,
+  "streaming": {
+    "enabled": false,
+    "think": true,
+    "content": true,
+    "think_transient": false,
+    "render_interval": 0.05
+  },
   "max_input_tokens": 64000,
   "max_tool_calls": 50,
   "compression_threshold": 0.75,
@@ -79,12 +102,18 @@ config/merco.json.example        # 配置模板（git 跟踪，供参考）
   "memory": {
     "enabled": true,
     "path": "~/.merco/memory",
+    "backend": "json",
     "recall_enabled": true,
     "recall_limit": 3,
-    "recall_max_chars": 300
+    "recall_max_chars": 300,
+    "auto_extract_on_session_end": false,
+    "extract_max_per_session": 3,
+    "extract_min_messages": 5
   },
   "skills_paths": ["./.merco/skills", "~/.config/merco/skills"],
+  "plugins_paths": ["./.merco/plugins", "~/.config/merco/plugins"],
   "mcp_servers": {},
+  "plugins": {},
   "session": {
     "fork_enabled": true,
     "fork_auto_on_compress": true,
@@ -102,22 +131,26 @@ config/merco.json.example        # 配置模板（git 跟踪，供参考）
 
 ## 可用的斜杠命令
 
+> 27 个注册命令，6 个分组（info / session / search / memory / task / system / control）。详细列表见 [README §REPL 命令](../../README.md#-repl-命令)。
+
 ### 信息查询
 | 命令 | 功能 |
 |------|------|
 | `/help` | 显示全部命令帮助 |
 | `/model` | 当前模型 (provider/model) |
-| `/tools` | 列出可用工具（`check()` 为 True 的才显示） |
+| `/tools` | 列出可用工具（按 builtin / `mcp:<server>` 分组） |
 | `/context` | 上下文窗口用量 (current/max tokens) |
-| `/report` | 会话统计：LLM 调用/工具调用/token 用量/缓存命中率 |
+| `/report` | 会话统计：LLM 调用/工具调用/token 用量/缓存命中率；`/report reset` 清零 |
+| `/reload-mcp` | 重新加载 MCP 服务器 |
+| `/mcp-status` | MCP 服务器连接状态（已连接/工具数） |
 
 ### 会话管理
 | 命令 | 功能 |
 |------|------|
 | `/new` | 创建新会话（当前自动 save） |
-| `/sessions [n]` | 列出最近 n 个历史会话 |
+| `/sessions [n]` | 列出最近 n 个历史会话；`/sessions <n>` 切换第 n 个 |
 | `/fork [title]` | 从当前会话创建分支 |
-| `/tree` | 查看当前会话分支树 |
+| `/tree` | 查看当前会话分支树（父子会话） |
 | `/history [n]` | 查看当前会话完整消息记录 (分页) |
 | `/revert` | 撤销本会话的文件修改 |
 
@@ -127,12 +160,31 @@ config/merco.json.example        # 配置模板（git 跟踪，供参考）
 | `/search <关键词>` | 搜索所有历史消息 (FTS5 全文检索) |
 | `/recall <关键词>` | 从历史会话中召回相关内容 (HybridRecaller) |
 
+### 记忆
+| 命令 | 功能 |
+|------|------|
+| `/remember` | 存一条记忆（`/remember key=<k> <text>`） |
+| `/memories` | 列出所有记忆；`/memories [tag]` 可按 tag 过滤 |
+| `/forget` | 删除一条记忆（`/forget <key>`） |
+
+### 任务
+| 命令 | 功能 |
+|------|------|
+| `/todos` | 列出所有任务（支持按 status 过滤） |
+| `/todo <id>` | 查看任务详情 |
+| `/todo-done <id>` | 标记任务完成 |
+| `/agents` | 列出所有 AgentProfile |
+| `/agent <name>` | 查看 AgentProfile 详情 |
+
+### 系统
+| 命令 | 功能 |
+|------|------|
+| `/plugins` | 列出已安装插件（状态：已激活 / 未激活 / 已禁用 + 版本） |
+
 ### 控制
 | 命令 | 功能 |
 |------|------|
-| `/exit` `/quit` `/q` | 退出 |
-| `/reload-mcp` | 重新加载 MCP 服务器 |
-| `/mcp-status` | 显示 MCP 服务器连接状态 |
+| `/exit` `/quit` `/q` | 退出 REPL（自动保存 session + observer snapshot） |
 
 ## 可用工具
 
@@ -145,7 +197,7 @@ config/merco.json.example        # 配置模板（git 跟踪，供参考）
 - **SecurityChecker 硬拦截**（正则，不可绕过）：
   `rm -rf /`、`mkfs`、`dd if=`、`> /dev/sd`、`chmod 777 /`、`curl|bash`、`wget|bash`
 - **Guard 规则链 ask**（弹出确认提示）：
-  `rm`、`sudo`、`pip install/uninstall`、`npm -g`、`apt/yum/brew`、`git push`、`git reset --hard`、`shutdown`、`reboot`、`docker rm/rmi` 等 20+ 条
+  `rm`、`sudo`、`pip install/uninstall`、`npm -g`、`apt/yum/brew`、`git push`、`git reset --hard`、`shutdown`、`reboot`、`docker rm/rmi` 等 28 条默认规则
 - **mode=auto**：完全跳过所有检查
 
 ### 文件工具
@@ -167,6 +219,36 @@ config/merco.json.example        # 配置模板（git 跟踪，供参考）
 
 ### Skill 工具
 - **skill_view** — 加载并查看技能文档内容
+
+## 插件系统（8 个内置插件）
+
+merco 插件经 `pyproject.toml` 的 `[project.entry-points."merco.plugins"]` 动态发现，agent.py 零硬编码 import。
+
+| 插件 | priority | 职责 |
+|------|:--:|------|
+| `ObservabilityPlugin` | 100 (BOOT) | 创建 Observer，挂到 `PluginContext.observer` |
+| `SkillsPlugin` | 60 | 从 `skills_paths` 加载 SKILL.md |
+| `MCPPlugin` | 50 | 创建 `MCPServerManager`，启动时按 `mcp_servers` 自动连接 |
+| `SubAgentPlugin` | 40 | `SubAgentManager` + `TodoManager` |
+| `WebPlugin` | 30 | 注册 `web_fetch` / `web_search` 工具 |
+| `GatewayPlugin` | 25 | 在 `ctx.gateway_registry` 注册内置 `WebhookGateway` |
+| `SchedulerPlugin` | 20 | 创建 `CronScheduler`，由 `AgentRuntime.start()` 后台启动 |
+| `SuperpowerPlugin` | 10 | 订阅 `agent.start` / `tool.error` 注入错误恢复 / 续命逻辑 |
+
+**PluginContext**：23 注入属性 + 11 便捷方法。第三方扩展点：
+- `ctx.register_model_provider(info)` — 注入自定义 `ModelProvider`（波2）
+- `ctx.register_gateway(adapter)` — 注入自定义 `GatewayAdapter`（波3）
+- `ctx.register_agent_profile(profile)` / `ctx.register_loop_policy(policy)` / `ctx.add_memory_backend(backend)` / `ctx.add_security_policy(policy)` — 注册器类扩展点
+- `ctx.add_processor("result_pipeline", x)` / `ctx.add_recaller(r)` — 管线注入
+- `ctx.on(event, handler)` / `ctx.register_tool(tool)` / `ctx.add_prompt_chunk(chunk)` — 基础便捷方法
+
+**安装第三方插件**：写一个含 `plugin.toml` 的目录（`entry = "module:Class"`），丢到 `./.merco/plugins/<name>/` 或 `~/.config/merco/plugins/<name>/` 即可被 `PluginDiscovery` 发现。或在你的 `pyproject.toml` 注册 entry-point。
+
+## Gateway 适配器
+
+`AgentRuntime.handle_inbound(source, chat_id, message)` 是 webhook/gateway 统一入口（**Wave 3 单 session 简化**：当前 `agent.run(message)`，`chat_id` 保留前向兼容**但不启用 per-chat_id 隔离**）。
+
+内置 `WebhookGateway`（FastAPI/uvicorn，`port=0` OS 自动分配；POST `/message` 收 `{chat_id, message}` → `{reply}`）。
 
 ## 会话与上下文
 
@@ -213,24 +295,29 @@ Guard._check() 规则链            ← 用户配置 + 默认 ask 规则
 3. **通解不补丁** — 修 bug 必须覆盖所有同类场景，不单改一个文件
 4. **根因优先** — 必须先找到根本原因再修，禁止 `except: pass` 掩盖
 5. **同类全检** — 修一个文件必须同步改所有类似代码
-6. **TDD** — `tests/` 下 175+ 个测试，跑 `pytest tests/` 验证
+6. **TDD** — `tests/` 下 999 个测试（`uv run pytest`），跑全部验证
 7. **`uv sync` 安装依赖**，`.venv/` 为虚拟环境
 8. **`merco --debug`** 启动调试模式，日志前缀定位模块
+9. **pre-commit 强制** — 提交前自动跑 `uv run ruff check .` + `uv run ruff format --check .`（`.pre-commit-config.yaml`，本地 hook 与项目 venv 版本对齐防漂移）
 
 ### 模块位置
 ```
-merco/core/       — 核心引擎 (agent、llm、config、context、session、message、pipeline 等)
-merco/tools/      — 工具系统 (bash、file、edit、web、task、mcp、skill)
+merco/core/       — 核心引擎 (agent、runtime、llm/{base,registry,openai_provider,anthropic_provider,...}、config、context、session、message、pipeline、recovery/、loop_policy)
+merco/tools/      — 工具系统 (bash、file、edit、web、task、skill；mcp_tools stub 已删)
 merco/mcp/        — MCP 客户端 (manager、config、tool)
-merco/memory/     — 记忆系统 (store、recall、compressor、search、session_store)
-merco/sandbox/    — 沙箱安全 (guard、security、isolation、permissions、confirm)
+merco/memory/     — 记忆系统 (store、recall、save_pipeline、session_store、search、session_search、backend、backends/)
+merco/sandbox/    — 沙箱安全 (guard、security、confirm、snapshot；isolation/permissions 已删)
 merco/observability/ — 可观察性 (metrics、audit、tracing、logger、observer)
-merco/hooks/      — 钩子系统
-merco/skills/     — 技能加载
-merco/gateway/    — 消息网关
-merco/scheduler/  — 定时任务
-cli/              — CLI 实现 (main、commands、input_driver、interrupt)
-tests/            — 测试 (core、mcp、observability、cli、integration、unit)
+merco/hooks/      — 钩子系统 (registry、lifecycle、tool_hooks、chat_hooks)
+merco/skills/     — 技能加载 (loader、registry、builtin/)
+merco/gateway/    — 消息网关 (base、registry、webhook；Wave 3 新增)
+merco/scheduler/  — 定时任务 (cron；jobs/delivery 已删)
+merco/plugins/    — 插件系统 (base、discovery、manager、builtin/ 8 个内置插件)
+merco/agents/     — AgentProfile + SubAgentManager
+merco/todo/       — TodoManager + TodoItem
+cli/              — CLI 实现 (main、commands、input_driver、interrupt、registry)
+web/              — Web 接口 (FastAPI app, PARTIAL — /chat "coming soon")
+tests/            — 测试 (core、mcp、observability、cli、integration、unit、gateway)
 ```
 
 ## 调试
