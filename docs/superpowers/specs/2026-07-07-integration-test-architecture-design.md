@@ -117,7 +117,7 @@ class ProgrammableLLMClient:
 
 ### 3.3 隔离服务工厂
 
-`tests/integration/core/isolation.py`:
+`tests/integration/conftest.py`:
 
 ```python
 @pytest.fixture

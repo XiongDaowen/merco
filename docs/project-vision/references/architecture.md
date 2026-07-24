@@ -73,6 +73,7 @@ references/         # 参考源码 (git 忽略)
 - **Web**: fastapi (预留)
 - **配置**: pydantic-settings
 - **测试**: pytest
+- **代码质量**: ruff（lint + format），pre-commit 钩子强制（`.pre-commit-config.yaml`，`uv run ruff` 本地 hook 防版本漂移）
 
 ## 参考资料库
 
