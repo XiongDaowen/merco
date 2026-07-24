@@ -57,10 +57,10 @@ references/         # 参考源码 (git 忽略)
 | Sandbox | 🟢 POLISHED | ToolGuard + SecurityChecker + Confirm + Snapshot |
 | Observability | 🟢 POLISHED | Observer 全链路接入，metrics/audit/tracing |
 | Scheduler | 🟢 POLISHED | CronScheduler + SchedulerPlugin 接入 Agent 生命周期 |
-| Plugins | 🟢 NEW | Plugin + PluginSpec + PluginContext + PluginDiscovery，20 扩展点 + 4 便捷方法，7 个内置插件（entry_points 动态发现） |
+| Plugins | 🟢 NEW | Plugin + PluginSpec + PluginContext + PluginDiscovery，21 扩展点 + 5 便捷方法，8 个内置插件（entry_points 动态发现） |
 | SubAgent | 🟢 NEW | SubAgentManager + AgentProfile + AgentProfileRegistry |
 | Todo | 🟢 NEW | TodoItem + TodoManager，支持子任务分解 |
-| Gateway | ⚪ LEGACY | 消息网关预留，未完善 |
+| Gateway | 🟢 NEW | GatewayAdapter ABC + GatewayRegistry + WebhookGateway 参考适配器 + GatewayPlugin；AgentRuntime 统一宿主生命周期（start/stop/submit/handle_inbound） |
 | Utils | ⚪ UTIL | 通用工具函数 |
 
 ## 技术栈
@@ -103,6 +103,13 @@ skinparam note {
 package "merco" {
   rectangle "CLI\n(main.py)" as CLI #LightBlue
 
+  rectangle "AgentRuntime\n(runtime.py)" as Runtime #LightBlue
+  note right of Runtime
+    生命周期宿主：owns Agent + CronScheduler + GatewayRegistry
+    - start/stop（幂等）
+    - submit / handle_inbound -> agent.run
+  end note
+
   rectangle "Agent Loop\n(agent.py)" as Agent #LightGreen
   note right of Agent
     主心骨：协调所有子系统
@@ -132,8 +139,9 @@ package "merco" {
 
   package "扩展层" {
     rectangle "Hooks\n(15 事件)" as Hooks #LightGray
-    rectangle "Plugins\n(7 内置插件, entry_points)" as Plugins #LightGray
+    rectangle "Plugins\n(8 内置插件, entry_points)" as Plugins #LightGray
     rectangle "Scheduler\n(CronScheduler)" as Scheduler #LightGray
+    rectangle "GatewayRegistry\n(GatewayAdapter ABC)" as GatewayRegistry #LightGray
     rectangle "Observer\n(全链路接入)" as Observer #LightGray
   }
 
@@ -146,7 +154,8 @@ package "merco" {
   }
 }
 
-CLI --> Agent
+CLI --> Runtime
+Runtime --> Agent
 Agent --> LLM
 Agent --> Config
 Agent --> Session
@@ -162,7 +171,8 @@ Agent --> SessionStore
 
 Agent --> Hooks
 Agent --> Plugins
-Agent --> Scheduler
+Runtime --> Scheduler
+Runtime --> GatewayRegistry
 Agent --> Observer
 
 Agent --> MCP
@@ -190,6 +200,7 @@ note right of Plugins
   - SubAgent Plugin
   - Web Plugin
   - Superpower Plugin
+  - Gateway Plugin
 end note
 
 @enduml
@@ -200,7 +211,7 @@ end note
 ## 2. 插件系统架构图
 
 > **扩展点说明**：插件系统有两套扩展机制：
-> - **PluginContext 属性（20个）**：代码层面直接注入的子系统引用 + 4 个便捷方法
+> - **PluginContext 属性（21个）**：代码层面直接注入的子系统引用 + 5 个便捷方法
 > - **Hook 事件扩展点（15个）**：生命周期事件，插件可订阅
 
 ```plantuml
@@ -254,7 +265,7 @@ package "Plugin System" {
   end note
 }
 
-package "Builtin Plugins (7, entry_points)" {
+package "Builtin Plugins (8, entry_points)" {
   rectangle "MCPPlugin" as MCP #LightBlue
   rectangle "ObservabilityPlugin" as Obs #LightBlue
   rectangle "SchedulerPlugin" as Sched #LightBlue
@@ -262,6 +273,7 @@ package "Builtin Plugins (7, entry_points)" {
   rectangle "SubAgentPlugin" as SubAgent #LightBlue
   rectangle "WebPlugin" as Web #LightBlue
   rectangle "SuperpowerPlugin" as Super #LightBlue
+  rectangle "GatewayPlugin" as Gateway #LightBlue
 }
 
 package "Hook Events (15)" {
@@ -626,6 +638,8 @@ Agent.run(prompt)
 - **`agent.provider` 懒属性**：首次访问时 `ModelRegistry.select(config.model)` 实例化 provider 并缓存到 `_model_provider`/`_response_provider`；setter 走 `switch_model`（跨 provider 修复：构造新 `ModelConfig` 触发 re-select，而非假设同 client）。SubAgent 覆盖 `config.model` 即自动 re-select，无需额外代码。
 - **`agent.model_registry`**：agent 持有 registry 引用，`switch_model` / recovery 均经此拿 provider。
 - **`PluginContext.model_registry`**：第三方扩展点。插件经 `ctx.register_model_provider(ProviderClass)` 注入自有 provider，agent 无需感知。
+- **`PluginContext.gateway_registry`**：第三方扩展点（Wave 3）。插件经 `ctx.register_gateway(adapter)` 注入自有 `GatewayAdapter`，`AgentRuntime.start()` 统一 `set_inbound_handler` + `start_all()`。
+- **`AgentRuntime` 生命周期宿主**：薄宿主，owns Agent + CronScheduler + GatewayRegistry。`start()` 触发 `Agent.create`（含插件两阶段激活）+ gateway/scheduler 起；`stop()` 幂等收尾。turn-loop 留在 `agent.py`，宿主只做 `submit`/`handle_inbound` -> `agent.run` 路由。CLI 单事件循环：`_setup_agent` sync 返回未启动 Runtime，`repl()` 内 `await runtime.start()`/`stop()`。
 - **每个 provider 拥有自己的 SDK error mapping**：`translate_openai_error`/`translate_anthropic_error` 各居其 provider 文件，`errors.py` 保持 SDK 无关--agent 与 `error_ui` 永不 import SDK。
 - **凭证解析归 `ModelRegistry.select()` 独占**：`ModelConfig` 退化为纯数据（删 `resolve()`/`stream_options`），`_get_api_key` 删除。
 
@@ -686,7 +700,7 @@ end note
 :Plugins.on_init();
 note right
   PluginContext 注入所有子系统
-  7 个内置插件初始化（entry_points 动态发现 + 拓扑激活）
+  8 个内置插件初始化（entry_points 动态发现 + 拓扑激活）
 end note
 
 :Memory Recall (HybridRecaller);
