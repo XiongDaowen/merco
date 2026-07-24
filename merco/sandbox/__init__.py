@@ -24,6 +24,7 @@ except Exception:
 __all__ = [
     "ToolGuard",
     "GuardRule",
+    "_DEFAULT_RULES",
     "tool_guard",
     "create_tool_guard",
 ]

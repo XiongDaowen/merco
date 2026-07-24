@@ -1,7 +1,7 @@
 """技能注册表单元测试"""
 import tempfile
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import pytest
 from merco.skills.registry import SkillRegistry
 

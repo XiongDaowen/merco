@@ -1,12 +1,10 @@
 """交互式 API 配置向导 - merco setup"""
 
 import os
-import asyncio
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
 from merco.core.config import MercoConfig
 from merco.core.llm.base import ModelProviderInfo

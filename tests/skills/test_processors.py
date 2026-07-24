@@ -1,5 +1,4 @@
 """技能处理器单元测试"""
-from unittest.mock import MagicMock
 import pytest
 from merco.skills.processors import SkillViewProcessor
 from merco.core.pipeline import ProcessContext

@@ -1,7 +1,6 @@
 """Agent 核心循环集成测试"""
 
-import pytest
-from merco.core.config import MercoConfig, ModelConfig
+from merco.core.config import MercoConfig
 from merco.tools.registry import ToolRegistry
 from merco.tools.base import BaseTool
 

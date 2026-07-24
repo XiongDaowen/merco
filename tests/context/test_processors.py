@@ -1,5 +1,4 @@
 """处理器单测"""
-import pytest
 from merco.context.processors.compress import CompressProcessor
 from merco.context.processors.cache_optimize import CacheOptimizeProcessor
 

@@ -1,6 +1,5 @@
 """工具调用集成测试 — 端到端覆盖工具链路"""
 import pytest
-from pathlib import Path
 from merco.sandbox.guard import GuardAction, GuardConfirmationRequired
 from merco.tools.base import BaseTool
 from tests.integration.core.programmable_mock import Response

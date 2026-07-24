@@ -11,12 +11,12 @@ Tests the StreamingProvider with various configurations:
 import asyncio
 import pytest
 from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 from merco.core.llm.base import ModelProvider
 from merco.core.config import MercoConfig, StreamingConfig
-from merco.core.agent import Agent, StreamingProvider
-from tests.conftest import MockModelProvider, make_test_registry
+from merco.core.agent import Agent
+from tests.conftest import make_test_registry
 
 
 # ── Enhanced Mock LLM for streaming tests ──────────────────────────

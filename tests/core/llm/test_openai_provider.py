@@ -1,13 +1,13 @@
 """OpenAICompatibleProvider transport tests."""
 import pytest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from merco.core.llm.openai_provider import (
     OpenAICompatibleProvider,
     _clean_surrogates,
     _extract_usage,
 )
-from merco.core.llm.errors import ProviderError, RateLimitError
+from merco.core.llm.errors import RateLimitError
 
 
 def _fake_choice(content="hi", finish="stop", tool_calls=None, reasoning=""):

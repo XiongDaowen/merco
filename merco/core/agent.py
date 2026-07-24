@@ -6,8 +6,6 @@ import asyncio
 import logging
 import shutil
 import time
-from typing import Optional
-from abc import ABC, abstractmethod
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -18,7 +16,6 @@ from .llm.response import (
     ResponseProvider, NonStreamingProvider, StreamingProvider, _build_reasoning_panel,
 )
 from .session import Session
-from .message import Message, MessageRole
 from .context import ContextManager, msg_tokens, estimate_tokens as est_tk
 from .pipeline import ProcessContext
 from .interrupt import (
@@ -26,7 +23,7 @@ from .interrupt import (
     InjectCancelMessages, TerminateSubprocesses,
     CloseMCPConnections, EmitInterruptHooks, SavePartialState
 )
-from merco.sandbox.guard import GuardConfirmationRequired, GuardAction
+from merco.sandbox.guard import GuardConfirmationRequired
 
 console = Console()
 logger = logging.getLogger("merco.agent")

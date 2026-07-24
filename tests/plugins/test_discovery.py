@@ -1,6 +1,5 @@
 """PluginDiscovery 单元测试"""
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from merco.plugins.discovery import PluginDiscovery
 from merco.plugins.base import Plugin
 

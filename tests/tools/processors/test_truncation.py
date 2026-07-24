@@ -3,7 +3,7 @@ import json
 import os
 import tempfile
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import pytest
 from merco.tools.processors.truncation import TruncationProcessor
 from merco.core.pipeline import ProcessContext

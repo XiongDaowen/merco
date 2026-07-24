@@ -414,7 +414,7 @@ def run_repl(runtime, dashboard=None, config_source=""):
 
     _on_exit(_save_on_exit)
 
-    import cli.commands  # triggers all @cmd_registry.register decorators
+    import cli.commands  # noqa: F401 - triggers all @cmd_registry.register decorators
     from cli.input_driver import PromptToolkitInput, InputInterrupt
     driver = PromptToolkitInput([c.name for c in cmd_registry.get_all()])
 
@@ -587,7 +587,6 @@ def skills_cmd(
     list: bool = typer.Option(False, "--list", "-l", help="列出已加载技能"),
     path: str = typer.Option(None, "--path", "-p", help="技能目录路径"),
 ):
-    from merco.skills.loader import SkillLoader
     from merco.skills.registry import SkillRegistry
 
     if list:

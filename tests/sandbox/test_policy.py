@@ -73,7 +73,6 @@ class TestBuiltinDefaultPolicy:
         assert result.action == GuardAction.ALLOW
 
     async def test_user_rules_override(self):
-        from merco.sandbox.guard import GuardRule
         p = BuiltinDefaultPolicy(mode="ask", user_rules=[
             {"tool": "bash", "pattern": "rm ", "action": "deny"},
         ])

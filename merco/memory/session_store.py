@@ -8,7 +8,6 @@ import sqlite3
 import time
 import uuid
 from datetime import datetime
-from pathlib import Path
 
 logger = logging.getLogger("merco.session_store")
 

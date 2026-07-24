@@ -1,6 +1,6 @@
 """ToolMiddleware 集成测试"""
 import pytest
-from merco.tools.middleware import ToolMiddleware, ToolContext
+from merco.tools.middleware import ToolMiddleware
 from merco.tools.registry import ToolRegistry
 from merco.tools.base import BaseTool
 

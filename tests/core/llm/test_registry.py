@@ -1,7 +1,7 @@
 """ModelRegistry - sole source of truth for providers + credential resolution."""
 import pytest
 from unittest.mock import MagicMock
-from merco.core.llm.registry import ModelRegistry, _BUILTIN_PROVIDERS
+from merco.core.llm.registry import ModelRegistry
 from merco.core.llm.base import ModelProviderInfo
 from merco.core.config import ModelConfig
 

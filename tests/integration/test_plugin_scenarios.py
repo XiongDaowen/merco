@@ -1,7 +1,6 @@
 """插件系统集成测试 — 覆盖插件完整生命周期与多插件协同。"""
 import pytest
 from merco.plugins.base import Plugin, PluginContext
-from tests.integration.core.programmable_mock import Response
 
 
 class TestPluginLifecycle:

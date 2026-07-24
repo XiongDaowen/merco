@@ -1,7 +1,6 @@
 """MemorySaveStrategy 单测"""
 import json
 import pytest
-from merco.memory.save_pipeline import SaveItem
 from merco.memory.strategy import MemorySaveStrategy, ExplicitRememberStrategy, SessionEndExtractStrategy
 
 

@@ -1,7 +1,7 @@
 """CommandRegistry 测试"""
 
 import pytest
-from cli.registry import CommandRegistry, CommandDef, cmd_registry
+from cli.registry import CommandRegistry, cmd_registry
 
 
 @pytest.fixture

@@ -1,5 +1,4 @@
 """PermissionPolicy end-to-end integration tests"""
-import pytest
 from merco.sandbox.guard import (
     PermissionPolicy, PolicyPipeline, GuardResult, GuardAction,
     BuiltinDefaultPolicy, ToolGuard,

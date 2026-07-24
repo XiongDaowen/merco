@@ -1,6 +1,5 @@
 """ToolRegistry 与 ToolGuard 集成测试"""
 
-import asyncio
 import sys
 import pytest
 

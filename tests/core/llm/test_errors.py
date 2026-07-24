@@ -1,5 +1,4 @@
 """merco LLM exception types - provider-translated, SDK-agnostic."""
-import pytest
 from merco.core.llm.errors import (
     ProviderError, RateLimitError, AuthError, ConnectionError,
 )
@@ -20,7 +19,6 @@ def test_subclasses_are_provider_errors():
 
 def test_translate_openai_429():
     import httpx
-    import openai
     from openai import RateLimitError as OAIRateLimit
     # Construct a real openai RateLimitError requires a response with a request attached.
     req = httpx.Request("POST", "http://example.com")

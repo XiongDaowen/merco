@@ -1,11 +1,8 @@
 """AgentProfile 端到端集成测试"""
-import pytest
-import tempfile
 from unittest.mock import MagicMock, AsyncMock
 
-from merco.agents.profile import AgentProfile, AgentProfileRegistry, BUILTIN_PROFILES
+from merco.agents.profile import AgentProfileRegistry, BUILTIN_PROFILES
 from merco.agents.subagent import SubAgentManager
-from merco.todo.manager import TodoManager
 
 
 async def test_task_tool_dispatches_with_agent_name(test_agent):

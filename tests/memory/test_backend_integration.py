@@ -1,7 +1,6 @@
 """MemoryBackend backward compatibility integration tests"""
 import os
 
-import pytest
 from merco.memory.store import MemoryStore
 from merco.memory.backends.json_backend import JSONBackend
 

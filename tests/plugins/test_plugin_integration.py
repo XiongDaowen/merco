@@ -176,7 +176,7 @@ async def test_external_dir_plugin_registers_via_convenience_methods(tmp_path, m
 @pytest.mark.asyncio
 async def test_plugin_can_register_model_provider(test_agent):
     """Third-party provider registers via ctx.register_model_provider."""
-    from merco.plugins.base import Plugin, PluginContext, PluginSpec
+    from merco.plugins.base import Plugin
     from merco.core.llm.base import ModelProvider, ModelProviderInfo
 
     class FakeProvider(ModelProvider):
@@ -194,7 +194,6 @@ async def test_plugin_can_register_model_provider(test_agent):
 
     assert test_agent.model_registry is not None
     # simulate plugin activation
-    from merco.core.llm.registry import ModelRegistry
     test_agent.model_registry.register(ModelProviderInfo(
         name="fake", provider_class=FakeProvider, display_name="Fake"))
     info = test_agent.model_registry.get("fake")

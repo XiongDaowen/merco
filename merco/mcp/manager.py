@@ -1,5 +1,4 @@
 """MCP Server lifecycle manager — connect, discover tools, register."""
-import asyncio
 import logging
 import time
 from .config import MCPServerConfig

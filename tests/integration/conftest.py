@@ -4,7 +4,7 @@ from pathlib import Path
 
 from tests.integration.core.programmable_mock import ProgrammableModelProvider
 from tests.integration.core.scenario import TestScenario, build_scenario_agent
-from tests.integration.core.isolation import isolation_services as _isolation_services
+from tests.integration.core.isolation import isolation_services as _isolation_services  # noqa: F401 - 重新导出 fixture 供 scenario/isolation_services 通过名字发现（pytest 按模块属性发现 fixture）
 
 
 @pytest.fixture

@@ -1,8 +1,5 @@
 """LLM 错误 UI 单元测试"""
-import pytest
-from unittest.mock import MagicMock
 from merco.core.llm.error_ui import (
-    ErrorInfo,
     classify_error,
     sanitize_message,
     error_message,

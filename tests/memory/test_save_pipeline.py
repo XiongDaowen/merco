@@ -1,7 +1,6 @@
 """MemorySavePipeline 单测"""
 import pytest
-from dataclasses import dataclass
-from merco.memory.save_pipeline import SaveItem, MemorySource, SOURCE_PRIORITY
+from merco.memory.save_pipeline import SaveItem, SOURCE_PRIORITY
 
 
 def test_save_item_creation():

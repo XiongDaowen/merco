@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Callable, Awaitable
+from typing import Callable
 
 logger = logging.getLogger("merco.scheduler.cron")
 

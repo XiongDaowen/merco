@@ -1,11 +1,9 @@
 """TestScenario上下文对象与Agent构建器"""
 from __future__ import annotations
-import pytest
 from dataclasses import dataclass
 from pathlib import Path
 
 from merco.core.agent import Agent
-from merco.core.config import MercoConfig
 from merco.sandbox.guard import (
     GuardAction,
     GuardResult,
@@ -80,7 +78,6 @@ async def build_scenario_agent(provider: ProgrammableModelProvider, tmp_path: Pa
     # 参考根conftest.py的test_agent fixture构造
     from merco.core.config import MercoConfig
     from merco.core.agent import Agent
-    from merco.core.agent import _get_db_path
 
     # 临时数据库路径
     db_path = str(tmp_path / "agent.db")

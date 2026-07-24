@@ -8,7 +8,6 @@ from __future__ import annotations
 import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import AsyncIterator
 
 
 _SENSITIVE_KEYWORDS = ("api_key", "token", "secret", "authorization", "bearer")

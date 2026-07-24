@@ -1,7 +1,6 @@
 """配置模块测试"""
 
-import pytest
-from merco.core.config import MercoConfig, ModelConfig
+from merco.core.config import MercoConfig
 from merco.mcp.config import MCPServerConfig
 
 

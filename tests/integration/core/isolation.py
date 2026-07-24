@@ -1,6 +1,5 @@
 """全隔离服务工厂 — 每个测试场景独立的状态服务"""
 import pytest
-from pathlib import Path
 
 from merco.sandbox import snapshot
 from merco.scheduler.cron import CronScheduler

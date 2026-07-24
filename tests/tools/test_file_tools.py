@@ -1,7 +1,6 @@
 """文件工具单元测试"""
 import tempfile
 import os
-from pathlib import Path
 import pytest
 from merco.tools.file_tools import ReadFile, WriteFile
 

@@ -2,7 +2,6 @@
 
 import logging
 import uuid
-from datetime import datetime
 
 _logger = logging.getLogger("merco.session")
 

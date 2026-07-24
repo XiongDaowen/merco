@@ -7,7 +7,6 @@ PluginContext.register_model_provider.
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 from merco.core.llm.base import ModelProvider, ModelProviderInfo
 from merco.core.llm.openai_provider import OpenAICompatibleProvider

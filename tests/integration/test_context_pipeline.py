@@ -1,6 +1,4 @@
 """Context Pipeline 端到端集成测试"""
-import pytest
-from merco.context.pipeline import ContextPipeline
 from merco.context.processors.compress import CompressProcessor
 from merco.context.processors.cache_optimize import CacheOptimizeProcessor
 

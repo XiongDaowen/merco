@@ -1,5 +1,4 @@
 """工具辅助函数单元测试"""
-import pytest
 from pathlib import Path
 from merco.utils.helpers import expand_path, truncate, extract_urls, slugify, format_bytes
 

@@ -2,7 +2,6 @@
 import asyncio
 import pytest
 from datetime import datetime
-from tests.integration.core.programmable_mock import Response
 
 
 class TestJobScheduling:

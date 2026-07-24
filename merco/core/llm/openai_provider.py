@@ -6,7 +6,7 @@ import json
 import logging
 import re
 import time
-from typing import Any, AsyncIterator, Optional
+from typing import AsyncIterator, Optional
 
 from merco.core.llm.base import ModelProvider
 from merco.core.llm.errors import (
@@ -17,7 +17,7 @@ from merco.core.llm.errors import (
     RateLimitError,
 )
 from merco.core.llm.thinking import (
-    ThinkingExtractor, make_thinking_extractor,
+    make_thinking_extractor,
     _strip_think_tags, _clean_content,
 )
 
