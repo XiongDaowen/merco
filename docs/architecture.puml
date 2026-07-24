@@ -1,0 +1,113 @@
+@startuml
+skinparam backgroundColor #FEFEFE
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FF8F00
+}
+
+package "merco" {
+  rectangle "CLI\n(main.py)" as CLI #LightBlue
+
+  rectangle "AgentRuntime\n(runtime.py)" as Runtime #LightBlue
+  note right of Runtime
+    生命周期宿主：owns Agent + CronScheduler + GatewayRegistry
+    - start/stop（幂等）
+    - submit / handle_inbound -> agent.run
+  end note
+
+  rectangle "Agent Loop\n(agent.py)" as Agent #LightGreen
+  note right of Agent
+    主心骨：协调所有子系统
+    - 生命周期管理
+    - 工具调用循环
+    - 上下文管理
+  end note
+
+  package "核心模块" {
+    rectangle "LLM\n(llm/)" as LLM #LightYellow
+    rectangle "Config\n(config.py)" as Config #LightYellow
+    rectangle "Session\n(session.py)" as Session #LightYellow
+    rectangle "Context\n(context.py)" as SessionContext #LightYellow
+  }
+
+  package "工具层" {
+    rectangle "ToolRegistry" as Registry #LightGray
+    rectangle "ToolGuard" as Guard #LightGray
+    rectangle "Tools\n(bash/file/web/mcp/...)" as Tools #LightGray
+  }
+
+  package "记忆层" {
+    rectangle "MemorySave\n(Pipeline + Strategy)" as MemorySave #LightGray
+    rectangle "MemoryRecall\n(HybridRecaller)" as MemoryRecall #LightGray
+    rectangle "SessionStore\n(SQLite)" as SessionStore #LightGray
+  }
+
+  package "扩展层" {
+    rectangle "Hooks\n(15 事件)" as Hooks #LightGray
+    rectangle "Plugins\n(8 内置插件, entry_points)" as Plugins #LightGray
+    rectangle "Scheduler\n(CronScheduler)" as Scheduler #LightGray
+    rectangle "GatewayRegistry\n(GatewayAdapter ABC)" as GatewayRegistry #LightGray
+    rectangle "Observer\n(全链路接入)" as Observer #LightGray
+  }
+
+  package "子模块" {
+    rectangle "MCP\n(MCPServerManager)" as MCP #LightGray
+    rectangle "Skills\n(SkillLoader/Registry)" as Skills #LightGray
+    rectangle "SubAgent\n(SubAgentManager)" as SubAgent #LightGray
+    rectangle "Todo\n(TodoManager)" as Todo #LightGray
+    rectangle "ContextPipeline\n(Compress/Cache)" as ContextPipeline #LightGray
+  }
+}
+
+CLI --> Runtime
+Runtime --> Agent
+Agent --> LLM
+Agent --> Config
+Agent --> Session
+Agent --> SessionContext
+
+Agent --> Registry
+Registry --> Guard
+Registry --> Tools
+
+Agent --> MemorySave
+Agent --> MemoryRecall
+Agent --> SessionStore
+
+Agent --> Hooks
+Agent --> Plugins
+Runtime --> Scheduler
+Runtime --> GatewayRegistry
+Agent --> Observer
+
+Agent --> MCP
+Agent --> Skills
+Agent --> SubAgent
+Agent --> Todo
+Agent --> ContextPipeline
+
+note right of MemorySave
+  Save 链路：
+  Strategy → Pipeline → Hooks.emit("memory.saved")
+end note
+
+note right of MemoryRecall
+  Recall 链路：
+  HybridRecaller → FTS5 + JSON → 注入 context
+end note
+
+note right of Plugins
+  PluginContext 接入：
+  - MCP Plugin
+  - Observability Plugin
+  - Scheduler Plugin
+  - Skills Plugin
+  - SubAgent Plugin
+  - Web Plugin
+  - Superpower Plugin
+  - Gateway Plugin
+end note
+
+@enduml
