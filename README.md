@@ -10,7 +10,7 @@
 
 | 功能 | 说明 |
 |------|------|
-| 🤖 **Agent 循环** | 用户输入 → LLM → 工具调用 → 循环；`agent.py` 实现 turn-loop，`AgentRuntime` 薄宿主负责 start/stop |
+| 🤖 **Agent 循环** | 用户输入 → LLM → 工具调用 → 循环；`agent.py` 实现 turn-loop；CLI / webhook / 定时任务共用同一套生命周期管理 |
 | 🖥️ **流式输出** | thinking/content 双面板，`StreamingConfig` 子对象（`enabled/think/content/think_transient/render_interval`）分级控制 |
 | 🔌 **插件系统** | `PluginDiscovery`（entry-points `merco.plugins` + 目录扫描）→ `PluginManager`（Kahn 拓扑 + priority）→ 8 个内置插件，**全部 entry-points 动态发现** |
 | 🧠 **多模型接入** | `ModelProvider` ABC + `ModelRegistry` 单一真相源；内置 `OpenAICompatibleProvider` / `AnthropicNativeProvider`；凭证解析由 `select()` 独占，Agent 不感知 base_url/api_key |
@@ -20,7 +20,7 @@
 | 💾 **Session 记忆** | `SessionStore` 用 SQLite WAL 模式，支持并发读 + 增量写 + FTS5 全文搜索；`/sessions` 切换、`/fork` 创建分支、`/history` 分页查看 |
 | 🧠 **Memory Recall** | `HybridRecaller`（FTS5 + JSON 后端）自动召回相关记忆 + 历史会话内容 |
 | 📊 **可观察性** | hooks 驱动 `Observer`（订阅 7+ 事件）；`/report` 显示 token 统计、LLM 延迟、工具分布、`/report reset` 清零 |
-| 🚀 **代码质量** | `ruff check .` 0 问题；`ruff format` 全仓干净；`.pre-commit-config.yaml` 本地 `uv run ruff` 钩子；**999 tests passed / 0 skip / 0 fail** |
+| 🚀 **代码质量** | `ruff` lint + format（`ruff check .` 0 问题）；`pre-commit` 钩子强制（提交前自动检查）；**999 测试全绿** |
 
 ---
 
@@ -82,7 +82,7 @@ merco/
 │   ├── recovery/       # 失败恢复策略
 │   ├── self_healing.py
 │   └── interrupt.py / message.py / context.py / session.py / empty_response.py
-├── gateway/        # 网关适配器（Wave 3）
+├── gateway/        # 网关适配器（Webhook / 自定义平台接入）
 │   ├── base.py         # GatewayAdapter ABC
 │   ├── registry.py     # GatewayRegistry：set_inbound_handler + start_all/stop_all
 │   └── webhook.py      # WebhookGateway 参考适配器（FastAPI/uvicorn）
@@ -91,8 +91,8 @@ merco/
 ├── mcp/            # MCP 客户端（manager / config / tool / builtin servers）
 ├── memory/         # MemoryStore + HybridRecaller + SessionStore（SQLite WAL）
 ├── observability/  # Observer / metrics / audit / tracing（hooks 驱动）
-├── plugins/        # 插件系统（Wave 1）
-│   ├── base.py         # Plugin ABC + PluginContext（23 属性 + 11 便捷方法）+ PluginSpec
+├── plugins/        # 插件系统
+│   ├── base.py         # Plugin ABC + PluginContext（20+ 扩展点 + 一组便捷注册方法）+ PluginSpec
 │   ├── discovery.py    # PluginDiscovery（entry_points + 目录扫描，无副作用）
 │   ├── manager.py      # PluginManager（Kahn 拓扑 + priority，activate_boot / activate_all）
 │   └── builtin/        # 8 个内置插件（entry-points 动态发现，零硬编码）
@@ -247,7 +247,7 @@ merco/
 | Sandbox | 🟢 POLISHED | `ToolGuard` 规则链 + `SecurityChecker` + `Confirm` UI + `Snapshot` 回滚 |
 | Observability | 🟢 POLISHED | `Observer`（订阅 7+ 事件）+ MetricsCollector + AuditLogger + TracingSpan |
 | Scheduler | 🟢 POLISHED | `CronScheduler` + `SchedulerPlugin`，通过 `AgentRuntime` 后台启动 |
-| Plugins | 🟢 NEW | `Plugin` + `PluginSpec` + `PluginContext`（23 属性 + 11 便捷方法）+ `PluginDiscovery`（entry-points + 目录扫描）+ `PluginManager`（拓扑 + priority）；**8 个内置插件全部 entry-points 动态发现** |
+| Plugins | 🟢 NEW | `Plugin` + `PluginSpec` + `PluginContext`（20+ 扩展点 + 一组便捷注册方法）+ `PluginDiscovery`（entry-points + 目录扫描）+ `PluginManager`（拓扑 + priority）；**8 个内置插件全部 entry-points 动态发现** |
 | SubAgent | 🟢 NEW | `SubAgentManager` + `AgentProfile` + `AgentProfileRegistry` |
 | Todo | 🟢 NEW | `TodoItem` + `TodoManager`，支持子任务分解 |
 | Gateway | 🟢 NEW | `GatewayAdapter` ABC + `GatewayRegistry`（per-adapter 失败隔离）+ `WebhookGateway` 参考适配器（FastAPI/uvicorn，`port=0` OS 自动分配）；`GatewayPlugin`（priority=25）注册；`AgentRuntime` 统一生命周期宿主 |
@@ -301,11 +301,10 @@ class MyPlugin(Plugin):
 
 **属性（23 个，`PluginContext.__init__` 注入）**：`hooks` / `agent` / `config` / `tool_registry` / `skill_registry` / `prompt_builder` / `observer` / `scheduler` / `mcp_manager` / `todo_manager` / `sub_agent_manager` / `memory_save_pipeline` / `recaller` / `context_pipeline` / `agent_profiles` / `memory_backends` / `loop_policies` / `recovery_pipeline` / `result_pipeline` / `security_pipeline` / `model_registry` / `gateway_registry` / `metadata`。
 
-**便捷方法（11 个）**：
-- 事件订阅：`on(event, handler)`
-- 工具 / 提示词 / 管线：`register_tool(tool)` / `add_prompt_chunk(chunk)` / `add_processor(pipeline_name, processor)` / `add_recaller(recaller)`
+**便捷注册方法（覆盖典型扩展场景）**：
+- 事件订阅 / 工具 / 提示词 / 管线：`on(event, handler)` / `register_tool(tool)` / `add_prompt_chunk(chunk)` / `add_processor(pipeline_name, processor)` / `add_recaller(recaller)`
 - 注册器类（拓展点）：`register_agent_profile(profile)` / `register_loop_policy(policy)` / `add_memory_backend(backend)` / `add_security_policy(policy)`
-- 第三方接入（Wave 2/3）：`register_model_provider(info)` / `register_gateway(adapter)`
+- 第三方接入：`register_model_provider(info)` / `register_gateway(adapter)`
 
 ### 三方插件安装方式
 
@@ -358,7 +357,7 @@ ctx.register_gateway(TelegramGateway(...))
 
 ## 📡 Gateway 适配器（简表）
 
-> Wave 3 新增。完整字段对齐 `merco/gateway/{base,registry,webhook}.py`。
+> 网关层接口对齐 `merco/gateway/{base,registry,webhook}.py`。
 
 | 概念 | 角色 |
 |------|------|
@@ -368,7 +367,7 @@ ctx.register_gateway(TelegramGateway(...))
 | `GatewayPlugin` | 第 8 个内置插件，priority=25；`activate()` 时在 `ctx.gateway_registry` 注册内置 `WebhookGateway` |
 | `AgentRuntime` | 统一生命周期宿主：`start()` 绑 `set_inbound_handler` + `start_all()`；`stop()` 幂等收尾；`handle_inbound(source, chat_id, message) → agent.run(message)` |
 
-> **Wave 3 单 session 简化**：`handle_inbound` 当前直接 `agent.run(message)`，`chat_id` 保留前向兼容但不启用 per-chat_id 隔离（详见 spec §6）。
+> **单 session 简化**：`handle_inbound` 当前直接 `agent.run(message)`，`chat_id` 保留前向兼容但不启用 per-chat_id 隔离（详见 spec §6）。
 
 ---
 
