@@ -38,16 +38,29 @@ merco skills -l        # 列出技能
 
 ## 当前状态
 
-**Phase 2 已完成** | 插件系统：Plugin 基类 + PluginContext（15扩展点）+ PluginManager + 内置插件（mcp/observability/scheduler/skills/subagent/web/superpower）| 所有 superpowers 计划已完成 | README.md 已更新反映当前状态 | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-06-29
+**Wave 1+2+3 插件/模型/gateway 动态化完成 + 技术债清零** | 插件系统：Plugin ABC + PluginContext（23 扩展点 + 11 便捷方法）+ PluginDiscovery（entry_points + 目录扫描）+ PluginManager（Kahn 拓扑 + priority）；**8 个内置插件**（observability/skills/mcp/subagent/web/gateway/scheduler/superpower）经 `merco.plugins` entry-points 动态发现 | 模型层：`ModelProvider` ABC + `ModelRegistry` 单一真相源（OpenAICompatible + AnthropicNative 双 provider，`select()` 独占凭证解析）| Gateway 层：`GatewayAdapter` ABC + `GatewayRegistry` + `WebhookGateway` 参考适配器 + `AgentRuntime` 薄宿主统一生命周期 | 代码质量：**ruff check 0 / ruff format 干净 / pre-commit 强制 / 999 tests passed / 0 skipped / 0 failures** | 对标 Hermes/OpenClaw/OpenCode | 最后更新: 2026-07-24
+
+### Wave 1+2+3 + 去债浪潮（2026-07-23 ~ 2026-07-24）
+
+| 工作 | 周期 | 关键产出 | 终态 commit |
+|------|------|----------|-------------|
+| Wave 1 插件动态化 | 2026-07-23 | `PluginDiscovery` + `PluginSpec` + `PluginManager` (Kahn 拓扑 + priority) + 两阶段 boot | `d99cc87` |
+| Wave 2 模型层动态化 | 2026-07-23 | `ModelProvider` ABC + `ModelRegistry` 单一真相源 + OpenAICompatible / AnthropicNative 双 provider | `4951099` |
+| Wave 3 多入口动态化 | 2026-07-24 | `GatewayAdapter` ABC + `GatewayRegistry` + `WebhookGateway` + `AgentRuntime` 薄宿主 + CLI 单事件循环 | `d92d958` |
+| 去债浪潮（T1-T8） | 2026-07-24 | ruff 498→0（零规则禁用纯修根因）；`.pre-commit-config.yaml` 本地 `uv run ruff` 钩子 | `d92d958` |
+| 测试跳过修复 | 2026-07-24 | dash `printf` 不支持 `\x` 十六进制转义（真 bug），cat 二进制文件替 printf | `e7dd024` |
+
+**下一焦点候选**详见 [next-focus.md](references/next-focus.md)（推荐 Gateway 生态扩展，Self-Improving Loop 延后）。
 
 ## 详细文档
 
 | 文档 | 内容 |
 |------|------|
-| [项目进展](references/progress.md) | 已完成清单、骨架待实现、里程碑、下一步计划 |
-| [架构设计](references/architecture.md) | 模块设计、目录结构、技术栈、参考资料库、收尾模式 |
-| [关键决策](references/decisions.md) | 重要决策记录与原因 |
+| [项目进展](references/progress.md) | 已完成清单（Wave 1+2+3 + 去债 + 测试跳过修复）、骨架待实现、里程碑、下一步候选 |
+| [架构设计](references/architecture.md) | 模块设计、目录结构、技术栈、参考资料库、收尾模式、AgentRuntime 宿主 |
+| [关键决策](references/decisions.md) | 重要决策记录与原因（按日期倒序） |
 | [开发教训](references/lessons.md) | 犯过的错、反思、以后的规则 |
+| [下一焦点](references/next-focus.md) | 候选方向对比（Gateway 扩展推荐 / per-chat_id 路由 / Self-Improving Loop 延后） |
 | [Bug 追踪](references/bugs.md) | 已修复和待修复的 bug |
 
 ## 工作原则
