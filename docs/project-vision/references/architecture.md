@@ -57,7 +57,7 @@ references/         # 参考源码 (git 忽略)
 | Sandbox | 🟢 POLISHED | ToolGuard + SecurityChecker + Confirm + Snapshot |
 | Observability | 🟢 POLISHED | Observer 全链路接入，metrics/audit/tracing |
 | Scheduler | 🟢 POLISHED | CronScheduler + SchedulerPlugin 接入 Agent 生命周期 |
-| Plugins | 🟢 NEW | Plugin + PluginSpec + PluginContext + PluginDiscovery，21 扩展点 + 5 便捷方法，8 个内置插件（entry_points 动态发现） |
+| Plugins | 🟢 NEW | Plugin + PluginSpec + PluginContext + PluginDiscovery，23 扩展点 + 11 便捷方法，8 个内置插件（entry_points 动态发现） |
 | SubAgent | 🟢 NEW | SubAgentManager + AgentProfile + AgentProfileRegistry |
 | Todo | 🟢 NEW | TodoItem + TodoManager，支持子任务分解 |
 | Gateway | 🟢 NEW | GatewayAdapter ABC + GatewayRegistry + WebhookGateway 参考适配器 + GatewayPlugin；AgentRuntime 统一宿主生命周期（start/stop/submit/handle_inbound） |
