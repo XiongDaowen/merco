@@ -25,12 +25,12 @@ merco/
 ├── agents/         # 子 Agent 管理 (subagent, profile)                          🟢 NEW
 ├── todo/           # 待办事项 (manager, models)                                 🟢 NEW
 ├── mcp/            # MCP 客户端 (manager, config, tool)                         🟢 POLISHED
-├── gateway/        # 消息网关 (预留)                                           ⚪ LEGACY
+├── gateway/        # 消息网关 (Wave 3: ABC + Registry + WebhookGateway)        🟢 NEW
 └── utils/          # 工具函数                                                 ⚪ UTIL
 
 cli/                # CLI 入口 (main, commands, input_driver, interrupt,
-│                   #             registry, tui)                                  🟢 POLISHED
-web/                # Web 界面 (FastAPI app, 预留)                               ⚪ LEGACY
+│                   #             registry)                                    🟢 POLISHED
+web/                # Web 界面 (FastAPI app, PARTIAL -- /chat "coming soon")   🟡 PARTIAL
 tests/              # 测试 (core, mcp, observability, cli, integration, unit)
 docs/               # 文档
 config/             # 配置示例
@@ -69,11 +69,11 @@ references/         # 参考源码 (git 忽略)
 - **包管理**: uv
 - **异步**: asyncio / aiohttp
 - **CLI**: typer / prompt_toolkit
-- **TUI**: textual (skeleton)
-- **Web**: fastapi (预留)
+- **TUI**: textual (Phase 7 计划；占位 `cli/tui.py` 已删)
+- **Web**: fastapi (PARTIAL, `/chat` 仍 "coming soon")
 - **配置**: pydantic-settings
 - **测试**: pytest
-- **代码质量**: ruff（lint + format），pre-commit 钩子强制（`.pre-commit-config.yaml`，`uv run ruff` 本地 hook 防版本漂移）
+- **代码质量**: ruff（lint + format），pre-commit 钩子强制（`.pre-commit-config.yaml`，`uv run ruff` 本地 hook 防版本漂移）— `ruff check .` 0 error，999 tests passed
 
 ## 参考资料库
 
@@ -212,8 +212,8 @@ end note
 ## 2. 插件系统架构图
 
 > **扩展点说明**：插件系统有两套扩展机制：
-> - **PluginContext 属性（21个）**：代码层面直接注入的子系统引用 + 5 个便捷方法
-> - **Hook 事件扩展点（15个）**：生命周期事件，插件可订阅
+> - **PluginContext 属性（23 个）**：代码层面直接注入的子系统引用 + 11 个便捷方法
+> - **Hook 事件扩展点（15 个）**：生命周期事件，插件可订阅
 
 ```plantuml
 @startuml
@@ -249,8 +249,8 @@ package "Plugin System" {
 
   rectangle "PluginContext" as Context #LightYellow
   note bottom of Context
-    20 个扩展属性（含 security_pipeline）：
-    hooks / agent / config
+    23 个扩展属性（含 security_pipeline / model_registry / gateway_registry / metadata）：
+    hooks / agent / config / metadata
     tool_registry / skill_registry
     prompt_builder / observer
     scheduler / mcp_manager
@@ -259,10 +259,14 @@ package "Plugin System" {
     context_pipeline / agent_profiles
     memory_backends / loop_policies
     recovery_pipeline / result_pipeline
-    security_pipeline
-    便捷方法：register_agent_profile /
+    security_pipeline / model_registry
+    gateway_registry
+    便捷方法（11 个）：on / register_tool /
+    add_prompt_chunk / add_processor /
+    add_recaller / register_agent_profile /
     register_loop_policy / add_memory_backend /
-    add_security_policy
+    add_security_policy / register_model_provider /
+    register_gateway
   end note
 }
 
