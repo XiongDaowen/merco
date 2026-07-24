@@ -1,15 +1,56 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-07-23 (波2 ModelProviderRegistry 完成)
+> 最后更新: 2026-07-24 (Wave 3 完成 + 去债 ruff 498→0 + pre-commit + 测试跳过修复 → 999 passed / 0 skipped / 0 failed)
 
 ## 目标对标
 
-对标 **Hermes Agent** (自学习/记忆/多平台网关)、**OpenClaw** (多平台/插件/定时任务)、**OpenCode** (TUI/Skill/MCP)，取其三家之长，构建更精简、更可落地的 AI Agent 框架。
+对标 **Hermes Agent** (自学习/记忆/多平台网关)、**OpenClaw** (多平台/插件/定时任务)、**OpenCode** (TUI/Skill/MCP)，取其三家之长，构建更精简、更可落地的 AI Agent 框架。merco 的差异化路径：插件全动态化（discovery → spec → manager → context → 8 个 builtin）、模型供应商动态化（ABC → registry → 双 provider）、gateway/runtime 薄宿主 + 失败隔离、单事件循环 CLI 收尾、代码零技术债（ruff=0 + pre-commit 防回归）、prompt-level 自进化储备（见 `next-focus.md`）。
 
 ## 当前状态
 
-**阶段**: Phase 5 完成 → v0.4.0 发布 | **焦点**: 插件动态化波2 完成（ModelProvider ABC + ModelRegistry 单一真相源 + OpenAI/Anthropic 双 provider + thinking/response 提取）
+**阶段**: Wave 1+2+3 插件/模型/gateway 动态化 完成 + 技术债清零（ruff 498→0 + pre-commit）| **焦点**: 下一站候选方向——`Self-Improving Agent Loop`（见 `references/next-focus.md`）
+
+### 本次会话更新 (2026-07-24) - Wave 3 Scheduler→Runtime + GatewayRegistry
+
+**插件动态化 波3（重大架构升级）**：
+- **12 个 commit**（自 `97e70fc`：5 重构/gateway 基础 + 3 scheduler/agent 接线 + 2 CLI 单 loop + 2 测试/spec 文档），分支 `wave3/runtime-gateway-registry` 推上 main 落点 `d92d958`。**998 passed / 1 skipped**（1 skip = `test_execute_command_with_non_utf8_output`，见本次会话第 3 节）。
+- **目标**：把 Scheduler 从"代码完整但从未激活"升级为运行时基础设施，新增 Gateway 动态注册机制——薄宿主 AgentRuntime 统一调度 Agent + CronScheduler + GatewayRegistry，让 CLI/Web/gateway/Cron 都能复用同一套生命周期。
+- **`merco/core/runtime.py` (NEW, ~117 行)**：`AgentRuntime` 生命周期宿主。owns Agent + CronScheduler + GatewayRegistry；`start()` 幂等（必要时 `Agent.create()` 触发插件两阶段激活）→ 绑 `inbound handler` → `gateway_registry.start_all()` → `scheduler.start()` 后台 task；`stop()` 幂等（gateway → scheduler → scheduler task 取消，partial-start 也能清理）；`submit(prompt)` 给 cron job；`handle_inbound(source, chat_id, message)` 给 gateway inbound（chat_id 保留前向兼容，**Wave 3 单 session 不做 per-chat_id 隔离**，见 spec §6）。`agent` property：start() 前访问抛 RuntimeError。
+- **`merco/gateway/base.py` (NEW)**：`GatewayAdapter` ABC（`name` 类属性 + `start/stop/send_message` abstract + `set_message_handler(handler)`）。Inbound 协议 = `handler(chat_id, message) -> reply`（async）。
+- **`merco/gateway/registry.py` (NEW, ~74 行)**：`GatewayRegistry` 注册表 + 生命周期管理。`register/get/list`（重复名 raise，对齐 ModelRegistry 严格语义） + `set_inbound_handler(handler)` + `start_all()`（逐 adapter 绑定 `_bound(name)` closure → start，单个失败隔离）+ `stop_all()`（逐 adapter stop，partial-start 也能容忍）。**闭包 bug 防护**：`_bound(chat_id, message, _name=name)` 用默认参捕获本轮 name，避免循环晚绑定到最后一个 adapter（registry.py:57）。
+- **`merco/gateway/webhook.py` (NEW, ~80 行)**：`WebhookGateway` 参考适配器，FastAPI/uvicorn 实现，`port=0` 让 OS 分配空闲端口，启动后 `actual_port` 可读；POST `/message` → 调用 `message_handler(chat_id, body)` → JSON `{reply: ...}`。
+- **`merco/plugins/builtin/gateway/plugin.py` (NEW, 8th builtin, priority=25)**：`GatewayPlugin` 注册内置 `WebhookGateway`，走 PluginContext 注入 `gateway_registry`。
+- **`merco/plugins/base.py`**：`PluginContext` 注入属性从 22 → **23**（`gateway_registry`）+ 便捷方法从 10 → **11**（`register_gateway(adapter)`）。
+- **`merco/core/agent.py`**：构造期接入 `gateway_registry`（`plugin_ctx` property + 装配到 `ctx.gateway_registry`，让 `Runtime.start()` 能拿到）。
+- **CLI 单事件循环重构**：`_setup_agent()` 改 sync，构造 `AgentRuntime(config=cfg, tool_registry=tool_registry)` 返回 **未启动** Runtime（cli/main.py:154-310）；`repl()` 内 `await runtime.start()` + `agent = runtime.agent`（cli/main.py:502-503），`finally` 块 `await runtime.stop()`（cli/main.py:568-569）。**全文件仅一处 `asyncio.run(repl())`**（cli/main.py:571），消除之前 `_setup_agent` 内部 asyncio.run + CLI 顶层再 run 的双 loop。
+- **删除死代码**（Wave 3 内部 + T1 合并）：
+  - `merco/scheduler/delivery.py`（DeliveryManager 占位）、`merco/scheduler/jobs.py`（TaskManager 占位）、`merco/gateway/telegram.py`、`merco/gateway/discord.py`（commit `97e70fc`，4 文件 -144 行）
+  - `merco/tools/mcp_tools.py`（commit `ab20c07`，MCP 已由 `merco/mcp/` 实现）
+- **架构分层**：`GatewayAdapter`（契约 ABC）→ `GatewayRegistry`（注册表 + 生命周期 + 失败隔离）→ 具体 adapter（如 `WebhookGateway`）→ `AgentRuntime` 统一宿主 → CLI/Web/cron 经 `submit`/`handle_inbound` → `agent.run`。镜像插件 / 模型层的分层（ABC → registry → 实现 → consumer）。
+- **设计文档**：`docs/superpowers/specs/2026-07-23-scheduler-runtime-gateway-registry-design.md` + `docs/superpowers/plans/2026-07-23-scheduler-runtime-gateway-registry.md`（spec §6 单 session / §7 ctx accessor / §9 CLI 单 loop / §11 FastAPI 事实修正全部采纳）。
+
+### 本次会话更新 (2026-07-24) - 去债浪潮（ruff 498→0 + pre-commit）
+
+**技术债清零（系统性清理）**：
+- **8 个 commit**（`ab20c07`..`50c511a` + `d92d958`），分支 `debt-cleanup` 推上 main 落点 `d92d958`。**8 个任务 T1-T8**，子 agent 驱动 + 右尺寸评审。
+- **T1 死代码 stub 删除**（commit `ab20c07`）：`cli/tui.py`（Phase 7 TUI 占位）+ `merco/tools/mcp_tools.py`（MCP 已由 `merco/mcp/` 实现）。`merco/tools/__init__.py` 移除 mcp_tools re-export。3 文件 -66 行。
+- **T2 真实类型洞修复**（commit `dafa879`）：4 个 F821（`TYPE_CHECKING` 缺漏：`Agent` 在 `merco/core/llm/response.py`、`ModelConfig` 在 `merco/core/pipeline.py`）；1 个 F811（response.py import shadowing——移除冗余本地 `_json`/`Live`/`Group`，保留 `console` local 用于避开循环）；3 个 F841（未用局部变量，保留 side-effects）。
+- **T3 F401 未用 import 大扫除**（commit `3b495d9`）：86 → 0。先识别 side-effect imports：`cli.commands` 加 `# noqa: F401`（命令注册触发）、sandbox `_DEFAULT_RULES` 加进 `__all__`、`SkillLoader` 整个删除（确为 dead）。autofix 后**意外发现并修复 52 个集成测试断**：conftest `_isolation_services` fixture 被 autofix 当未用删掉——手动 re-export + noqa 恢复。
+- **T4 ruff autofix 简单项**（commit `4b4facd`）：I001 (203→0 import 排序) + W292 (16→0 尾换行) + F541 (12→0 空 f-string)。
+- **T5 pyupgrade**（commit `83f9b7c`）：UP037 (59→0 去注解引号) + UP035 (11→0 `typing.List` → `list`)。**关键判断**：仓库已对所有带 quoted annotation 的文件加 `from __future__ import annotations`，所以 safe-fix（仅改 import / 不动运行时行为）覆盖全部；仓库确认 **未使用 Pydantic / `get_type_hints`**，无运行时风险。
+- **T6 ruff format 全仓**（commit `50c511a` 上半）：`ruff format .` 191 个文件纯格式化（+2308 / -1488 行）；big-bang。
+- **T7 手动残余清理**（commit `2dfa556`）：N818 (10 noqa'd——保留 `InputInterrupt` / `GuardConfirmationRequired` 业务命名) + N806 (6 重命名局部变量) + F841 (5 修) + E501 (2 rewrap) + F811 (2 修：`isolation_services` fixture 移到 `tests/integration/conftest.py` + 删空 `tests/integration/core/isolation.py`) + E731 (1 lambda → def) + UP042 (`MessageRole str, Enum` → `StrEnum`，行为安全验证)。
+- **T8 pre-commit 钩子**（commit `d92d958`）：新增 `.pre-commit-config.yaml`，本地 `uv run ruff` hooks（与项目 venv 版本对齐，防版本漂移）。**ruff 配置 0 改动**（`pyproject.toml` `[tool.ruff]` / `[tool.ruff.lint]` 完全不变——零规则禁用，纯靠修复达成 0 error）。
+- **结果**：`ruff check .` **498 → 0**，`ruff format --check .` **0**，`pytest` **998/1/0**，pre-commit 强制门。
+
+### 本次会话更新 (2026-07-24) - 测试跳过修复
+
+**测试跳过修复（真 bug，不是 stale debt）**：
+- **1 commit**（`e7dd024`），分支 `fix/bash-non-utf8-test` 推上 main。`pytest` **998/1/0 → 999/0/0**。
+- **根因**：`tests/tools/test_bash_tools.py::test_execute_command_with_non_utf8_output` 用 `printf '\xff\xfe\xfd'` 生成二进制输出，但仓库默认 `/bin/sh` 是 **dash**，dash `printf` **不支持 `\x` hex escape**——输出变成了字面字符串 `\xff\xfe\xfd`（含反斜杠与字母），断言 `assert "�" in stdout` **不可能通过**（输出里没有 `�`，也没法产生）。
+- **修复**：测试重写为 `cat` 一个真实二进制文件（`b"\xff\xfe\xfd"` 由 Python `tmp_path / "bin"` 写入）。避开 shell escape 陷阱，直接验证 `decode(errors="replace")` 从 invalid UTF-8 字节产生 `�` 替换字符。
+- **结论**：跳过不是 stale debt 是真 bug；shell 兼容性问题（dash vs bash）原本靠 `pytest.skip` 掩盖，实质是测试方法不可靠。修复后 999 全绿。
 
 ### 本次会话更新 (2026-07-23) - 波2 ModelProviderRegistry
 
@@ -90,7 +131,7 @@
 - **压缩**：`CompressProcessor` 滑动窗口 + LLM 摘要。
 
 **其他架构改进**：
-- **Plugin 系统**：`PluginManager` + `PluginBase`，`builtin/` 目录含 ObservabilityPlugin / SkillPlugin / MCPPlugin / SubAgentPlugin / WebPlugin / SchedulerPlugin。
+- **Plugin 系统**（**Wave 1+2+3 完成**）：`PluginManager` + `PluginBase` + `PluginDiscovery` + `PluginSpec` + `PluginContext` (23 注入属性 + 11 便捷方法)；8 个 builtin 经 entry_points 发现（observability/skills/mcp/subagent/web/scheduler/superpower/**gateway**），priority 数据驱动 boot 序（100/60/50/40/30/25/20/10）。
 - **config.py 重大重构**：`ModelConfig.resolve()` 自动补齐 base_url/api_key，未注册 provider 只需显式写 base_url。
 - **agent.py 膨胀到 1186 行**：集成 Stream/NonStream Provider 双模式、RecoveryPipeline、LoopPolicy、Hooks emit、ToolGuard、Observer、Session 持久化。是下一步重构目标。
 
@@ -105,6 +146,11 @@
 - [x] Phase 3: Skill 系统完善 + MCP 集成 + API 错误可见性 — v0.3.0
 - [x] Phase 4: 斜杠命令 + REPL 重构 + CLI UI 测试 + 错误呈现优化 — v0.4.0
 - [x] Phase 5: Memory 召回体系 + Session Fork/Tree + Recaller 协议 + Snapshot 文件追踪
+- [x] **插件动态化 波1** (2026-07-23, `d99cc87`)：discovery + PluginSpec + manager 拓扑激活 + 两阶段 boot
+- [x] **插件动态化 波2** (2026-07-23, `4951099`)：ModelProvider ABC + ModelRegistry 单一真相源 + OpenAI/Anthropic 双 provider
+- [x] **插件动态化 波3** (2026-07-24, `d92d958`)：AgentRuntime 生命周期宿主 + GatewayRegistry + WebhookGateway + CLI 单事件循环
+- [x] **技术债清零** (2026-07-24, `d92d958`)：ruff 498→0 + pre-commit 防回归（零规则禁用，纯修复达成）
+- [x] **测试跳过修复** (2026-07-24, `e7dd024`)：dash shell `\x` escape 不兼容真 bug，cat 二进制文件替 printf，999/0/0
 - [ ] Phase 6: 可观测性深化（tracing/metrics 可视化）+ 沙箱容器化 + LLM 摘要上下文压缩完善
 - [ ] Phase 7: TUI + Web 对接 Agent + 多代理协作 + 文档/发布
 
@@ -125,6 +171,7 @@
 | `pipeline.py` | 🟢 REAL | `ResultPipeline` + `RecoveryPipeline` + `EmptyResponsePipeline`，链式 use()/process()。含 TruncationProcessor / SkillViewProcessor / WaitRecovery / ContextCompressRecovery / CallbackEmptyResponse。573 行。 |
 | `loop_policy.py` | 🟢 REAL | LoopPolicy 决策（exit / continue / switch_model），68 行。 |
 | `recovery/` | 🟢 REAL | `wait.py` (差异化退避) + `model_fallback.py` (备选模型切换)。 |
+| `runtime.py` | 🟢 NEW | **Wave 3**：`AgentRuntime` 生命周期宿主（~117 行）。owns Agent + CronScheduler + GatewayRegistry；`start()/stop()` 幂等；`submit(prompt)` 给 cron job；`handle_inbound(source, chat_id, message)` 给 gateway inbound（单 session，chat_id 仅前向兼容）。 |
 
 ### merco/plugins/ — Plugin System
 
@@ -132,17 +179,36 @@
 |------|--------|---------|
 | `discovery.py` | 🟢 NEW | `PluginDiscovery` 无副作用发现器：entry_points(group="merco.plugins") + `plugins_paths` 目录扫描（plugin.toml manifest，`importlib.util.spec_from_file_location` 单文件加载，零 sys.path 污染）。同名目录覆盖 entry_points；enabled 过滤 + DFS 循环检测 + 存在性闭包剪枝。~190 行。 |
 | `manager.py` | 🟢 REAL | PluginManager：`register_all(specs)` / `_resolve_order`(Kahn 拓扑 + `(-priority,name)` tiebreak) / `activate_boot`(priority>=100) / `activate` 懒实例化 + dep-active 检查 / `_emit_error`。emit `plugin.activated`/`deactivated`/`error`。 |
-| `base.py` | 🟢 REAL | `Plugin` ABC(+`priority`/`depends_on`) + `PluginSpec` dataclass(懒加载 `load_cls`/`instantiate`) + `PluginContext`(20 注入属性 + 4 便捷方法 `register_agent_profile`/`register_loop_policy`/`add_memory_backend`/`add_security_policy`)。 |
-| `builtin/` | 🟢 REAL | **7 个** builtin（observability/skills/mcp/subagent/web/scheduler/superpower）经 entry_points 发现，priority 标注 (100/60/50/40/30/20/10)。 |
+| `base.py` | 🟢 REAL | `Plugin` ABC(+`priority`/`depends_on`) + `PluginSpec` dataclass(懒加载 `load_cls`/`instantiate`) + `PluginContext`(**23** 注入属性 + **11** 便捷方法 `register_agent_profile`/`register_loop_policy`/`add_memory_backend`/`add_security_policy`/`register_model_provider`/`register_gateway`)。Wave 3 加 `gateway_registry` + `register_gateway`。 |
+| `builtin/` | 🟢 REAL | **8 个** builtin（observability/skills/mcp/subagent/web/scheduler/superpower/**gateway**）经 entry_points 发现，priority 标注 (100/60/50/40/30/20/10/**25**)。Wave 3 新增 GatewayPlugin（priority=25）。 |
 
 ### merco/mcp/ — MCP Integration
 
 | File | Status | Details |
 |------|--------|---------|
-| `manager.py` | 🟢 REAL | MCPManager：load_config/reload/status/list_tools。 |
+| `manager.py` | 🟢 REAL | MCPManager / MCPServerManager：load_config/reload/status/list_tools。 |
 | `tool.py` | 🟢 REAL | MCP 工具包装 + 注册。 |
 | `config.py` | 🟢 REAL | MCP 服务器配置。 |
 | **集成** | ✅ WIRED | `/mcp-status` + `/reload-mcp` CLI 命令、agent.py 启动时 auto-load。 |
+| **dead stub** | ❌ 已删 | `merco/tools/mcp_tools.py`（Wave 3 T1 `ab20c07` 删）——MCP 真实实现均在 `merco/mcp/`，stub 仅为旧版占位。 |
+
+### merco/gateway/ — Gateway Subsystem（Wave 3 新增）
+
+| File | Status | Details |
+|------|--------|---------|
+| `base.py` | 🟢 NEW | `GatewayAdapter` ABC：`name` 类属性 + abstract `start/stop/send_message` + `set_message_handler(handler)`；inbound 协议 = `handler(chat_id, message) -> reply` (async)。 |
+| `registry.py` | 🟢 NEW | `GatewayRegistry`（~74 行）：`register/get/list` + `set_inbound_handler` + `start_all`/`stop_all`（逐 adapter 失败隔离）。`_bound(name)` 用默认参捕获本轮名避免循环晚绑定 bug（registry.py:57）。 |
+| `webhook.py` | 🟢 NEW | `WebhookGateway` 参考适配器（~80 行）：FastAPI/uvicorn，`port=0` OS 分配端口，启动后 `actual_port` 可读；POST `/message` → JSON `{reply: ...}`。 |
+| `telegram.py` / `discord.py` | ❌ 已删 | Wave 3 准备期 `97e70fc` 删——仅为旧版占位，无实现。 |
+| **集成** | ✅ WIRED | `GatewayPlugin` (priority=25) 经 entry_points 注册 `WebhookGateway`；`PluginContext.gateway_registry` + `register_gateway()` 注入；`AgentRuntime.start()` 调 `gateway_registry.start_all()`，`handle_inbound()` 路由到 `agent.run`。 |
+
+### merco/scheduler/ — Cron Scheduler（Wave 3 接通）
+
+| File | Status | Details |
+|------|--------|---------|
+| `cron.py` | 🟢 REAL | `CronScheduler` 阻塞 while 循环——Wave 3 commit `d8b1ff6` 修复异常不吞 / weekday Sun=0 / 诚实 docstring；`SchedulerPlugin` (priority=20) 经 entry_points 注册注入 ctx。 |
+| `delivery.py` / `jobs.py` | ❌ 已删 | Wave 3 准备期 `97e70fc` 删——DeliveryManager / TaskManager 占位无实现。 |
+| **集成** | ✅ WIRED | Wave 3 `AgentRuntime.start()` 后台 task 跑 `scheduler.start()`，`stop()` 收尾；`runtime.submit(prompt)` 给 cron job 入口。 |
 
 ### merco/tools/ — Tool System
 
@@ -156,7 +222,7 @@
 | `skill_tools.py` | 🟢 REAL | `SkillViewTool` 动态描述。73 行。 |
 | `web_tools.py` | 🟡 PARTIAL | `WebFetch` 可用。`WebSearch` 骨架。 |
 | `task_tools.py` | 🟡 PARTIAL | 基础实现。Phase 7 多代理协作。 |
-| `mcp_tools.py` | 🟢 REAL | MCP 工具发现 + 注册 ✅。 |
+| `mcp_tools.py` | ❌ 已删 | T1 (`ab20c07`) 删除——MCP 由 `merco/mcp/` 真实实现，stub 仅为旧版占位。 |
 
 ### merco/skills/ — Skills System
 
@@ -209,7 +275,7 @@
 | `registry.py` | 🟢 REAL | CommandRegistry + CommandDef，register/get/match/get_all/get_help_text。 |
 | `input_driver.py` | 🟢 REAL | PromptToolkitInput + InputInterrupt。 |
 | `interrupt.py` | 🟢 REAL | InterruptPipeline：CancelTaskStrategy / ClearInputStrategy / ExitWithHooksStrategy 三层策略。 |
-| `tui.py` | 🔴 SKELETON | `"TUI mode - coming soon"`。Phase 7。 |
+| `tui.py` | ❌ 已删 | T1 (`ab20c07`) 删除——原为 `"TUI mode - coming soon"` 占位；Phase 7 真实现时直接用 textual 替换。 |
 
 ### web/ — Web Interface
 
@@ -246,12 +312,13 @@
 | **Recaller → Agent** | ✅ WIRED | `BaseRecaller` → `FTS5Recaller` → `MemoryRecaller` → `HybridRecaller` 四级协议。Agent 启动自动注入。 |
 | **Session Fork → Agent** | ✅ WIRED | `Session.fork()` + `/fork` + `/tree` CLI 命令 + `snapshot.set_current_session()`。 |
 | **Snapshot → Agent** | ✅ WIRED | 文件快照追踪，`/revert` 撤销修改。 |
-| **Plugins → Agent** | ✅ WIRED | discovery 驱动装配：`PluginDiscovery(config).discover()` + `register_all`，两阶段 boot（`activate_boot` → restore → `activate_all`）。7 个 builtin 经 entry_points。`/plugins` CLI。 |
-| **Scheduler → Runtime** | ❌ NOT WIRED | CLI/Web 未启动 CronScheduler。代码完整但从未激活。Phase 6。 |
-| **TUI** | ❌ NOT WIRED | `tui.py` 仍为占位。Phase 7。 |
+| **Plugins → Agent** | ✅ WIRED | discovery 驱动装配：`PluginDiscovery(config).discover()` + `register_all`，两阶段 boot（`activate_boot` → restore → `activate_all`）。**8 个** builtin 经 entry_points。`/plugins` CLI。 |
+| **Scheduler → Runtime** | ✅ WIRED | **Wave 3**：`AgentRuntime.start()` 后台 task 跑 `CronScheduler.start()`；`runtime.submit(prompt)` 给 cron job 入口；plugin_ctx 注入。 |
+| **Runtime → Gateway** | ✅ WIRED | **Wave 3**：`AgentRuntime.start()` 绑 `gateway_registry.set_inbound_handler(self.handle_inbound)` + `start_all()`；Web/GatewayPlugin/CLI 共用同一套生命周期。 |
+| **CLI 单事件循环** | ✅ WIRED | **Wave 3**：`_setup_agent` 改 sync 返未启动 Runtime；`repl()` 内 `await runtime.start()` / `finally: await runtime.stop()`；全文件仅一处 `asyncio.run(repl())`。 |
+| **TUI** | ❌ NOT WIRED | `tui.py` 占位已删（T1 `ab20c07`），Phase 7 用 textual 真实现。 |
 | **Web → Agent** | ❌ NOT WIRED | `/chat` 返回 `"coming soon"`。Phase 7。 |
 | **SubAgent** | ❌ NOT WIRED | `task_tools.py` 基础实现，多代理协作未完全打通。Phase 7。 |
-| **Gateway** | ❌ NOT WIRED | Telegram/Discord gateway 仅骨架。Phase 7。 |
 
 ---
 
@@ -259,33 +326,45 @@
 
 | Status | Count | 说明 |
 |--------|-------|------|
-| 🟢 REAL (可用) | 35 | 生产级或基本可用的独立模块（+1：新增 `plugins/discovery.py`） |
-| 🟡 PARTIAL (部分) | 3 | web/app.py / web_tools / task_tools |
-| 🔴 SKELETON (骨架) | 2 | tui.py / 2 个 gateway |
-| ❌ NOT WIRED (未集成) | 4 | Scheduler → Runtime / TUI / Web → Agent / SubAgent |
+| 🟢 REAL (可用) | 36 | 生产级或基本可用的独立模块（Wave 3 +1：`merco/gateway/` 完整 + `merco/core/runtime.py` AgentRuntime） |
+| 🟡 PARTIAL (部分) | 2 | web/app.py / web_tools / task_tools（mcp_tools stub 已删） |
+| 🔴 SKELETON (骨架) | 0 | tui.py + 2 个 gateway stub 均已删（Wave 3 + 去债 T1） |
+| ❌ NOT WIRED (未集成) | 3 | TUI / Web → Agent / SubAgent（Scheduler→Runtime 与 Gateway 经 Wave 3 已 ✅） |
 | **CLI 测试** | **94** | 9 个测试文件，覆盖 Dashboard / PromptArea / commands / lifecycle / REPL errors |
-| **Plugin 测试** | **新增** | test_discovery / test_spec / test_manager / test_plugin_base / test_plugin_integration + 7 个 builtin 插件测试 |
-| **总测试** | **945 passed / 1 skipped** | 波2 ModelProviderRegistry 后全量 |
+| **Plugin 测试** | **新增** | test_discovery / test_spec / test_manager / test_plugin_base / test_plugin_integration + 8 个 builtin 插件测试（含 Gateway） |
+| **Gateway 测试** | **新增** | test_webhook + Runtime gateway 集成（`36f2293`） |
+| **去债** | ruff 498→0 | `ruff check .` 0 error + `ruff format --check .` 0 diff；pre-commit 强制门；pyproject.toml `[tool.ruff]` 零改动 |
+| **总测试** | **999 passed / 0 skipped / 0 failed** | Wave 3 → 去债 → 测试跳过修复 后全量 |
 
 ## 下一步（按优先级）
 
-### Phase 6（可观测性深化 + 沙箱容器化）
-1. **Scheduler 接入 CLI** — `run_repl` 启动 CronScheduler
-2. **LLM 摘要上下文压缩** — `CompressProcessor._summarize` 对接真实 LLM
-3. **Docker 沙箱** — 替换临时目录
+> **生态已收敛**：插件/模型/gateway 三大动态化完成，代码零技术债（ruff=0 + pre-commit），999 测试全绿。下一步不再围绕"接上去"，而是围绕"用起来更聪明"。
 
-### Phase 7（界面 + 多代理 + 发布）
-4. **TUI 实现** — Textual 替换 `"coming soon"`
-5. **Web 对接 Agent** — `app.py` 接入 Agent + 会话管理
-6. **SubAgent 多代理协作** — `task_tools.py` 完整实现
-7. **Gateway 实现** — Telegram/Discord
+### 下一站候选方向：`Self-Improving Agent Loop`（prompt-level 自进化）
 
-### 插件动态化（波2/波3）
-- **波1 ✅ 完成**（2026-07-23）：discovery + PluginSpec + manager 拓扑激活 + 两阶段 boot。
-- **波2 ✅ 完成**（2026-07-23）- ModelProviderRegistry：动态模型供应商，镜像插件发现机制。
-- **波3** - Scheduler->Runtime + GatewayRegistry：调度器升级为 Runtime + 网关动态注册。
+详细设计见 `references/next-focus.md`（决策中→下一步进 brainstorming）。核心机制：
+- 订阅 `tool.error` / `conversation.turn` / `llm.chat` → `FeedbackDetector` 识别触发条件（连续 N 次同 tool 失败 / 单次 token 超阈值 / 用户反复纠正）；
+- `Improver` 调 LLM 看具体失败 case，生成"应该怎么做"的 prompt-level 教训，写到 Memory（`source=system` priority=1）；
+- 下次 `agent.run` → `HybridRecaller` 自动召回"经验" → 注入 system prompt；
+- `fail-soft` 兜底（Improver 任何步骤失败 log + 跳过，不阻塞主循环）；
+- 可控：默认 opt-in（`config.self_improver_enabled = False`），`/report` 显示已学 N 条，`/lessons` 列出，`/forget` 可清。
+
+**为什么是这个方向**（见 `next-focus.md`）：架构复用率最高（Observer/Memory/Hook/Pipeline 零新基础设施）、merco 独家路径（hermes/openclaw/opencode 都没有 prompt-level 自进化）、不破坏现有架构（增量加 `SelfImprover`）、可见价值（用户用越久 agent 越懂自己）。
+
+### 其他长期候选（暂缓）
+
+| 候选 | 优先级 | 原因 |
+|------|--------|------|
+| Multi-Modal Context 引擎 | 低 | scope 大、依赖重，三家对标都没把它当核心 |
+| Agent Composition (子 agent 编排) | 低 | 工程量大、各家都在做、无差异化 |
+| TUI 实现（textual 替换占位） | 中 | Phase 7，但 Web 优先级可能更高 |
+| Web 对接 Agent | 中 | `/chat` 真接通 `AgentRuntime.submit()`；可复用 Wave 3 Runtime |
+| Docker 沙箱 | 中 | Phase 6 容器化路线，与 bubblewrap/firejail 一起排期 |
+| SubAgent 多代理协作 | 中 | `task_tools.py` 完整化；需要 spec |
+| LLM 摘要上下文压缩 | 中 | `CompressProcessor._summarize` 对接真实 LLM；当前为空 |
 
 ### 持续
-- **agent.py 拆分** — 1186 行太重，StreamingProvider / NonStreamingProvider 可独立文件
-- **补充端到端测试** — 真实 LLM 的集成测试
-- **PyPI 发布** — 发布 v0.4.0 并写 changelog
+
+- **agent.py 拆分** — 1186 行太重，StreamingProvider / NonStreamingProvider 可独立文件（Wave 2 已抽 `core/llm/response.py`，但 agent.py 仍有遗留 inline 逻辑）
+- **PyPI 发布** — 发布 v0.4.0（插件/模型/gateway 动态化 + 代码债清零）并写 changelog
+- **补充端到端测试** — 真实 LLM 的集成测试（当前 999 测试均为 mock/units）
