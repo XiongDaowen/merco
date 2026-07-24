@@ -4,6 +4,70 @@
 
 ---
 
+## 2026-07-24: 删 `@skip` 测试前先真跑一次 — 跳过的可能是被掩盖的真失败
+
+**场景**：一个 bash 工具非 UTF-8 输出测试长期 `@skip` 标"非关键"，去债时准备删掉。
+
+**根因**：测试用 `printf '\xff\xfe\xfd'` 造非法 UTF-8 字节。dash `/bin/sh` 的 `printf` 不支持 `\x` 十六进制转义 → 实际输出字面反斜杠 `\xff...` 而非字节 → 断言 `assert "�" in stdout` 永不可能成立。测试的前提本身就是错的，不是"暂时不关键"。
+
+**修复**（`e7dd024`）：把 `b"\xff\xfe\xfd"` 用 Python 写入 `tmp_path` 二进制文件，再 `cat` 它——无 shell 转义，稳定验证 bash 工具 `decode(errors="replace")` 从非法 UTF-8 产出 `�`。
+
+**教训**：删一个 `@skip` 测试前，先真跑一次。跳过的测试可能是伪装成"非关键"的真实失败。跨 shell 造字节别用 `printf '\x'`（bash 特性，dash 不支持），用文件。
+
+---
+
+## 2026-07-24: 去债波 — 修根因不降级；autofix 有副作用要先标注
+
+**场景**：ruff 498 error 清零 + 加 pre-commit 防回归（`3b495d9`..`d92d958`）。
+
+**F401 autofix 误删 side-effect import**（`3b495d9`）：
+- `ruff --fix --select F401` 删掉 `tests/integration/conftest.py` 的 `_isolation_services` fixture 再导出 → 52 集成测试直接挂（pytest 按模块属性名发现 fixture，import 被删则发现不到）。
+- 同理 `import cli.commands`（触发 `@cmd_registry.register` 装饰器，cli/main.py:449）。
+- **教训**：side-effect import + fixture 再导出是真实存在的，autofix 前必须先加 `# noqa: F401`，顺序是 **noqa 先、`--fix` 后**。fixture 再导出还要在注释里写清"为何保留"。`merco/sandbox/__init__.py` 的 `_DEFAULT_RULES` 再导出则加进 `__all__` 而非 noqa。
+
+**UP037 去注解引号需两条件同时成立**（`83f9b7c`）：
+- 全仓 `--fix --unsafe-fixes` 去引号安全，当且仅当：(a) 所有带注解文件都有 `from __future__ import annotations`；(b) 全仓零运行期注解求值——Pydantic 在 pyproject 声明但从未 import，无 get_type_hints/BaseModel。
+- **教训**：bulk UP037 前先验证这两点都成立，缺一则去引号会破坏运行期类型解析。
+
+**pre-commit 用本地 `uv run ruff` 而非独立 ruff**（`d92d958`）：
+- **教训**：钩子跑项目 venv 内的 `uv run ruff`（版本对齐），别下载独立 ruff——避免本地与 CI ruff 版本漂移导致结果不一致。
+
+**教训（总）**：498→0 一波清完 + pre-commit 挡回归。修根因不 demote-and-keep；用户"别他妈有历史债务"的强制口径驱动了整轮清理，值。
+
+---
+
+## 2026-07-23: Wave 3 review/verify-first 抓到 3 个隐藏 bug
+
+**场景**：Scheduler 接 AgentRuntime + GatewayRegistry（`650c270`..`09abde1`）。
+
+**`agent.stop` 双 emit 死 no-op**（review 抓到）：
+- runtime.stop() 里 emit 了 `agent.stop`，但 `Agent.run` 已在 `finally` 带 `session_id` per-run emit（agent.py:431）。宿主那次无 kwargs 的 emit 抛 TypeError，被 HookRegistry 吞掉 → 变成死 no-op（observer `agent_stops` 计数不涨，实测确认）。
+- **教训**：从新层级重新 emit 一个 hook/event 前，**先 grep 这个事件名**看谁已经 emit。per-run 事件属于 run 自身，不属于生命周期宿主。最终宿主 teardown 只收 gateway/scheduler，不碰 agent 事件。
+
+**`CronScheduler.stop()` 是 `async def`**（verify-first 抓到，`d8b1ff6`/merco/scheduler/cron.py:58）：
+- 计划稿写它是同步的，实际是 `async def`。
+- **教训**：永远别信 spec 对 sync/async 的描述，`grep "async def\|def "` 那个函数亲眼确认再写调用点。
+
+**`_bound` 闭包晚绑定**（`650c270`/merco/gateway/registry.py:57）：
+- 朴素写 `async def _bound(chat_id, message): return await self._inbound_handler(name, ...)`，`name` 是循环变量 → 晚绑定到最后一个适配器。
+- 修复：默认参 `_name=name` 在 def 时求值捕获本轮名字。
+- **教训**：对循环变量的闭包要用默认参捕获；用多适配器测试证明（3 适配器各自路由正确）。
+
+**GatewayRegistry 重名抛 ValueError（故意背离 ModelRegistry 静默覆盖）**：
+- **教训**：注册表的重复语义要看条目性质。gateway 持有 live 资源（端口/连接），静默覆盖会泄漏 → 抛 ValueError；ModelRegistry 条目是无副作用元数据 → 静默覆盖 OK。别无脑统一两个注册表的语义。
+
+---
+
+## 2026-07-23: CLI 单事件循环重构保留了有意的循环导入 workaround
+
+**场景**：CLI 从双层 asyncio 循环改单层（`09abde1`），`_setup_agent` 改同步返回未启动 Runtime，`repl()` 内 start/stop。
+
+**发现**：`merco/core/llm/response.py:57` 有个方法体内的局部 `from merco.core.agent import console`——必须留在方法内，因为 agent.py 反过来 import response.py（`4ec61cc` 抽出的），提到模块顶层会循环导入。
+
+**教训**：循环导入的局部 import workaround 是有意的，重构时别顺手提到顶层"清理"。删局部 import 前先读完整方法体确认它为何在那里。
+
+---
+
 ## 2026-05-21: 不要把 provider 名写进核心代码
 
 **场景**：调试 SCNet 的 429 限流时，在 `llm.py` 的注释和变量名里写了 "SCNet"。
