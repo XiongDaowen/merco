@@ -9,7 +9,7 @@
 
 ## 当前状态
 
-**阶段**: Wave 1+2+3 插件/模型/gateway 动态化 完成 + 技术债清零（ruff 498→0 + pre-commit）| **焦点**: 下一站候选方向——`Self-Improving Agent Loop`（见 `references/next-focus.md`）
+**阶段**: Wave 1+2+3 插件/模型/gateway 动态化 完成 + 技术债清零（ruff 498→0 + pre-commit）| **焦点**: 下一站候选方向——`Gateway 生态扩展`（Telegram/Discord 适配器；详见 `references/next-focus.md`，推荐 A 候选；Self-Improving Loop 延后）
 
 ### 本次会话更新 (2026-07-24) - Wave 3 Scheduler→Runtime + GatewayRegistry
 
@@ -131,7 +131,7 @@
 - **压缩**：`CompressProcessor` 滑动窗口 + LLM 摘要。
 
 **其他架构改进**：
-- **Plugin 系统**（**Wave 1+2+3 完成**）：`PluginManager` + `PluginBase` + `PluginDiscovery` + `PluginSpec` + `PluginContext` (23 注入属性 + 11 便捷方法)；8 个 builtin 经 entry_points 发现（observability/skills/mcp/subagent/web/scheduler/superpower/**gateway**），priority 数据驱动 boot 序（100/60/50/40/30/25/20/10）。
+- **Plugin 系统**（**Wave 1+2+3 完成**）：`PluginManager` + `PluginBase` + `PluginDiscovery` + `PluginSpec` + `PluginContext` (23 注入属性 + 11 便捷方法)；8 个 builtin 经 entry_points 发现（observability/skills/mcp/subagent/web/**gateway**/scheduler/superpower），priority 数据驱动 boot 序（100/60/50/40/30/25/20/10）。
 - **config.py 重大重构**：`ModelConfig.resolve()` 自动补齐 base_url/api_key，未注册 provider 只需显式写 base_url。
 - **agent.py 膨胀到 1186 行**：集成 Stream/NonStream Provider 双模式、RecoveryPipeline、LoopPolicy、Hooks emit、ToolGuard、Observer、Session 持久化。是下一步重构目标。
 
@@ -180,7 +180,7 @@
 | `discovery.py` | 🟢 NEW | `PluginDiscovery` 无副作用发现器：entry_points(group="merco.plugins") + `plugins_paths` 目录扫描（plugin.toml manifest，`importlib.util.spec_from_file_location` 单文件加载，零 sys.path 污染）。同名目录覆盖 entry_points；enabled 过滤 + DFS 循环检测 + 存在性闭包剪枝。~190 行。 |
 | `manager.py` | 🟢 REAL | PluginManager：`register_all(specs)` / `_resolve_order`(Kahn 拓扑 + `(-priority,name)` tiebreak) / `activate_boot`(priority>=100) / `activate` 懒实例化 + dep-active 检查 / `_emit_error`。emit `plugin.activated`/`deactivated`/`error`。 |
 | `base.py` | 🟢 REAL | `Plugin` ABC(+`priority`/`depends_on`) + `PluginSpec` dataclass(懒加载 `load_cls`/`instantiate`) + `PluginContext`(**23** 注入属性 + **11** 便捷方法 `register_agent_profile`/`register_loop_policy`/`add_memory_backend`/`add_security_policy`/`register_model_provider`/`register_gateway`)。Wave 3 加 `gateway_registry` + `register_gateway`。 |
-| `builtin/` | 🟢 REAL | **8 个** builtin（observability/skills/mcp/subagent/web/scheduler/superpower/**gateway**）经 entry_points 发现，priority 标注 (100/60/50/40/30/20/10/**25**)。Wave 3 新增 GatewayPlugin（priority=25）。 |
+| `builtin/` | 🟢 REAL | **8 个** builtin（observability/skills/mcp/subagent/web/**gateway**/scheduler/superpower）经 entry_points 发现，priority 标注 (100/60/50/40/30/25/20/10)。Wave 3 新增 GatewayPlugin（priority=25）。 |
 
 ### merco/mcp/ — MCP Integration
 
@@ -249,7 +249,7 @@
 
 | File | Status | Details |
 |------|--------|---------|
-| `guard.py` | 🟢 REAL | `ToolGuard`：30 条默认 ask 规则链。166 行。 |
+| `guard.py` | 🟢 REAL | `ToolGuard`：28 条默认 ask 规则链。166 行。 |
 | `confirm.py` | 🟢 REAL | edit_file 确认交互。 |
 | `isolation.py` | 🟢 REAL | `SandboxIsolation`：临时目录创建/白名单/只读/穿越检测/清理。 |
 | `permissions.py` | 🟢 REAL | `PermissionManager`：allow/ask/deny 模式。 |
@@ -340,7 +340,7 @@
 
 > **生态已收敛**：插件/模型/gateway 三大动态化完成，代码零技术债（ruff=0 + pre-commit），999 测试全绿。下一步不再围绕"接上去"，而是围绕"用起来更聪明"。
 
-### 下一站候选方向：`Self-Improving Agent Loop`（prompt-level 自进化）
+### 下一站候选方向：`Gateway 生态扩展`（Telegram/Discord 适配器；详见 `references/next-focus.md`）
 
 详细设计见 `references/next-focus.md`（决策中→下一步进 brainstorming）。核心机制：
 - 订阅 `tool.error` / `conversation.turn` / `llm.chat` → `FeedbackDetector` 识别触发条件（连续 N 次同 tool 失败 / 单次 token 超阈值 / 用户反复纠正）；

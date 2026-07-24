@@ -591,7 +591,7 @@ Agent.run(prompt)
        │
        ├─ Hooks → emit("conversation.turn")         ← ✅ v0.3.0
        │
-       ├─ ToolGuard.check() → 拦截/确认/放行        ← ✅ v0.2.0 (30 条默认 ask 规则)
+       ├─ ToolGuard.check() → 拦截/确认/放行        ← ✅ v0.2.0 (28 条默认 ask 规则)
        ├─ Hooks → emit("tool.before_execute")       ← ✅ v0.3.0
        ├─ ToolRegistry.execute() + ToolHooks        ← ✅ v0.2.0
        ├─ Observer._on_tool() / _on_error()         ← ✅ v0.2.0 (订阅 hooks)
@@ -765,7 +765,7 @@ while (循环条件) is (未达到 max_tool_calls)
       :ToolGuard.check();
       note right
         规则链匹配：
-        - 30 条默认 ask 规则
+        - 28 条默认 ask 规则
         - 用户自定义规则优先级最高
         - action: ask / deny / allow
       end note
@@ -1111,7 +1111,7 @@ class ToolGuard:
         """返回 True=放行"""
 ```
 
-**30 条默认 ask 规则**（覆盖 rm/sudo/pip/docker/system 敏感点）：
+**28 条默认 ask 规则**（覆盖 rm/sudo/pip/docker/system 敏感点）：
 
 ```python
 _DEFAULT_RULES = [
@@ -1120,7 +1120,7 @@ _DEFAULT_RULES = [
     GuardRule("bash", "git push", "ask"),
     GuardRule("bash", "pip install", "ask"),
     GuardRule("bash", "docker rm", "ask"),
-    # ... 30 条
+    # ... 28 条
 ]
 ```
 

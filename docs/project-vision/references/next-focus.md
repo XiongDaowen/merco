@@ -11,7 +11,7 @@
 |------------|------|----------|------|
 | **插件动态化 波1** | 2026-07-23 | `PluginDiscovery` (entry_points + 目录扫描) + `PluginSpec` + `PluginManager` (Kahn 拓扑 + priority) + 两阶段 boot；7 个 builtin 经 entry_points | commit `d99cc87` |
 | **插件动态化 波2** | 2026-07-23 | `ModelProvider` ABC + `ModelRegistry` 单一真相源 + `OpenAICompatibleProvider` / `AnthropicNativeProvider`；凭证解析归 `select()` 独占 | commit `4951099` |
-| **插件动态化 波3** | 2026-07-24 | `GatewayAdapter` ABC + `GatewayRegistry` + `WebhookGateway` 参考适配器 + `AgentRuntime` 薄宿主；CLI 单事件循环重构；删 5 死文件 | commit `d92d958` |
+| **插件动态化 波3** | 2026-07-24 | `GatewayAdapter` ABC + `GatewayRegistry` + `WebhookGateway` 参考适配器 + `AgentRuntime` 薄宿主；CLI 单事件循环重构；删 6 死文件 | commit `d92d958` |
 | **去债浪潮** | 2026-07-24 | ruff 498→0（零规则禁用，纯修根因）；`.pre-commit-config.yaml` 本地 `uv run ruff` 钩子；T1-T8 八任务全绿 | commit `d92d958` |
 | **测试跳过修复** | 2026-07-24 | dash `printf` 不支持 `\x` 十六进制转义——真 bug，cat 二进制文件替 printf | commit `e7dd024` |
 
@@ -49,7 +49,7 @@
 - **Wave 3 单 session 简化**：`handle_inbound` 当前 `agent.run(message)`，`chat_id` 保留前向兼容**但不启用 per-chat_id 隔离**（spec §6 descope）。
 - `GatewayPlugin` 第 8 内置插件 priority=**25**；`PluginContext.gateway_registry` + `register_gateway()` 新增（11 个便捷方法）。
 - CLI 单事件循环重构：`_setup_agent()` 改 sync 返回**未启动** Runtime；`repl()` 内 `await runtime.start()` / `finally: await runtime.stop()`；全文件仅一处 `asyncio.run(repl())`（cli/main.py:571）。
-- 删 5 死文件：`cli/tui.py` / `merco/tools/mcp_tools.py` / `merco/gateway/{telegram,discord}.py` / `merco/scheduler/{delivery,jobs}.py`。
+- 删 6 死文件：`cli/tui.py` / `merco/tools/mcp_tools.py` / `merco/gateway/{telegram,discord}.py` / `merco/scheduler/{delivery,jobs}.py`。
 
 ### 去债浪潮（commit `d92d958`，T1-T8）
 - T1 死代码 stub 删除（`ab20c07`）：`cli/tui.py`（Phase 7 TUI 占位）+ `merco/tools/mcp_tools.py`（MCP 真身在 `merco/mcp/`，此为 stub）。
