@@ -32,9 +32,9 @@ app = typer.Typer(
 
 # ── 启动首页 Dashboard ──────────────────────────────────────────────
 
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod  # noqa: E402 - Dashboard 区段分组导入
 
-import merco
+import merco  # noqa: E402 - Dashboard 区段分组（__version__）
 
 
 class DashboardSection(ABC):
@@ -186,7 +186,8 @@ def _setup_agent(config_path: str | None, model: str | None, api_key: str | None
                     "首次使用？运行 [bold]merco setup[/bold] 交互式配置，一分钟搞定。\n\n"
                     "也可以手动——选一种就行：\n"
                     "  [bold]• OpenAI：[/bold] export [dim]OPENAI_API_KEY=sk-...[/dim] 然后 [dim]merco run[/dim]\n"
-                    '  [bold]• 其他平台：[/bold] [dim]merco.json[/dim] 写 [dim]"model": {"provider": "deepseek", "api_key": "sk-..."}[/dim]\n'
+                    "  [bold]• 其他平台：[/bold] [dim]merco.json[/dim] 写 "
+                    '[dim]"model": {"provider": "deepseek", "api_key": "sk-..."}[/dim]\n'
                     "  [bold]• 临时启动：[/bold] [dim]merco run -k sk-...[/dim]",
                     title="⚙️ 需要配置",
                     border_style="yellow",

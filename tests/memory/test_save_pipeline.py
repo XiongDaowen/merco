@@ -2,7 +2,14 @@
 
 import pytest
 
-from merco.memory.save_pipeline import SOURCE_PRIORITY, SaveItem
+from merco.memory.save_pipeline import (
+    SOURCE_PRIORITY,
+    DedupProcessor,
+    MemorySavePipeline,
+    MemorySaveProcessor,
+    SaveItem,
+    SourceEnricher,
+)
 
 
 def test_save_item_creation():
@@ -20,10 +27,6 @@ def test_source_priority_ordering():
     """source 优先级 user > extracted > system"""
     assert SOURCE_PRIORITY["user"] > SOURCE_PRIORITY["extracted"]
     assert SOURCE_PRIORITY["extracted"] > SOURCE_PRIORITY["system"]
-
-
-
-from merco.memory.save_pipeline import SourceEnricher
 
 
 @pytest.mark.asyncio
@@ -46,9 +49,6 @@ async def test_source_enricher_does_not_duplicate_prefix():
     result = await enricher.process(item)
     assert result is not None
     assert result.tags.count("[user]") == 1
-
-
-from merco.memory.save_pipeline import DedupProcessor
 
 
 class FakeStore:
@@ -101,9 +101,6 @@ async def test_dedup_infer_source_from_tags():
     item = SaveItem(key="k1", value="new", source="extracted")
     result = await proc.process(item)
     assert result is not None
-
-
-from merco.memory.save_pipeline import MemorySavePipeline, MemorySaveProcessor
 
 
 class FakeHooks:

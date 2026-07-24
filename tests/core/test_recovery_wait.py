@@ -5,7 +5,7 @@ import pytest
 from merco.core.pipeline import RecoveryContext
 
 
-class _FakeExc(Exception):
+class _FakeExc(Exception):  # noqa: N818 - 测试桩异常
     def __init__(self, msg="err", status_code=None):
         super().__init__(msg)
         self.status_code = status_code
@@ -76,7 +76,7 @@ class TestWaitRecovery:
 
         rec = WaitRecovery(delay=3.0)
 
-        class ConnErr(Exception):
+        class ConnErr(Exception):  # noqa: N818 - 测试桩异常
             pass
 
         ctx = RecoveryContext(error=ConnErr("connection refused"))
@@ -89,7 +89,7 @@ class TestWaitRecovery:
 
         rec = WaitRecovery(delay=3.0)
 
-        class TimeoutErr(Exception):
+        class TimeoutErr(Exception):  # noqa: N818 - 测试桩异常
             pass
 
         ctx = RecoveryContext(error=TimeoutErr("read timeout"))

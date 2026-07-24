@@ -732,8 +732,8 @@ class Agent:
                 result = {"error": "操作已被拦截或取消"}
 
             elif self.tool_registry:
-                _INTERACTIVE_TOOLS = {"edit_file"}  # 会弹确认提示的工具，不能用 spinner（会覆盖终端）
-                if tool_name in _INTERACTIVE_TOOLS:
+                _interactive_tools = {"edit_file"}  # 会弹确认提示的工具，不能用 spinner（会覆盖终端）
+                if tool_name in _interactive_tools:
                     console.print(f"[bright_black]  ⚙ {tool_name} ({progress}) {arg_str}[/bright_black]")
                     try:
                         await self.hooks.emit("tool.before_execute", tool_name=tool_name, args=arguments)
@@ -774,7 +774,8 @@ class Agent:
                                 while not task.done():
                                     live.update(
                                         Text.from_markup(
-                                            f"[bright_black]  {next(spinner)} {tool_name} ({progress}) {arg_str}[/bright_black]"
+                                            f"[bright_black]  {next(spinner)} {tool_name} "
+                                            f"({progress}) {arg_str}[/bright_black]"
                                         )
                                     )
                                     await asyncio.sleep(0.1)

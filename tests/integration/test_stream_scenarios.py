@@ -257,7 +257,6 @@ async def test_tool_calls_with_streaming(stream_agent, quiet_console):
         ]
     )
     # Override to provide second response after tool execution
-    original_stream = stream_agent.provider.chat_stream
     call_count = [0]
 
     async def multi_turn_stream(messages, tools=None, tool_choice="auto"):
@@ -359,7 +358,7 @@ async def test_interrupt_during_streaming(stream_agent, quiet_console):
     # The cancelling_stream already raises CancelledError internally
     # which should be caught by the provider's checkpoint
     try:
-        result = await task
+        await task
     except asyncio.CancelledError:
         pass  # Expected
 

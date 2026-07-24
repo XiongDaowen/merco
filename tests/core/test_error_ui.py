@@ -9,7 +9,7 @@ from merco.core.llm.error_ui import (
 )
 
 
-class _FakeExc(Exception):
+class _FakeExc(Exception):  # noqa: N818 - 测试桩异常
     def __init__(self, msg="boom", status_code=None):
         super().__init__(msg)
         self.status_code = status_code
@@ -48,14 +48,14 @@ class TestClassifyError:
             assert str(code) in info.label
 
     def test_timeout_exception(self):
-        class TimeoutExc(Exception):
+        class TimeoutExc(Exception):  # noqa: N818 - 测试桩异常
             pass
 
         info = classify_error(TimeoutExc("read timeout"))
         assert "超时" in info.label
 
     def test_connection_exception(self):
-        class ConnExc(Exception):
+        class ConnExc(Exception):  # noqa: N818 - 测试桩异常
             pass
 
         info = classify_error(ConnExc("connection refused"))
@@ -101,10 +101,10 @@ class TestSanitizeMessage:
         assert "脱敏" not in msg
 
 
-from rich.panel import Panel
+from rich.panel import Panel  # noqa: E402 - 与 TestBuildErrorPanel 分组
 
 
-class _DummyExc(Exception):
+class _DummyExc(Exception):  # noqa: N818 - 测试桩异常
     def __init__(self, msg="boom", status_code=None):
         super().__init__(msg)
         self.status_code = status_code

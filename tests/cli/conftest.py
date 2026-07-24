@@ -47,7 +47,7 @@ def capture_console(monkeypatch):
     return capture, buf
 
 
-from merco.core.config import StreamingConfig
+from merco.core.config import StreamingConfig  # noqa: E402 - 与 make_fake_agent 分组
 
 
 def make_fake_agent(

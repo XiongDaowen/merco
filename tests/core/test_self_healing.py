@@ -5,7 +5,7 @@ import pytest
 from merco.core.pipeline import RecoveryContext
 
 
-class _FakeExc(Exception):
+class _FakeExc(Exception):  # noqa: N818 - 测试桩异常
     def __init__(self, msg="err", status_code=None):
         super().__init__(msg)
         self.status_code = status_code

@@ -202,8 +202,8 @@ async def test_chain_before_returns_context_continues():
 
 # ── Task 2: GuardMiddleware + ErrorHandlingMiddleware ───────
 
-from merco.sandbox.guard import GuardAction, GuardConfirmationRequired, GuardResult
-from merco.tools.middleware import ErrorHandlingMiddleware, GuardMiddleware
+from merco.sandbox.guard import GuardAction, GuardConfirmationRequired, GuardResult  # noqa: E402 - Task 2 区段分组
+from merco.tools.middleware import ErrorHandlingMiddleware, GuardMiddleware  # noqa: E402 - Task 2 区段分组
 
 
 class StubGuard:

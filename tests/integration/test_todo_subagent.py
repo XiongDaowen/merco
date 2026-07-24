@@ -36,7 +36,7 @@ class TestTodoSubAgentE2E:
         )
 
         # ── 5. 派发 ──
-        subagent_id = await manager.dispatch(todo.id, "执行任务")
+        await manager.dispatch(todo.id, "执行任务")
 
         # ── 6. 验证 Todo 状态 ──
         updated = todo_manager.get(todo.id)
@@ -68,7 +68,7 @@ class TestTodoSubAgentE2E:
             )
         )
 
-        subagent_id = await manager.dispatch(todo.id, "执行会失败")
+        await manager.dispatch(todo.id, "执行会失败")
 
         # Todo 应标记为 failed
         updated = todo_manager.get(todo.id)

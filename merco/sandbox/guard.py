@@ -40,7 +40,7 @@ class GuardResult:
     reason: str = ""
 
 
-class GuardConfirmationRequired(Exception):
+class GuardConfirmationRequired(Exception):  # noqa: N818 - 确认信号非 Error 语义
     """需要用户确认才能继续执行"""
 
     def __init__(self, result: GuardResult):

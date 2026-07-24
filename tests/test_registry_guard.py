@@ -42,7 +42,7 @@ async def test_registry_calls_guard(registry):
     mock_guard.check = AsyncMock(return_value=GuardResult(action=GuardAction.ALLOW, command=""))
 
     mw = GuardMiddleware(mock_guard)
-    idx = registry._middleware.use(mw)
+    registry._middleware.use(mw)
     try:
         result = await registry.execute("mock_tool_test")
 

@@ -1,7 +1,6 @@
 """技能注册与管理"""
 
 
-
 class SkillRegistry:
     """技能注册表"""
 

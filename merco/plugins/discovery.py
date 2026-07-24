@@ -75,7 +75,10 @@ class PluginDiscovery:
             return None
         if not self._is_enabled(name):
             return None
-        loader = lambda pd=pdir, en=entry: _load_class_from_dir(pd, en)
+
+        def loader(pd=pdir, en=entry):
+            return _load_class_from_dir(pd, en)
+
         spec = PluginSpec(
             name=name,
             source="dir",
@@ -143,27 +146,27 @@ class PluginDiscovery:
 
     def _find_cycles(self, specs: dict[str, PluginSpec]) -> set[str]:
         """DFS 检测参与循环的节点名集合。"""
-        WHITE, GRAY, BLACK = 0, 1, 2
-        color = {n: WHITE for n in specs}
+        white, gray, black = 0, 1, 2
+        color = {n: white for n in specs}
         cyclic: set[str] = set()
 
         def visit(n, stack):
-            color[n] = GRAY
+            color[n] = gray
             stack.append(n)
             for dep in specs[n].depends_on:
                 if dep not in specs:
                     continue  # 已被存在性剪枝处理
-                if color[dep] == GRAY:
+                if color[dep] == gray:
                     # 找到环：stack 中从 dep 起的部分
                     idx = stack.index(dep)
                     cyclic.update(stack[idx:])
-                elif color[dep] == WHITE:
+                elif color[dep] == white:
                     visit(dep, stack)
             stack.pop()
-            color[n] = BLACK
+            color[n] = black
 
         for n in specs:
-            if color[n] == WHITE:
+            if color[n] == white:
                 visit(n, [])
         return cyclic
 

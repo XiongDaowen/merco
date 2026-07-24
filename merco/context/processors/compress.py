@@ -36,14 +36,14 @@ class CompressProcessor(ContextProcessor):
 
     async def _sliding(self, messages: list[dict], summary_fn=None) -> list[dict]:
         """滑动窗口压缩 — 保留最后 2 轮原文 + 摘要旧消息"""
-        TAIL_TURNS = 2
+        tail_turns = 2
 
         tail_start = 0
         user_count = 0
         for i in range(len(messages) - 1, -1, -1):
             if messages[i].get("role") == "user":
                 user_count += 1
-                if user_count >= TAIL_TURNS:
+                if user_count >= tail_turns:
                     tail_start = i
                     break
 

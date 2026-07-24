@@ -83,7 +83,7 @@ def test_select_known_builtin_still_works():
 
 def test_register_third_party():
     reg = ModelRegistry()
-    Fake = MagicMock()
-    info = ModelProviderInfo(name="gemini", provider_class=Fake, display_name="Gemini")
+    fake = MagicMock()
+    info = ModelProviderInfo(name="gemini", provider_class=fake, display_name="Gemini")
     reg.register(info)
     assert reg.get("gemini") is info

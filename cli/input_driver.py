@@ -1,6 +1,17 @@
 """Terminal input abstraction. Phase 2: PromptToolkitInput. Phase 4: Textual reuse."""
 
+import os
+import time
 from abc import ABC, abstractmethod
+from pathlib import Path
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.keys import Keys
+from prompt_toolkit.styles import Style
 
 
 class InputDriver(ABC):
@@ -12,22 +23,10 @@ class InputDriver(ABC):
         ...
 
 
-import os
-import time
-from pathlib import Path
-
-from prompt_toolkit import PromptSession
-from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit.history import FileHistory
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.keys import Keys
-from prompt_toolkit.styles import Style
-
 _PASTE_THRESHOLD = 500  # chars threshold for paste archive
 
 
-class InputInterrupt(Exception):
+class InputInterrupt(Exception):  # noqa: N818 - Ctrl+C 中断信号，非 Error 语义
     """Raised by PromptToolkitInput when Ctrl+C pressed with empty buffer."""
 
 

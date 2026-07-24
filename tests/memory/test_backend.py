@@ -44,7 +44,7 @@ class TestMemoryBackendABC:
         assert b.load("k1")["value"] == "v1"
 
 
-from merco.memory.backends.json_backend import JSONBackend
+from merco.memory.backends.json_backend import JSONBackend  # noqa: E402 - 与 TestJSONBackend 分组
 
 
 class TestJSONBackend:
