@@ -124,13 +124,11 @@ class ThinkTagStrategy(ThinkingStrategy):
 
     def __init__(self):
         self._in_thinking = False
-        self._open_tag = ""
-        self._close_tag = ""
+        self._close_tags: list[str] = []
 
     def reset(self) -> None:
         self._in_thinking = False
-        self._open_tag = ""
-        self._close_tag = ""
+        self._close_tags = []
 
     def extract_from_delta(self, delta: Any) -> dict | None:
         content = getattr(delta, "content", None) or ""
@@ -139,8 +137,16 @@ class ThinkTagStrategy(ThinkingStrategy):
 
         if self._in_thinking:
             # 继续处理跨 chunk 的 think 块
-            if self._close_tag in content:
-                before_close, after_close = content.split(self._close_tag, 1)
+            # 找最先出现的候选闭标签（同开标签可能有多个闭标签，如 <think> -> [/think] 或 </think>）
+            earliest_idx = -1
+            earliest_tag = ""
+            for ct in self._close_tags:
+                idx = content.find(ct)
+                if idx != -1 and (earliest_idx == -1 or idx < earliest_idx):
+                    earliest_idx = idx
+                    earliest_tag = ct
+            if earliest_tag:
+                before_close, after_close = content.split(earliest_tag, 1)
                 self._in_thinking = False
                 result: dict = {}
                 if before_close:
@@ -166,12 +172,16 @@ class ThinkTagStrategy(ThinkingStrategy):
                     # 例如 ("<think>", "[/think]") 与 ("<think>", "</think>")）
                     # 如果所有标签对都不匹配，再走跨 chunk 分支
             # 全部标签对都不匹配：进入跨 chunk 状态机，等待闭标签
-            for ot, ct in THINK_TAG_PAIRS:
+            # 收集唯一开标签（保序），命中第一个就进入状态机
+            seen_open: set[str] = set()
+            for ot, _ct in THINK_TAG_PAIRS:
+                if ot in seen_open:
+                    continue
+                seen_open.add(ot)
                 if ot in content:
                     before_open, rest = content.split(ot, 1)
                     self._in_thinking = True
-                    self._open_tag = ot
-                    self._close_tag = ct
+                    self._close_tags = [ct for (o, ct) in THINK_TAG_PAIRS if o == ot]
                     result: dict = {"reasoning": rest, "content": before_open}
                     return result
             return {"content": content}

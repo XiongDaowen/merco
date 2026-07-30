@@ -177,6 +177,30 @@ class TestThinkTagStrategy:
         assert result2["content"] == "answer"
         assert strategy._in_thinking is False
 
+    def test_extract_from_delta_cross_chunk_standard_close_tag(self):
+        """跨 chunk：开标签 <think> 在 chunk1，标准 </think> 闭标签在 chunk2。
+
+        回归 MiniMax/DeepSeek 流式场景：THINK_TAG_PAIRS 里 ([/think]) 排在
+        (</think>) 前面，旧状态机只记第一个闭标签 -> 错配 [/think]，
+        </think> 永远匹配不上，</think> 后的回复被吞进 reasoning、content 空。
+        """
+        strategy = ThinkTagStrategy()
+        delta1 = SimpleNamespace(content="<think>part1")
+        delta2 = SimpleNamespace(content="part2</think>answer")
+
+        result1 = strategy.extract_from_delta(delta1)
+        assert result1["reasoning"] == "part1"
+        assert result1["content"] == ""
+        assert strategy._in_thinking is True
+        # 锁机制：进入状态机时该开标签的所有候选闭标签都进入 _close_tags
+        # （如果未来"回退"成只记一个闭标签，MiniMax/DeepSeek 的 </think> 会再次失配）
+        assert strategy._close_tags == ["[/think]", "</think>"]
+
+        result2 = strategy.extract_from_delta(delta2)
+        assert result2["reasoning"] == "part2"
+        assert result2["content"] == "answer"
+        assert strategy._in_thinking is False
+
     def test_extract_from_delta_cross_chunk_only_open(self):
         """跨 chunk 提取：只有开标签，后续 chunk 仍处于 thinking 状态。"""
         strategy = ThinkTagStrategy()
@@ -201,16 +225,14 @@ class TestThinkTagStrategy:
         assert result["content"] == "</think>answer"
 
     def test_extract_from_delta_reset(self):
-        """状态重置：_in_thinking / _open_tag / _close_tag 全部清空。"""
+        """状态重置：_in_thinking / _close_tags 全部清空。"""
         strategy = ThinkTagStrategy()
         strategy._in_thinking = True
-        strategy._open_tag = "<think>"
-        strategy._close_tag = "</think>"
+        strategy._close_tags = ["[/think]", "</think>"]
 
         strategy.reset()
         assert strategy._in_thinking is False
-        assert strategy._open_tag == ""
-        assert strategy._close_tag == ""
+        assert strategy._close_tags == []
 
 
 # ── DirectFieldStrategy ─────────────────────
