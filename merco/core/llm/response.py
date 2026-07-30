@@ -28,7 +28,13 @@ logger = logging.getLogger("merco.agent")
 
 def _build_reasoning_panel(text: str) -> Panel:
     return Panel(
-        f"[dim]{text.rstrip()}[/dim]", border_style="dim", title="🧠 思考中…", title_align="left", padding=(0, 1)
+        # 去 LLM 输出开头/末尾的空白（很多模型 reasoning 习惯以 \n 起头/收尾），
+        # 但保留内部换行结构。不能用 .strip()——会把内部空行也剥掉。
+        f"[dim]{text.lstrip().rstrip()}[/dim]",
+        border_style="dim",
+        title="🧠 思考中…",
+        title_align="left",
+        padding=(0, 1),
     )
 
 
