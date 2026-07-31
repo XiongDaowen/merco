@@ -65,6 +65,8 @@ class MercoConfig:
     fork_enabled: bool = True
     fork_auto_on_compress: bool = True
     fork_reset_observer: bool = False  # default: inherit observer acc on fork
+    session_summarize: bool = True  # fork/切换会话时生成分支摘要
+    session_summarize_min_messages: int = 8  # 低于此数不总结
     mcp_servers: dict = field(default_factory=dict)
     plugins: dict = field(default_factory=dict)
 
@@ -147,6 +149,8 @@ class MercoConfig:
                 "fork_enabled": self.fork_enabled,
                 "fork_auto_on_compress": self.fork_auto_on_compress,
                 "fork_reset_observer": self.fork_reset_observer,
+                "summarize": self.session_summarize,
+                "summarize_min_messages": self.session_summarize_min_messages,
             },
             "mcp_servers": self.mcp_servers,
             "plugins": self.plugins,
@@ -230,6 +234,8 @@ class MercoConfig:
             fork_enabled=sess.get("fork_enabled", True),
             fork_auto_on_compress=sess.get("fork_auto_on_compress", True),
             fork_reset_observer=isinstance(sess, dict) and sess.get("fork_reset_observer", False),
+            session_summarize=sess.get("summarize", True),
+            session_summarize_min_messages=sess.get("summarize_min_messages", 8),
             mcp_servers=data.get("mcp_servers", {}),
             plugins=data.get("plugins", {}),
         )
