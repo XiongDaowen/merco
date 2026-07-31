@@ -41,6 +41,9 @@ class SessionStore:
                     updated_at    TEXT NOT NULL,
                     message_count INTEGER DEFAULT 0,
                     parent_id     TEXT,
+                    total_tokens_in     INTEGER DEFAULT 0,
+                    total_tokens_out    INTEGER DEFAULT 0,
+                    total_cached_tokens INTEGER DEFAULT 0,
                     metadata      TEXT DEFAULT '{}'
                 );
 
@@ -52,6 +55,7 @@ class SessionStore:
                     tool_call_id  TEXT DEFAULT '',
                     tool_calls    TEXT DEFAULT '[]',
                     reasoning     TEXT DEFAULT '',
+                    usage         TEXT DEFAULT '{}',
                     timestamp     TEXT NOT NULL,
                     FOREIGN KEY (session_id) REFERENCES sessions(id)
                 );
@@ -64,6 +68,18 @@ class SessionStore:
                 conn.execute("ALTER TABLE sessions ADD COLUMN metadata TEXT DEFAULT '{}'")
             except Exception:
                 pass  # 列已存在
+
+            # 兼容已有数据库：加 usage / 聚合列
+            for stmt in (
+                "ALTER TABLE messages ADD COLUMN usage TEXT DEFAULT '{}'",
+                "ALTER TABLE sessions ADD COLUMN total_tokens_in INTEGER DEFAULT 0",
+                "ALTER TABLE sessions ADD COLUMN total_tokens_out INTEGER DEFAULT 0",
+                "ALTER TABLE sessions ADD COLUMN total_cached_tokens INTEGER DEFAULT 0",
+            ):
+                try:
+                    conn.execute(stmt)
+                except Exception:
+                    pass  # 列已存在
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)

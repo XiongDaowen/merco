@@ -281,3 +281,44 @@ class TestIntegrityCheck:
 
             result = store.check_integrity()
             assert result is True
+
+
+class TestUsageMigration:
+    """测试旧库（无 usage/聚合列）迁移"""
+
+    def test_old_db_migrates_usage_columns(self, tmp_path):
+        """建一个旧 schema 的 DB，SessionStore 打开后应补上 usage / 聚合列。"""
+        import sqlite3
+
+        db_path = str(tmp_path / "old_schema.db")
+        conn = sqlite3.connect(db_path)
+        conn.executescript(
+            """
+            CREATE TABLE sessions (
+                id TEXT PRIMARY KEY, title TEXT DEFAULT '',
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                message_count INTEGER DEFAULT 0, parent_id TEXT,
+                metadata TEXT DEFAULT '{}'
+            );
+            CREATE TABLE messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
+                role TEXT NOT NULL, content TEXT DEFAULT '',
+                tool_call_id TEXT DEFAULT '', tool_calls TEXT DEFAULT '[]',
+                reasoning TEXT DEFAULT '', timestamp TEXT NOT NULL
+            );
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        # 打开 -> _ensure_db 跑 ALTER 加列
+        SessionStore(db_path)
+
+        # 验证四列已存在（save_message usage 处理 + 聚合见 Task 2/3）
+        with sqlite3.connect(db_path) as c:
+            msg_cols = {r[1] for r in c.execute("PRAGMA table_info(messages)")}
+            sess_cols = {r[1] for r in c.execute("PRAGMA table_info(sessions)")}
+        assert "usage" in msg_cols
+        assert "total_tokens_in" in sess_cols
+        assert "total_tokens_out" in sess_cols
+        assert "total_cached_tokens" in sess_cols
