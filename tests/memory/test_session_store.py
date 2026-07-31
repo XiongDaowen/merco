@@ -324,6 +324,24 @@ class TestUsageMigration:
         assert "total_cached_tokens" in sess_cols
 
 
+class TestListSessionsAggregates:
+    """测试 list_sessions 返回聚合列"""
+
+    def test_list_sessions_includes_aggregates(self, tmp_path):
+        db_path = str(tmp_path / "list_agg.db")
+        store = SessionStore(db_path)
+        store.create_session("s1")
+        store.save_message(
+            "s1", "assistant", "hi",
+            usage={"tokens_in": 42, "tokens_out": 7, "cached_tokens": 0},
+        )
+        sessions = store.list_sessions()
+        assert len(sessions) == 1
+        assert sessions[0]["total_tokens_in"] == 42
+        assert sessions[0]["total_tokens_out"] == 7
+        assert sessions[0]["total_cached_tokens"] == 0
+
+
 class TestSaveMessageUsage:
     """测试 save_message 的 usage 落库与聚合"""
 

@@ -274,7 +274,8 @@ class SessionStore:
     def list_sessions(self, limit: int = 20) -> list[dict]:
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT id, title, created_at, updated_at, message_count "
+                "SELECT id, title, created_at, updated_at, message_count, "
+                "total_tokens_in, total_tokens_out, total_cached_tokens "
                 "FROM sessions ORDER BY updated_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
