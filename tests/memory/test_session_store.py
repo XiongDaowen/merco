@@ -322,3 +322,48 @@ class TestUsageMigration:
         assert "total_tokens_in" in sess_cols
         assert "total_tokens_out" in sess_cols
         assert "total_cached_tokens" in sess_cols
+
+
+class TestSaveMessageUsage:
+    """测试 save_message 的 usage 落库与聚合"""
+
+    def test_usage_increments_aggregates(self, tmp_path):
+        db_path = str(tmp_path / "usage.db")
+        store = SessionStore(db_path)
+        store.create_session("s1")
+        store.save_message(
+            "s1", "assistant", "hi",
+            usage={"tokens_in": 100, "tokens_out": 20, "cached_tokens": 30},
+        )
+        store.save_message(
+            "s1", "assistant", "again",
+            usage={"tokens_in": 50, "tokens_out": 10, "cached_tokens": 0},
+        )
+        s = store.load_session("s1")
+        assert s["total_tokens_in"] == 150
+        assert s["total_tokens_out"] == 30
+        assert s["total_cached_tokens"] == 30
+
+    def test_non_assistant_message_no_usage_no_increment(self, tmp_path):
+        db_path = str(tmp_path / "no_usage.db")
+        store = SessionStore(db_path)
+        store.create_session("s1")
+        store.save_message("s1", "user", "hello")  # 无 usage
+        store.save_message("s1", "tool", '{"result": 1}', tool_call_id="c1")
+        s = store.load_session("s1")
+        assert s["total_tokens_in"] == 0
+        assert s["total_tokens_out"] == 0
+        assert s["total_cached_tokens"] == 0
+        # 消息行 usage 为空 dict
+        assert s["messages"][0]["usage"] == {}
+
+    def test_load_session_returns_usage_on_message(self, tmp_path):
+        db_path = str(tmp_path / "load_usage.db")
+        store = SessionStore(db_path)
+        store.create_session("s1")
+        store.save_message(
+            "s1", "assistant", "hi",
+            usage={"tokens_in": 10, "tokens_out": 5, "cached_tokens": 0},
+        )
+        s = store.load_session("s1")
+        assert s["messages"][0]["usage"] == {"tokens_in": 10, "tokens_out": 5, "cached_tokens": 0}

@@ -187,10 +187,12 @@ class SessionStore:
         tool_call_id: str = "",
         tool_calls: list | None = None,
         reasoning: str = "",
+        usage: dict | None = None,
     ) -> int:
-        """保存消息，支持重试"""
+        """保存消息，支持重试。usage 非空时同事务累加会话级聚合列。"""
         now = _now()
         tc_json = json.dumps(tool_calls or [], ensure_ascii=False)
+        usage_json = json.dumps(usage or {}, ensure_ascii=False)
         last_error = None
 
         for attempt in range(3):
@@ -198,10 +200,23 @@ class SessionStore:
                 with self._conn() as conn:
                     cur = conn.execute(
                         "INSERT INTO messages (session_id, role, content, tool_call_id, "
-                        "tool_calls, reasoning, timestamp) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (session_id, role, content, tool_call_id, tc_json, reasoning, now),
+                        "tool_calls, reasoning, usage, timestamp) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (session_id, role, content, tool_call_id, tc_json, reasoning, usage_json, now),
                     )
+                    if usage:
+                        tin = int(usage.get("tokens_in", 0) or 0)
+                        tout = int(usage.get("tokens_out", 0) or 0)
+                        tcached = int(usage.get("cached_tokens", 0) or 0)
+                        if tin or tout or tcached:
+                            conn.execute(
+                                "UPDATE sessions SET "
+                                "total_tokens_in = total_tokens_in + ?, "
+                                "total_tokens_out = total_tokens_out + ?, "
+                                "total_cached_tokens = total_cached_tokens + ? "
+                                "WHERE id = ?",
+                                (tin, tout, tcached, session_id),
+                            )
                     conn.execute(
                         "UPDATE sessions SET updated_at = ?, message_count = message_count + 1 WHERE id = ?",
                         (now, session_id),
@@ -238,6 +253,9 @@ class SessionStore:
             "updated_at": row["updated_at"],
             "message_count": row["message_count"],
             "parent_id": row["parent_id"],
+            "total_tokens_in": row["total_tokens_in"],
+            "total_tokens_out": row["total_tokens_out"],
+            "total_cached_tokens": row["total_cached_tokens"],
             "metadata": json.loads(row["metadata"] or "{}"),
             "messages": [
                 {
@@ -246,6 +264,7 @@ class SessionStore:
                     "tool_call_id": m["tool_call_id"],
                     "tool_calls": json.loads(m["tool_calls"]),
                     "reasoning": m["reasoning"],
+                    "usage": json.loads(m["usage"] or "{}"),
                     "timestamp": m["timestamp"],
                 }
                 for m in messages
