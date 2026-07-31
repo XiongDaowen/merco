@@ -50,6 +50,7 @@ class Session:
                 tool_call_id=msg.get("tool_call_id", ""),
                 tool_calls=msg.get("tool_calls"),
                 reasoning=msg.get("reasoning", ""),
+                usage=msg.get("usage"),
             )
         self._dirty = False
 
