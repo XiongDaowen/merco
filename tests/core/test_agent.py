@@ -749,3 +749,57 @@ async def test_agent_has_provider_property_and_model_registry(monkeypatch, tmp_p
     assert agent.model_registry.get("openai").name == "openai"
 
     # provider is the canonical interface (legacy llm alias removed in Task 16)
+
+
+class TestUsageCapture:
+    """测试 Agent 把 response.usage 挂到 assistant 消息并落库"""
+
+    @pytest.mark.asyncio
+    async def test_assistant_message_carries_usage(self, test_agent):
+        """exit 路径：response 带 usage -> session 消息有 usage -> 落库后聚合正确"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider(
+            [{"content": "hello", "usage": {"prompt_tokens": 100, "completion_tokens": 20, "cached_tokens": 5}}]
+        )
+        await test_agent.run("hi")
+        asst = [m for m in test_agent.session.messages if m["role"] == "assistant"][0]
+        assert asst["usage"] == {"tokens_in": 100, "tokens_out": 20, "cached_tokens": 5}
+        test_agent.session.save()
+        sdata = test_agent._session_store.load_session(test_agent.session.id)
+        assert sdata["total_tokens_in"] == 100
+        assert sdata["total_tokens_out"] == 20
+        assert sdata["total_cached_tokens"] == 5
+
+    @pytest.mark.asyncio
+    async def test_tool_call_path_carries_usage(self, test_agent):
+        """工具调用路径：带 tool_calls 的 assistant 消息也挂 usage"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider(
+            [
+                {"tool_calls": [{"id": "t1", "name": "echo", "arguments": {"message": "hi"}}],
+                 "usage": {"prompt_tokens": 50, "completion_tokens": 10, "cached_tokens": 0}},
+                {"content": "done", "usage": {"prompt_tokens": 60, "completion_tokens": 5, "cached_tokens": 0}},
+            ]
+        )
+        await test_agent.run("echo hi")
+        asst_msgs = [m for m in test_agent.session.messages if m["role"] == "assistant"]
+        assert asst_msgs[0]["usage"]["tokens_in"] == 50
+        assert asst_msgs[1]["usage"]["tokens_in"] == 60
+        test_agent.session.save()
+        sdata = test_agent._session_store.load_session(test_agent.session.id)
+        assert sdata["total_tokens_in"] == 110
+
+    @pytest.mark.asyncio
+    async def test_no_usage_in_response(self, test_agent):
+        """response 无 usage -> 消息 usage 为空 dict，聚合列不变"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider([{"content": "hello"}])
+        await test_agent.run("hi")
+        asst = [m for m in test_agent.session.messages if m["role"] == "assistant"][0]
+        assert asst["usage"] == {}
+        test_agent.session.save()
+        sdata = test_agent._session_store.load_session(test_agent.session.id)
+        assert sdata["total_tokens_in"] == 0

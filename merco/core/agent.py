@@ -501,9 +501,20 @@ class Agent:
         except Exception:
             return "模型调用失败"
         content = resp.get("content", "") or "已达到调用上限。"
-        self.session.add_message("assistant", content)
+        self.session.add_message("assistant", content, usage=self._extract_usage(resp))
         self.context.add({"role": "assistant", "content": content})
         return content
+
+    def _extract_usage(self, response: dict) -> dict:
+        """从 LLM response 提取归一化 usage。无 usage 返回空 dict。"""
+        usage = response.get("usage") or {}
+        if not usage:
+            return {}
+        return {
+            "tokens_in": usage.get("prompt_tokens", 0) or 0,
+            "tokens_out": usage.get("completion_tokens", 0) or 0,
+            "cached_tokens": usage.get("cached_tokens") or usage.get("cache_read_tokens") or 0,
+        }
 
     async def _agent_loop(self) -> str:
         """Agent 主循环。工具预算耗尽时直接收尾。"""
@@ -624,7 +635,7 @@ class Agent:
                             console.print("[dim]  \u21bb 空回复 \u2192 回调 LLM…[/dim]")
                             continue
                     content = reasoning or "\uff08\u65e0\u56de\u590d\uff09"
-                self.session.add_message("assistant", content)
+                self.session.add_message("assistant", content, usage=self._extract_usage(response))
                 self.context.add({"role": "assistant", "content": content})
                 return content
 
@@ -645,7 +656,7 @@ class Agent:
                 content = content.strip()
                 if not content:
                     content = "已达到调用上限。"
-                self.session.add_message("assistant", content)
+                self.session.add_message("assistant", content, usage=self._extract_usage(response))
                 self.context.add({"role": "assistant", "content": content})
                 return content
             tool_calls = valid_calls
@@ -700,7 +711,9 @@ class Agent:
         if reasoning:
             logger.debug("_dispatch_tool_calls: response 有 reasoning (%d chars) 但未传入 context", len(reasoning))
         self.context.add({"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls})
-        self.session.add_message("assistant", assistant_content, tool_calls=api_tool_calls)
+        self.session.add_message(
+            "assistant", assistant_content, tool_calls=api_tool_calls, usage=self._extract_usage(response)
+        )
         logger.debug("⚙ 执行 %d 个工具调用: %s", len(tool_calls), [tc["name"] for tc in tool_calls])
         await self._execute_tool_calls(tool_calls)
 
