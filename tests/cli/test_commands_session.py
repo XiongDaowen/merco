@@ -97,3 +97,23 @@ async def test_switch_skips_summary_when_disabled(test_agent):
 
     left_data = test_agent._session_store.load_session(left_id)
     assert "context_summary" not in left_data["metadata"]
+
+
+@pytest.mark.asyncio
+async def test_report_shows_session_token_aggregates(test_agent, capture_console):
+    """/report 输出包含会话累计 token 行（读 DB 聚合）"""
+    capture, _buf = capture_console
+    # 直接写一条带 usage 的消息到 DB
+    test_agent._session_store.create_session(test_agent.session.id)
+    test_agent._session_store.save_message(
+        test_agent.session.id, "assistant", "hi",
+        usage={"tokens_in": 1234, "tokens_out": 567, "cached_tokens": 800},
+    )
+
+    await cmd_report(test_agent, "")
+
+    text = capture.export_text()
+    assert "会话累计" in text
+    assert "1.2K" in text  # 1234 -> 1.2K
+    assert "567" in text
+    assert "缓存命中" in text  # 800/1234 -> 65%

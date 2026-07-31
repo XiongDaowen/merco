@@ -11,6 +11,13 @@ from cli.registry import cmd_registry
 console = Console()
 
 
+def _fmt_tokens(n: int) -> str:
+    """token 数格式化：<1K 显示原值，否则 K 单位"""
+    if n < 1000:
+        return str(n)
+    return f"{n / 1024:.1f}K"
+
+
 # ═══════════════════════════════════════════════════════════════════
 # INFO GROUP
 # ═══════════════════════════════════════════════════════════════════
@@ -75,7 +82,19 @@ async def cmd_report(agent, args):
         agent.observer.reset()
         console.print("[dim]统计数据已清零[/dim]")
     else:
-        console.print(Panel(agent.observer.report(), title="📊 Session Report"))
+        report = agent.observer.report()
+        # 追加会话累计 token（读 DB 聚合，跨压缩历史不变；区别于 observer 的本次运行统计）
+        sdata = agent._session_store.load_session(agent.session.id) if agent._session_store else None
+        if sdata:
+            tin = sdata.get("total_tokens_in", 0)
+            tout = sdata.get("total_tokens_out", 0)
+            tcached = sdata.get("total_cached_tokens", 0)
+            if tin or tout:
+                cache_ratio = f"  {tcached / tin * 100:.0f}% 缓存命中" if tin and tcached else ""
+                report += (
+                    f"\n  会话累计: 入 {_fmt_tokens(tin)} tokens  出 {_fmt_tokens(tout)} tokens{cache_ratio}"
+                )
+        console.print(Panel(report, title="📊 Session Report"))
     return True
 
 
