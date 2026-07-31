@@ -559,6 +559,64 @@ async def test_agent_create_injects_managers_into_task_tool(monkeypatch, tmp_pat
     assert task_tool._sub_agent_manager is agent.sub_agent_manager
 
 
+class TestSummarizeBranch:
+    """测试 _summarize_branch 门槛与失败护栏"""
+
+    @pytest.mark.asyncio
+    async def test_below_threshold_returns_empty(self, test_agent):
+        """消息数 < min_messages -> 返回空串，不调 provider"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.config.session_summarize_min_messages = 8
+        test_agent.provider = MockModelProvider([{"content": "should not be called"}])
+        for i in range(3):
+            test_agent.session.add_message("user", f"msg {i}")
+            test_agent.session.add_message("assistant", f"reply {i}")
+        # 6 条 < 8
+        result = await test_agent._summarize_branch()
+        assert result == ""
+        assert len(test_agent.provider.calls) == 0  # 没调 LLM
+
+    @pytest.mark.asyncio
+    async def test_disabled_returns_empty(self, test_agent):
+        """session_summarize=False -> 返回空串"""
+        test_agent.config.session_summarize = False
+        for i in range(10):
+            test_agent.session.add_message("user", f"msg {i}")
+            test_agent.session.add_message("assistant", f"reply {i}")
+        result = await test_agent._summarize_branch()
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_returns_empty(self, test_agent):
+        """provider 抛异常 -> 返回空串，不影响调用方"""
+        from tests.conftest import MockModelProvider
+
+        class BoomProvider(MockModelProvider):
+            async def chat(self, messages, tools=None, tool_choice="auto"):
+                raise RuntimeError("LLM down")
+
+        test_agent.provider = BoomProvider()
+        for i in range(10):
+            test_agent.session.add_message("user", f"msg {i}")
+            test_agent.session.add_message("assistant", f"reply {i}")
+        result = await test_agent._summarize_branch()
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_returns_summary_when_enough_messages(self, test_agent):
+        """消息足够 + provider 正常 -> 返回非空摘要"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider([{"content": "目标: 测试\n进展: 完成"}])
+        for i in range(10):
+            test_agent.session.add_message("user", f"msg {i}")
+            test_agent.session.add_message("assistant", f"reply {i}")
+        result = await test_agent._summarize_branch()
+        assert result == "目标: 测试\n进展: 完成"
+        assert len(test_agent.provider.calls) == 1
+
+
 # ── Task 12: plugin dynamic loading regression tests ─────────
 
 # 9 个 builtin 的期望激活序：boot(observability) 先于 restore，其余按 priority 降序

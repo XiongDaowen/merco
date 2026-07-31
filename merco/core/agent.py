@@ -516,6 +516,43 @@ class Agent:
             "cached_tokens": usage.get("cached_tokens") or usage.get("cache_read_tokens") or 0,
         }
 
+    async def _summarize_branch(self) -> str:
+        """总结当前会话全部消息，生成分支摘要。失败或消息不足返回空串。
+
+        摘要写入 session metadata["context_summary"]，由 _restore_context 注入。
+        """
+        if not getattr(self.config, "session_summarize", True):
+            return ""
+        messages = self.session.messages
+        min_msgs = getattr(self.config, "session_summarize_min_messages", 8)
+        if len(messages) < min_msgs:
+            return ""
+
+        lines = []
+        for m in messages[-60:]:  # 上限 60 行，取最近
+            role = m.get("role", "unknown")
+            content = m.get("content", "")
+            if not isinstance(content, str) or not content.strip():
+                continue
+            text = content[:200] if role == "tool" else content[:600]
+            lines.append(f"[{role}]: {text}")
+        if not lines:
+            return ""
+
+        prompt = (
+            "Summarize this session so a continuation has context. "
+            "Use this format, under 300 words:\n"
+            "目标: ...\n进展: ...\n关键决策: ...\n下一步: ...\n\n"
+            + "\n".join(lines)
+            + "\n\nSummary:"
+        )
+        try:
+            response = await self.provider.chat([{"role": "user", "content": prompt}], tools=[])
+            return (response.get("content") or "").strip()
+        except Exception:
+            logger.debug("_summarize_branch failed", exc_info=True)
+            return ""
+
     async def _agent_loop(self) -> str:
         """Agent 主循环。工具预算耗尽时直接收尾。"""
         self._tool_calls_count = 0
