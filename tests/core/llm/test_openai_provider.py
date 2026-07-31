@@ -223,6 +223,28 @@ def test_parse_response_handles_none_arguments():
     assert parsed["arguments"] == {}  # None -> "" -> falsy -> {}
 
 
+def test_parse_chunk_extracts_cached_tokens():
+    """_parse_chunk 从 usage.prompt_tokens_details.cached_tokens 提取 cached_tokens（流式）。"""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from merco.core.llm.openai_provider import OpenAICompatibleProvider
+
+    provider = OpenAICompatibleProvider(api_key="k", model="gpt-4o")
+    chunk = SimpleNamespace(
+        choices=[SimpleNamespace(delta=SimpleNamespace(content="hi", tool_calls=None), finish_reason="stop")],
+        usage=SimpleNamespace(
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+            prompt_tokens_details=SimpleNamespace(cached_tokens=75),
+        ),
+    )
+    result = provider._parse_chunk(chunk)
+    assert result["usage"]["cached_tokens"] == 75
+    assert result["usage"]["prompt_tokens"] == 100
+
+
 @pytest.mark.asyncio
 async def test_chat_parses_tool_calls():
     """chat() 返回的 tool_calls 是 FLAT dict（{id, name, arguments, index?}），

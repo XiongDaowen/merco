@@ -125,6 +125,21 @@ def test_parse_response_extracts_cached_tokens():
     assert result["usage"]["cached_tokens"] == 50
 
 
+def test_final_chunk_extracts_cached_tokens():
+    """_final_chunk 从 usage.cache_read_input_tokens 提取 cached_tokens（流式）。"""
+    from unittest.mock import MagicMock
+
+    from merco.core.llm.anthropic_provider import AnthropicNativeProvider
+
+    provider = AnthropicNativeProvider(api_key="k", model="claude-sonnet-4-20250514")
+    final = MagicMock()
+    final.stop_reason = "end_turn"
+    final.usage = MagicMock(input_tokens=100, output_tokens=20, cache_read_input_tokens=50)
+    chunk = provider._final_chunk(final)
+    assert chunk["usage"]["cached_tokens"] == 50
+    assert chunk["usage"]["prompt_tokens"] == 100
+
+
 @pytest.mark.asyncio
 async def test_chat_translates_rate_limit():
     import anthropic
