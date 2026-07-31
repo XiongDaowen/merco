@@ -149,6 +149,12 @@ async def cmd_sessions(agent, args):
             agent.session.metadata["observer"] = agent.observer.snapshot()
             agent.session.save()
             agent._session_store.save_metadata(agent.session.id, agent.session.metadata)
+            # 总结被离开的会话，写入其 metadata（下次切回时注入）
+            if getattr(agent.config, "session_summarize", True):
+                summary = await agent._summarize_branch()
+                if summary:
+                    agent.session.metadata["context_summary"] = summary
+                    agent._session_store.save_metadata(agent.session.id, agent.session.metadata)
             s = Session.load(target_id, agent._session_store)
             if s:
                 agent.session = s
