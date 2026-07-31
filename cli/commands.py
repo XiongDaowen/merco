@@ -200,6 +200,13 @@ async def cmd_fork(agent, args):
         console.print("[red]Fork 失败[/red]")
         return True
 
+    # 生成分支摘要写入新 fork（让 fork 启动时知道分叉点进展）
+    if getattr(agent.config, "session_summarize", True):
+        summary = await agent._summarize_branch()
+        if summary:
+            new_session.metadata["context_summary"] = summary
+            agent._session_store.save_metadata(new_session.id, new_session.metadata)
+
     agent.session = new_session
     agent.observer.reset(full=agent.config.fork_reset_observer)
     agent._restore_context()
