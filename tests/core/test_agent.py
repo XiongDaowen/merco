@@ -861,3 +861,46 @@ class TestUsageCapture:
         test_agent.session.save()
         sdata = test_agent._session_store.load_session(test_agent.session.id)
         assert sdata["total_tokens_in"] == 0
+
+
+class TestRestoreContextSummary:
+    """测试 _restore_context 注入分支摘要"""
+
+    @pytest.mark.asyncio
+    async def test_injects_summary_as_first_system_message(self, test_agent):
+        test_agent.session.metadata["context_summary"] = "目标: 完成 X"
+        test_agent.session.add_message("user", "hi")
+        test_agent.session.add_message("assistant", "hello")
+        test_agent._restore_context()
+        # 首条 context 消息是 system 摘要
+        first = test_agent.context.messages[0]
+        assert first["role"] == "system"
+        assert first["content"] == "目标: 完成 X"
+
+    @pytest.mark.asyncio
+    async def test_no_summary_no_injection(self, test_agent):
+        test_agent.session.add_message("user", "hi")
+        test_agent.session.add_message("assistant", "hello")
+        test_agent._restore_context()
+        # 无摘要时首条不是额外 system 摘要
+        assert not any(
+            m["role"] == "system" and m["content"] == "目标: 完成 X"
+            for m in test_agent.context.messages
+        )
+
+    @pytest.mark.asyncio
+    async def test_summary_before_compress_checkpoint(self, test_agent):
+        """分支摘要与压缩 checkpoint 共存，摘要在前"""
+        test_agent.session.metadata["context_summary"] = "BRANCH SUMMARY"
+        test_agent.session.metadata["compress_checkpoint"] = {
+            "summary": "CHECKPOINT SUMMARY",
+            "tail_count": 1,
+            "original_count": 2,
+        }
+        test_agent.session.add_message("user", "hi")
+        test_agent.session.add_message("assistant", "hello")
+        test_agent._restore_context()
+        sys_msgs = [m for m in test_agent.context.messages if m["role"] == "system"]
+        # 分支摘要在 checkpoint 摘要之前
+        assert sys_msgs[0]["content"] == "BRANCH SUMMARY"
+        assert sys_msgs[1]["content"] == "CHECKPOINT SUMMARY"
