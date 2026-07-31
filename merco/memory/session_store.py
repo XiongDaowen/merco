@@ -352,12 +352,18 @@ class SessionStore:
                 ),
             )
 
+            total_in = total_out = total_cached = 0
             for msg in original["messages"]:
                 tc_json = json.dumps(msg.get("tool_calls") or [], ensure_ascii=False)
+                u = msg.get("usage") or {}
+                usage_json = json.dumps(u, ensure_ascii=False)
+                total_in += int(u.get("tokens_in", 0) or 0)
+                total_out += int(u.get("tokens_out", 0) or 0)
+                total_cached += int(u.get("cached_tokens", 0) or 0)
                 conn.execute(
                     "INSERT INTO messages (session_id, role, content, "
-                    "tool_call_id, tool_calls, reasoning, timestamp) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "tool_call_id, tool_calls, reasoning, usage, timestamp) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         new_id,
                         msg["role"],
@@ -365,14 +371,20 @@ class SessionStore:
                         msg.get("tool_call_id", ""),
                         tc_json,
                         msg.get("reasoning", ""),
+                        usage_json,
                         now,
                     ),
                 )
 
-            # Update message_count atomically
+            # 重算 message_count + token 聚合（从复制的消息）
             conn.execute(
-                "UPDATE sessions SET message_count = (SELECT COUNT(*) FROM messages WHERE session_id = ?) WHERE id = ?",
-                (new_id, new_id),
+                "UPDATE sessions SET "
+                "message_count = ?, "
+                "total_tokens_in = ?, "
+                "total_tokens_out = ?, "
+                "total_cached_tokens = ? "
+                "WHERE id = ?",
+                (len(original["messages"]), total_in, total_out, total_cached, new_id),
             )
             conn.commit()
 

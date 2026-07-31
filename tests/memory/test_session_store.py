@@ -385,3 +385,35 @@ class TestSaveMessageUsage:
         )
         s = store.load_session("s1")
         assert s["messages"][0]["usage"] == {"tokens_in": 10, "tokens_out": 5, "cached_tokens": 0}
+
+
+class TestCloneUsage:
+    """测试 clone_session 复制 usage 并重算聚合"""
+
+    def test_clone_preserves_usage_and_aggregates(self, tmp_path):
+        db_path = str(tmp_path / "clone_usage.db")
+        store = SessionStore(db_path)
+        store.create_session("orig")
+        store.save_message(
+            "orig", "assistant", "hi",
+            usage={"tokens_in": 100, "tokens_out": 20, "cached_tokens": 10},
+        )
+        store.save_message("orig", "user", "again")
+        store.save_message(
+            "orig", "assistant", "reply",
+            usage={"tokens_in": 50, "tokens_out": 5, "cached_tokens": 0},
+        )
+
+        new_id = store.clone_session("orig")
+        cloned = store.load_session(new_id)
+
+        assert cloned["message_count"] == 3
+        assert cloned["total_tokens_in"] == 150
+        assert cloned["total_tokens_out"] == 25
+        assert cloned["total_cached_tokens"] == 10
+        # 第一条 assistant 消息 usage 完整保留
+        assert cloned["messages"][0]["usage"] == {
+            "tokens_in": 100, "tokens_out": 20, "cached_tokens": 10,
+        }
+        # user 消息 usage 为空 dict
+        assert cloned["messages"][1]["usage"] == {}
