@@ -45,6 +45,13 @@ class ModelProvider(ABC):
     ) -> AsyncIterator[dict]:
         """Streaming. Yield normalized chunk dicts."""
 
+    async def fetch_context_window(self) -> int | None:
+        """按模型自动获取上下文窗口大小。返回 None 表示无法获取（走表/配置回退）。
+
+        插件 provider 子类可 override 实现自定义查询（如特殊 API）。
+        """
+        return None
+
 
 @dataclass
 class ModelProviderInfo:
@@ -61,4 +68,5 @@ class ModelProviderInfo:
     key_help: str = ""  # URL to obtain a key (wizard)
     default_model: str = ""
     models: list[str] = field(default_factory=list)
+    context_windows: dict[str, int] = field(default_factory=dict)  # 模型名 -> 上下文窗口
     description: str = ""

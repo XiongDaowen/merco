@@ -384,6 +384,8 @@ class Agent:
         assert self.observer is not None
         self._restore_context()
         await self.plugin_manager.activate_all()
+        # 按模型自动设置上下文窗口（provider 查询 -> 静态表 -> 配置）
+        await self._maybe_auto_context_window()
         # 续接时若上下文超阈值（如 checkpoint 过时全量恢复），立即压缩
         await self._maybe_compress_on_restore()
 
@@ -403,6 +405,29 @@ class Agent:
             self.context.messages = self.context.messages[-6:]
             self.context.current_tokens = sum(msg_tokens(m) for m in self.context.messages)
             self.context.last_actual_tokens = 0
+
+    async def _maybe_auto_context_window(self) -> None:
+        """按模型自动设置上下文窗口。三级回退：provider 查询 -> 静态表 -> 配置值。
+
+        插件扩展：provider 子类 override fetch_context_window()（动态），或
+        register_model_provider 携带 context_windows（静态表）。
+        """
+        if not getattr(self.config, "auto_context_window", True):
+            return
+        cw = None
+        try:
+            cw = await self.provider.fetch_context_window()
+        except Exception:
+            cw = None
+        if not cw:
+            cw = self.model_registry.get_context_window(self.config.model.provider, self.config.model.model)
+        if cw and cw > 0:
+            self.config.max_input_tokens = cw
+            self.context.max_tokens = cw
+            logger.debug(
+                "上下文窗口按模型设置: %s/%s -> %d",
+                self.config.model.provider, self.config.model.model, cw,
+            )
 
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
@@ -642,6 +667,8 @@ class Agent:
                         logger.info("-> 切换模型: %s/%s", ctx.switch_model.provider, ctx.switch_model.model)
                         self.config.model = ctx.switch_model
                         self._model_provider = None  # invalidate -> re-resolve on next access
+                        # 切换模型后窗口可能不同（如 200K 降到 64K），重新自动设置
+                        await self._maybe_auto_context_window()
                     continue
                 from merco.core.llm.errors import llm_error
 

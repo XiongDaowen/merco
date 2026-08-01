@@ -62,3 +62,22 @@ class TestSessionSummarizeConfig:
         loaded = MercoConfig.load(path)
         assert loaded.session_summarize is False
         assert loaded.session_summarize_min_messages == 12
+
+
+class TestAutoContextWindowConfig:
+    def test_defaults(self):
+        from merco.core.config import MercoConfig
+
+        cfg = MercoConfig()
+        assert cfg.auto_context_window is True
+
+    def test_roundtrip(self, tmp_path):
+        from merco.core.config import MercoConfig
+
+        cfg = MercoConfig()
+        cfg.auto_context_window = False
+        path = str(tmp_path / "cfg.json")
+        cfg.save(path)
+
+        loaded = MercoConfig.load(path)
+        assert loaded.auto_context_window is False

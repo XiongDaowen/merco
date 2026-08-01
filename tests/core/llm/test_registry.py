@@ -87,3 +87,35 @@ def test_register_third_party():
     info = ModelProviderInfo(name="gemini", provider_class=fake, display_name="Gemini")
     reg.register(info)
     assert reg.get("gemini") is info
+
+
+def test_get_context_window_known_model():
+    """已知 provider+model 返回窗口值"""
+    from merco.core.llm.registry import ModelRegistry
+
+    reg = ModelRegistry()
+    assert reg.get_context_window("openai", "gpt-4o") == 128000
+    assert reg.get_context_window("anthropic", "claude-sonnet-4-20250514") == 200000
+    assert reg.get_context_window("deepseek", "deepseek-chat") == 64000
+
+
+def test_get_context_window_unknown_returns_none():
+    """未知 provider 或 model 返回 None"""
+    from merco.core.llm.registry import ModelRegistry
+
+    reg = ModelRegistry()
+    assert reg.get_context_window("nonexistent", "gpt-4o") is None
+    assert reg.get_context_window("openai", "not-a-model") is None
+
+
+def test_get_context_window_plugin_registered():
+    """插件注册的 provider 携带 context_windows 可查"""
+    from merco.core.llm.base import ModelProviderInfo, ModelProvider
+    from merco.core.llm.registry import ModelRegistry
+
+    reg = ModelRegistry()
+    reg.register(ModelProviderInfo(
+        name="mymodel", provider_class=ModelProvider, display_name="M",
+        models=["my-model"], context_windows={"my-model": 200000},
+    ))
+    assert reg.get_context_window("mymodel", "my-model") == 200000

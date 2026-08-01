@@ -44,6 +44,7 @@ class MercoConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
     max_tool_calls: int = 50
     max_input_tokens: int = 64000
+    auto_context_window: bool = True  # 按模型自动确定上下文窗口
     compression_threshold: float = 0.75
     skills_paths: list = field(default_factory=lambda: ["./.merco/skills", "~/.config/merco/skills"])
     plugins_paths: list = field(default_factory=lambda: ["./.merco/plugins", "~/.config/merco/plugins"])
@@ -125,6 +126,7 @@ class MercoConfig:
             },
             "max_tool_calls": self.max_tool_calls,
             "max_input_tokens": self.max_input_tokens,
+            "auto_context_window": self.auto_context_window,
             "compression_threshold": self.compression_threshold,
             "skills_paths": self.skills_paths,
             "plugins_paths": self.plugins_paths,
@@ -213,6 +215,7 @@ class MercoConfig:
             model=model,
             max_tool_calls=data.get("max_tool_calls", 50),
             max_input_tokens=data.get("max_input_tokens", 64000),
+            auto_context_window=data.get("auto_context_window", True),
             compression_threshold=data.get("compression_threshold", 0.75),
             skills_paths=data.get("skills_paths", ["./.merco/skills", "~/.config/merco/skills"]),
             plugins_paths=data.get("plugins_paths", ["./.merco/plugins", "~/.config/merco/plugins"]),

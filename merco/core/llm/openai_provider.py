@@ -125,6 +125,31 @@ class OpenAICompatibleProvider(ModelProvider):
             if parsed := self._parse_chunk(chunk, extractor):
                 yield parsed
 
+    async def fetch_context_window(self) -> int | None:
+        """查询 OpenAI 兼容 /models 端点，读当前模型的 context_length。
+
+        OpenRouter / vLLM / LiteLLM proxy 等返回 context_length；OpenAI 官方
+        不返回 -> None，回退到表/配置。走 openai SDK 的 get（cast_to=httpx.Response
+        使返回体不被 SDK 剥离未知字段）。失败回 None。
+        """
+        try:
+            import httpx
+
+            base_url = str(self.client.base_url).rstrip("/")
+            resp = await self.client.get(f"{base_url}/models", cast_to=httpx.Response)
+            if getattr(resp, "status_code", None) != 200:
+                return None
+            data = resp.json() if hasattr(resp, "json") else {}
+            for m in data.get("data", []):
+                if m.get("id") == self.model:
+                    cl = m.get("context_length")
+                    if isinstance(cl, int) and cl > 0:
+                        return cl
+                    break
+            return None
+        except Exception:
+            return None
+
     def _build_params(self, messages, tools, tool_choice, stream=False) -> dict:
         # Streaming always requests usage in the final chunk (provider-internal,
         # not config-driven).

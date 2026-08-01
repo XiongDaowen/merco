@@ -175,6 +175,13 @@ class MiniMaxPlugin(Plugin):
             key_help="https://platform.minimaxi.com/user-center/basic-information",
             default_model="MiniMax-M3",
             models=["MiniMax-M3", "MiniMax-M2.7", "MiniMax-Text-01", "abab7-chat"],
+            # M2.7/M3 暂按 200K（实际约 204800，保守取整），用户可调整；Text-01 官方 1M；abab7 128K。
+            context_windows={
+                "MiniMax-M3": 200000,
+                "MiniMax-M2.7": 200000,  # 官方文档确认 204,800 tokens，保守取 200K
+                "MiniMax-Text-01": 1000000,
+                "abab7-chat": 128000,
+            },
             description=(
                 "MiniMax provider with fix for M2.7/M3 think-block quirk "
                 "(model occasionally replies inside <think> tags)"
