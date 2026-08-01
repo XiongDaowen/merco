@@ -616,6 +616,23 @@ class TestSummarizeBranch:
         assert result == "目标: 测试\n进展: 完成"
         assert len(test_agent.provider.calls) == 1
 
+    @pytest.mark.asyncio
+    async def test_long_session_includes_first_user_message(self, test_agent):
+        """长会话（>60 消息）摘要 prompt 包含首条用户消息（目标），不丢失早期意图"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider([{"content": "summary"}])
+        # 首条用户消息含独特目标标记
+        test_agent.session.add_message("user", "原始目标: 重构认证模块")
+        # 填充超过 60 条消息，把首条挤出 [-60:] 窗口
+        for i in range(65):
+            test_agent.session.add_message("assistant", f"reply {i}")
+            test_agent.session.add_message("user", f"msg {i}")
+        await test_agent._summarize_branch()
+        # 检查发给 LLM 的 prompt 包含首条用户消息的目标标记
+        prompt = test_agent.provider.calls[0]["messages"][0]["content"]
+        assert "原始目标: 重构认证模块" in prompt
+
 
 # ── Task 12: plugin dynamic loading regression tests ─────────
 

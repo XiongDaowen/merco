@@ -281,6 +281,22 @@ class SessionStore:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_token_totals(self, session_id: str) -> dict:
+        """轻量读取会话 token 聚合（不加载消息）。会话不存在返回 0。"""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT total_tokens_in, total_tokens_out, total_cached_tokens "
+                "FROM sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            return {"total_tokens_in": 0, "total_tokens_out": 0, "total_cached_tokens": 0}
+        return {
+            "total_tokens_in": row["total_tokens_in"],
+            "total_tokens_out": row["total_tokens_out"],
+            "total_cached_tokens": row["total_cached_tokens"],
+        }
+
     def count_messages(self, session_id: str) -> int:
         with self._conn() as conn:
             row = conn.execute(

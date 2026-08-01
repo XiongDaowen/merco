@@ -84,11 +84,11 @@ async def cmd_report(agent, args):
     else:
         report = agent.observer.report()
         # 追加会话累计 token（读 DB 聚合，跨压缩历史不变；区别于 observer 的本次运行统计）
-        sdata = agent._session_store.load_session(agent.session.id) if agent._session_store else None
-        if sdata:
-            tin = sdata.get("total_tokens_in", 0)
-            tout = sdata.get("total_tokens_out", 0)
-            tcached = sdata.get("total_cached_tokens", 0)
+        totals = agent._session_store.get_token_totals(agent.session.id) if agent._session_store else None
+        if totals:
+            tin = totals.get("total_tokens_in", 0)
+            tout = totals.get("total_tokens_out", 0)
+            tcached = totals.get("total_cached_tokens", 0)
             if tin or tout:
                 cache_ratio = f"  {tcached / tin * 100:.0f}% 缓存命中" if tin and tcached else ""
                 report += (

@@ -532,8 +532,14 @@ class Agent:
         if len(messages) < min_msgs:
             return ""
 
+        # 取最近 60 条；长会话时补回首条用户消息，避免丢失原始目标
+        selected = messages[-60:]
+        if len(messages) > 60:
+            first_user = next((m for m in messages if m.get("role") == "user"), None)
+            if first_user is not None and first_user not in selected:
+                selected = [first_user] + selected
         lines = []
-        for m in messages[-60:]:  # 上限 60 行，取最近
+        for m in selected:
             role = m.get("role", "unknown")
             content = m.get("content", "")
             if not isinstance(content, str) or not content.strip():

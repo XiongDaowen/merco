@@ -417,3 +417,24 @@ class TestCloneUsage:
         }
         # user 消息 usage 为空 dict
         assert cloned["messages"][1]["usage"] == {}
+
+
+class TestGetTokenTotals:
+    """测试 get_token_totals 轻量读取聚合"""
+
+    def test_returns_aggregates(self, tmp_path):
+        db_path = str(tmp_path / "totals.db")
+        store = SessionStore(db_path)
+        store.create_session("s1")
+        store.save_message(
+            "s1", "assistant", "hi",
+            usage={"tokens_in": 100, "tokens_out": 20, "cached_tokens": 5},
+        )
+        totals = store.get_token_totals("s1")
+        assert totals == {"total_tokens_in": 100, "total_tokens_out": 20, "total_cached_tokens": 5}
+
+    def test_nonexistent_session_returns_zeros(self, tmp_path):
+        db_path = str(tmp_path / "totals_none.db")
+        store = SessionStore(db_path)
+        totals = store.get_token_totals("ghost")
+        assert totals == {"total_tokens_in": 0, "total_tokens_out": 0, "total_cached_tokens": 0}
