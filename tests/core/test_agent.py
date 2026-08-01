@@ -1121,3 +1121,83 @@ class TestCompressOnRestore:
         await test_agent._maybe_compress_on_restore()  # 不抛异常
         assert len(test_agent.context.messages) == 6  # 截断到最近 6 条
         assert test_agent.context.last_actual_tokens == 0
+
+
+class TestAutoContextWindow:
+    """测试 _maybe_auto_context_window 三级回退"""
+
+    @pytest.mark.asyncio
+    async def test_uses_provider_context_window(self, test_agent):
+        """provider.fetch_context_window 返回值 -> 更新 config + context.max_tokens"""
+        from unittest.mock import AsyncMock
+
+        test_agent.config.auto_context_window = True
+        test_agent.provider = AsyncMock()
+        test_agent.provider.fetch_context_window = AsyncMock(return_value=200000)
+        test_agent.model_registry.get_context_window = MagicMock(return_value=999)
+
+        await test_agent._maybe_auto_context_window()
+
+        assert test_agent.config.max_input_tokens == 200000
+        assert test_agent.context.max_tokens == 200000
+        # provider 有值时不查表
+        test_agent.model_registry.get_context_window.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_table(self, test_agent):
+        """provider 返回 None -> 查 registry 表"""
+        from unittest.mock import AsyncMock
+
+        test_agent.config.auto_context_window = True
+        test_agent.provider = AsyncMock()
+        test_agent.provider.fetch_context_window = AsyncMock(return_value=None)
+        test_agent.model_registry.get_context_window = MagicMock(return_value=64000)
+
+        await test_agent._maybe_auto_context_window()
+
+        assert test_agent.config.max_input_tokens == 64000
+        test_agent.model_registry.get_context_window.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_keeps_config_when_no_window(self, test_agent):
+        """provider None + 表 None -> 不改 max_input_tokens"""
+        from unittest.mock import AsyncMock
+
+        test_agent.config.auto_context_window = True
+        test_agent.config.max_input_tokens = 50000
+        test_agent.provider = AsyncMock()
+        test_agent.provider.fetch_context_window = AsyncMock(return_value=None)
+        test_agent.model_registry.get_context_window = MagicMock(return_value=None)
+
+        await test_agent._maybe_auto_context_window()
+
+        assert test_agent.config.max_input_tokens == 50000
+
+    @pytest.mark.asyncio
+    async def test_skips_when_auto_disabled(self, test_agent):
+        """auto_context_window=False -> 不改"""
+        from unittest.mock import AsyncMock
+
+        test_agent.config.auto_context_window = False
+        test_agent.config.max_input_tokens = 64000
+        test_agent.provider = AsyncMock()
+        test_agent.provider.fetch_context_window = AsyncMock(return_value=200000)
+
+        await test_agent._maybe_auto_context_window()
+
+        assert test_agent.config.max_input_tokens == 64000
+        test_agent.provider.fetch_context_window.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_provider_failure_returns_none_then_table(self, test_agent):
+        """provider.fetch 抛异常 -> 回退表，不崩溃"""
+        from unittest.mock import AsyncMock
+
+        test_agent.config.auto_context_window = True
+        test_agent.provider = AsyncMock()
+        test_agent.provider.fetch_context_window = AsyncMock(side_effect=RuntimeError("boom"))
+        test_agent.model_registry.get_context_window = MagicMock(return_value=128000)
+
+        await test_agent._maybe_auto_context_window()
+
+        assert test_agent.config.max_input_tokens == 128000
