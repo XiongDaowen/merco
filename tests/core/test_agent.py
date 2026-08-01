@@ -1067,3 +1067,57 @@ class TestLastActualTokensPersist:
         test_agent.session.add_message("user", "hi")
         test_agent._restore_context()
         assert test_agent.context.last_actual_tokens == 0
+
+
+class TestCompressOnRestore:
+    """测试续接时超限上下文立即压缩（含失败回退）"""
+
+    @pytest.mark.asyncio
+    async def test_compress_triggers_when_over_limit(self, test_agent):
+        """超阈值时触发 _compress_context"""
+        from unittest.mock import AsyncMock
+
+        from merco.core.context import msg_tokens
+
+        test_agent.config.max_input_tokens = 1000  # 阈值 800
+        test_agent.context.max_tokens = 1000
+        test_agent.context.last_actual_tokens = 0  # 用估算
+        test_agent.context.messages = [{"role": "user", "content": "x" * 5000}] * 6  # ~7500 tok
+        test_agent.context.current_tokens = sum(msg_tokens(m) for m in test_agent.context.messages)
+        test_agent._compress_context = AsyncMock()
+
+        await test_agent._maybe_compress_on_restore()
+        test_agent._compress_context.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_compress_skips_when_under_limit(self, test_agent):
+        """未超阈值时不压缩"""
+        from unittest.mock import AsyncMock
+
+        test_agent.config.max_input_tokens = 100000
+        test_agent.context.max_tokens = 100000
+        test_agent.context.last_actual_tokens = 0
+        test_agent.context.messages = [{"role": "user", "content": "hi"}]
+        test_agent.context.current_tokens = 1
+        test_agent._compress_context = AsyncMock()
+
+        await test_agent._maybe_compress_on_restore()
+        test_agent._compress_context.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_compress_fallback_truncates_on_hard_failure(self, test_agent):
+        """_compress_context 硬失败时回退截断，不崩溃"""
+        from unittest.mock import AsyncMock
+
+        from merco.core.context import msg_tokens
+
+        test_agent.config.max_input_tokens = 100  # 阈值 80
+        test_agent.context.max_tokens = 100
+        test_agent.context.last_actual_tokens = 0
+        test_agent.context.messages = [{"role": "user", "content": "x" * 500} for _ in range(10)]  # ~1250 tok
+        test_agent.context.current_tokens = sum(msg_tokens(m) for m in test_agent.context.messages)
+        test_agent._compress_context = AsyncMock(side_effect=RuntimeError("DB down"))
+
+        await test_agent._maybe_compress_on_restore()  # 不抛异常
+        assert len(test_agent.context.messages) == 6  # 截断到最近 6 条
+        assert test_agent.context.last_actual_tokens == 0

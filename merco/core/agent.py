@@ -384,6 +384,25 @@ class Agent:
         assert self.observer is not None
         self._restore_context()
         await self.plugin_manager.activate_all()
+        # 续接时若上下文超阈值（如 checkpoint 过时全量恢复），立即压缩
+        await self._maybe_compress_on_restore()
+
+    async def _maybe_compress_on_restore(self) -> None:
+        """续接时若上下文超阈值（如 checkpoint 过时全量恢复），立即压缩。
+
+        LLM 摘要失败时 _compress_context 内部回退到非 LLM 摘要；硬失败时回退截断
+        最近 6 条消息，保证上下文有界、不卡死。压缩走 context_pipeline，插件扩展
+        的压缩策略不受影响。
+        """
+        if not self.context.needs_compression():
+            return
+        try:
+            await self._compress_context()
+        except Exception:
+            logger.warning("续接时压缩失败，回退到截断最近消息", exc_info=True)
+            self.context.messages = self.context.messages[-6:]
+            self.context.current_tokens = sum(msg_tokens(m) for m in self.context.messages)
+            self.context.last_actual_tokens = 0
 
     async def run(self, prompt: str) -> str:
         """执行一次 Agent 循环"""
@@ -462,6 +481,8 @@ class Agent:
                     "_restore_context: checkpoint 过时 (original=%d now=%d)，全量恢复", original_count, len(all_msgs)
                 )
                 del self.session.metadata["compress_checkpoint"]
+                # 全量恢复后上下文已变，实测 token 失效 -> 用估算判断是否需压缩
+                self.context.last_actual_tokens = 0
                 # fall through to full restore below
             else:
                 tail = all_msgs[-tail_count * 2 :] if len(all_msgs) > tail_count * 2 else all_msgs
