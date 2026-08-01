@@ -41,6 +41,9 @@ class SessionStore:
                     updated_at    TEXT NOT NULL,
                     message_count INTEGER DEFAULT 0,
                     parent_id     TEXT,
+                    total_tokens_in     INTEGER DEFAULT 0,
+                    total_tokens_out    INTEGER DEFAULT 0,
+                    total_cached_tokens INTEGER DEFAULT 0,
                     metadata      TEXT DEFAULT '{}'
                 );
 
@@ -52,6 +55,7 @@ class SessionStore:
                     tool_call_id  TEXT DEFAULT '',
                     tool_calls    TEXT DEFAULT '[]',
                     reasoning     TEXT DEFAULT '',
+                    usage         TEXT DEFAULT '{}',
                     timestamp     TEXT NOT NULL,
                     FOREIGN KEY (session_id) REFERENCES sessions(id)
                 );
@@ -64,6 +68,18 @@ class SessionStore:
                 conn.execute("ALTER TABLE sessions ADD COLUMN metadata TEXT DEFAULT '{}'")
             except Exception:
                 pass  # 列已存在
+
+            # 兼容已有数据库：加 usage / 聚合列
+            for stmt in (
+                "ALTER TABLE messages ADD COLUMN usage TEXT DEFAULT '{}'",
+                "ALTER TABLE sessions ADD COLUMN total_tokens_in INTEGER DEFAULT 0",
+                "ALTER TABLE sessions ADD COLUMN total_tokens_out INTEGER DEFAULT 0",
+                "ALTER TABLE sessions ADD COLUMN total_cached_tokens INTEGER DEFAULT 0",
+            ):
+                try:
+                    conn.execute(stmt)
+                except Exception:
+                    pass  # 列已存在
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -171,10 +187,12 @@ class SessionStore:
         tool_call_id: str = "",
         tool_calls: list | None = None,
         reasoning: str = "",
+        usage: dict | None = None,
     ) -> int:
-        """保存消息，支持重试"""
+        """保存消息，支持重试。usage 非空时同事务累加会话级聚合列。"""
         now = _now()
         tc_json = json.dumps(tool_calls or [], ensure_ascii=False)
+        usage_json = json.dumps(usage or {}, ensure_ascii=False)
         last_error = None
 
         for attempt in range(3):
@@ -182,10 +200,23 @@ class SessionStore:
                 with self._conn() as conn:
                     cur = conn.execute(
                         "INSERT INTO messages (session_id, role, content, tool_call_id, "
-                        "tool_calls, reasoning, timestamp) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (session_id, role, content, tool_call_id, tc_json, reasoning, now),
+                        "tool_calls, reasoning, usage, timestamp) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (session_id, role, content, tool_call_id, tc_json, reasoning, usage_json, now),
                     )
+                    if usage:
+                        tin = int(usage.get("tokens_in", 0) or 0)
+                        tout = int(usage.get("tokens_out", 0) or 0)
+                        tcached = int(usage.get("cached_tokens", 0) or 0)
+                        if tin or tout or tcached:
+                            conn.execute(
+                                "UPDATE sessions SET "
+                                "total_tokens_in = total_tokens_in + ?, "
+                                "total_tokens_out = total_tokens_out + ?, "
+                                "total_cached_tokens = total_cached_tokens + ? "
+                                "WHERE id = ?",
+                                (tin, tout, tcached, session_id),
+                            )
                     conn.execute(
                         "UPDATE sessions SET updated_at = ?, message_count = message_count + 1 WHERE id = ?",
                         (now, session_id),
@@ -222,6 +253,9 @@ class SessionStore:
             "updated_at": row["updated_at"],
             "message_count": row["message_count"],
             "parent_id": row["parent_id"],
+            "total_tokens_in": row["total_tokens_in"],
+            "total_tokens_out": row["total_tokens_out"],
+            "total_cached_tokens": row["total_cached_tokens"],
             "metadata": json.loads(row["metadata"] or "{}"),
             "messages": [
                 {
@@ -230,6 +264,7 @@ class SessionStore:
                     "tool_call_id": m["tool_call_id"],
                     "tool_calls": json.loads(m["tool_calls"]),
                     "reasoning": m["reasoning"],
+                    "usage": json.loads(m["usage"] or "{}"),
                     "timestamp": m["timestamp"],
                 }
                 for m in messages
@@ -239,7 +274,8 @@ class SessionStore:
     def list_sessions(self, limit: int = 20) -> list[dict]:
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT id, title, created_at, updated_at, message_count "
+                "SELECT id, title, created_at, updated_at, message_count, "
+                "total_tokens_in, total_tokens_out, total_cached_tokens "
                 "FROM sessions ORDER BY updated_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
@@ -316,12 +352,18 @@ class SessionStore:
                 ),
             )
 
+            total_in = total_out = total_cached = 0
             for msg in original["messages"]:
                 tc_json = json.dumps(msg.get("tool_calls") or [], ensure_ascii=False)
+                u = msg.get("usage") or {}
+                usage_json = json.dumps(u, ensure_ascii=False)
+                total_in += int(u.get("tokens_in", 0) or 0)
+                total_out += int(u.get("tokens_out", 0) or 0)
+                total_cached += int(u.get("cached_tokens", 0) or 0)
                 conn.execute(
                     "INSERT INTO messages (session_id, role, content, "
-                    "tool_call_id, tool_calls, reasoning, timestamp) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "tool_call_id, tool_calls, reasoning, usage, timestamp) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         new_id,
                         msg["role"],
@@ -329,14 +371,20 @@ class SessionStore:
                         msg.get("tool_call_id", ""),
                         tc_json,
                         msg.get("reasoning", ""),
+                        usage_json,
                         now,
                     ),
                 )
 
-            # Update message_count atomically
+            # 重算 message_count + token 聚合（从复制的消息）
             conn.execute(
-                "UPDATE sessions SET message_count = (SELECT COUNT(*) FROM messages WHERE session_id = ?) WHERE id = ?",
-                (new_id, new_id),
+                "UPDATE sessions SET "
+                "message_count = ?, "
+                "total_tokens_in = ?, "
+                "total_tokens_out = ?, "
+                "total_cached_tokens = ? "
+                "WHERE id = ?",
+                (len(original["messages"]), total_in, total_out, total_cached, new_id),
             )
             conn.commit()
 

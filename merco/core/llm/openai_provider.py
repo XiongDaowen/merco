@@ -226,9 +226,15 @@ class OpenAICompatibleProvider(ModelProvider):
         if choice.finish_reason:
             result["finish_reason"] = choice.finish_reason
         if hasattr(chunk, "usage") and chunk.usage:
-            result["usage"] = {
+            usage = {
                 "prompt_tokens": chunk.usage.prompt_tokens,
                 "completion_tokens": chunk.usage.completion_tokens,
                 "total_tokens": chunk.usage.total_tokens,
             }
+            details = getattr(chunk.usage, "prompt_tokens_details", None)
+            if details is not None:
+                cd = getattr(details, "cached_tokens", None)
+                if cd is not None:
+                    usage["cached_tokens"] = cd
+            result["usage"] = usage
         return result if result else None

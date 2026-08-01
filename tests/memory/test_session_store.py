@@ -281,3 +281,139 @@ class TestIntegrityCheck:
 
             result = store.check_integrity()
             assert result is True
+
+
+class TestUsageMigration:
+    """测试旧库（无 usage/聚合列）迁移"""
+
+    def test_old_db_migrates_usage_columns(self, tmp_path):
+        """建一个旧 schema 的 DB，SessionStore 打开后应补上 usage / 聚合列。"""
+        import sqlite3
+
+        db_path = str(tmp_path / "old_schema.db")
+        conn = sqlite3.connect(db_path)
+        conn.executescript(
+            """
+            CREATE TABLE sessions (
+                id TEXT PRIMARY KEY, title TEXT DEFAULT '',
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                message_count INTEGER DEFAULT 0, parent_id TEXT,
+                metadata TEXT DEFAULT '{}'
+            );
+            CREATE TABLE messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
+                role TEXT NOT NULL, content TEXT DEFAULT '',
+                tool_call_id TEXT DEFAULT '', tool_calls TEXT DEFAULT '[]',
+                reasoning TEXT DEFAULT '', timestamp TEXT NOT NULL
+            );
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        # 打开 -> _ensure_db 跑 ALTER 加列
+        SessionStore(db_path)
+
+        # 验证四列已存在（save_message usage 处理 + 聚合见 Task 2/3）
+        with sqlite3.connect(db_path) as c:
+            msg_cols = {r[1] for r in c.execute("PRAGMA table_info(messages)")}
+            sess_cols = {r[1] for r in c.execute("PRAGMA table_info(sessions)")}
+        assert "usage" in msg_cols
+        assert "total_tokens_in" in sess_cols
+        assert "total_tokens_out" in sess_cols
+        assert "total_cached_tokens" in sess_cols
+
+
+class TestListSessionsAggregates:
+    """测试 list_sessions 返回聚合列"""
+
+    def test_list_sessions_includes_aggregates(self, tmp_path):
+        db_path = str(tmp_path / "list_agg.db")
+        store = SessionStore(db_path)
+        store.create_session("s1")
+        store.save_message(
+            "s1", "assistant", "hi",
+            usage={"tokens_in": 42, "tokens_out": 7, "cached_tokens": 0},
+        )
+        sessions = store.list_sessions()
+        assert len(sessions) == 1
+        assert sessions[0]["total_tokens_in"] == 42
+        assert sessions[0]["total_tokens_out"] == 7
+        assert sessions[0]["total_cached_tokens"] == 0
+
+
+class TestSaveMessageUsage:
+    """测试 save_message 的 usage 落库与聚合"""
+
+    def test_usage_increments_aggregates(self, tmp_path):
+        db_path = str(tmp_path / "usage.db")
+        store = SessionStore(db_path)
+        store.create_session("s1")
+        store.save_message(
+            "s1", "assistant", "hi",
+            usage={"tokens_in": 100, "tokens_out": 20, "cached_tokens": 30},
+        )
+        store.save_message(
+            "s1", "assistant", "again",
+            usage={"tokens_in": 50, "tokens_out": 10, "cached_tokens": 0},
+        )
+        s = store.load_session("s1")
+        assert s["total_tokens_in"] == 150
+        assert s["total_tokens_out"] == 30
+        assert s["total_cached_tokens"] == 30
+
+    def test_non_assistant_message_no_usage_no_increment(self, tmp_path):
+        db_path = str(tmp_path / "no_usage.db")
+        store = SessionStore(db_path)
+        store.create_session("s1")
+        store.save_message("s1", "user", "hello")  # 无 usage
+        store.save_message("s1", "tool", '{"result": 1}', tool_call_id="c1")
+        s = store.load_session("s1")
+        assert s["total_tokens_in"] == 0
+        assert s["total_tokens_out"] == 0
+        assert s["total_cached_tokens"] == 0
+        # 消息行 usage 为空 dict
+        assert s["messages"][0]["usage"] == {}
+
+    def test_load_session_returns_usage_on_message(self, tmp_path):
+        db_path = str(tmp_path / "load_usage.db")
+        store = SessionStore(db_path)
+        store.create_session("s1")
+        store.save_message(
+            "s1", "assistant", "hi",
+            usage={"tokens_in": 10, "tokens_out": 5, "cached_tokens": 0},
+        )
+        s = store.load_session("s1")
+        assert s["messages"][0]["usage"] == {"tokens_in": 10, "tokens_out": 5, "cached_tokens": 0}
+
+
+class TestCloneUsage:
+    """测试 clone_session 复制 usage 并重算聚合"""
+
+    def test_clone_preserves_usage_and_aggregates(self, tmp_path):
+        db_path = str(tmp_path / "clone_usage.db")
+        store = SessionStore(db_path)
+        store.create_session("orig")
+        store.save_message(
+            "orig", "assistant", "hi",
+            usage={"tokens_in": 100, "tokens_out": 20, "cached_tokens": 10},
+        )
+        store.save_message("orig", "user", "again")
+        store.save_message(
+            "orig", "assistant", "reply",
+            usage={"tokens_in": 50, "tokens_out": 5, "cached_tokens": 0},
+        )
+
+        new_id = store.clone_session("orig")
+        cloned = store.load_session(new_id)
+
+        assert cloned["message_count"] == 3
+        assert cloned["total_tokens_in"] == 150
+        assert cloned["total_tokens_out"] == 25
+        assert cloned["total_cached_tokens"] == 10
+        # 第一条 assistant 消息 usage 完整保留
+        assert cloned["messages"][0]["usage"] == {
+            "tokens_in": 100, "tokens_out": 20, "cached_tokens": 10,
+        }
+        # user 消息 usage 为空 dict
+        assert cloned["messages"][1]["usage"] == {}

@@ -436,6 +436,10 @@ class Agent:
     def _restore_context(self):
         """清空上下文，然后从持久化会话恢复消息"""
         self.context = ContextManager(max_tokens=self.config.max_input_tokens)
+        # 分支摘要：整条会话定位，作为首条 system 注入（与 compress_checkpoint 共存，摘要在前）
+        branch_summary = self.session.metadata.get("context_summary")
+        if branch_summary:
+            self.context.add({"role": "system", "content": branch_summary})
         snap = self.session.metadata.get("observer")
         if snap:
             self.observer.restore(snap)
@@ -501,9 +505,57 @@ class Agent:
         except Exception:
             return "模型调用失败"
         content = resp.get("content", "") or "已达到调用上限。"
-        self.session.add_message("assistant", content)
+        self.session.add_message("assistant", content, usage=self._extract_usage(resp))
         self.context.add({"role": "assistant", "content": content})
         return content
+
+    def _extract_usage(self, response: dict) -> dict:
+        """从 LLM response 提取归一化 usage。无 usage 返回空 dict。"""
+        usage = response.get("usage") or {}
+        if not usage:
+            return {}
+        return {
+            "tokens_in": usage.get("prompt_tokens", 0) or 0,
+            "tokens_out": usage.get("completion_tokens", 0) or 0,
+            "cached_tokens": usage.get("cached_tokens") or usage.get("cache_read_tokens") or 0,
+        }
+
+    async def _summarize_branch(self) -> str:
+        """总结当前会话全部消息，生成分支摘要。失败或消息不足返回空串。
+
+        摘要写入 session metadata["context_summary"]，由 _restore_context 注入。
+        """
+        if not getattr(self.config, "session_summarize", True):
+            return ""
+        messages = self.session.messages
+        min_msgs = getattr(self.config, "session_summarize_min_messages", 8)
+        if len(messages) < min_msgs:
+            return ""
+
+        lines = []
+        for m in messages[-60:]:  # 上限 60 行，取最近
+            role = m.get("role", "unknown")
+            content = m.get("content", "")
+            if not isinstance(content, str) or not content.strip():
+                continue
+            text = content[:200] if role == "tool" else content[:600]
+            lines.append(f"[{role}]: {text}")
+        if not lines:
+            return ""
+
+        prompt = (
+            "Summarize this session so a continuation has context. "
+            "Use this format, under 300 words:\n"
+            "目标: ...\n进展: ...\n关键决策: ...\n下一步: ...\n\n"
+            + "\n".join(lines)
+            + "\n\nSummary:"
+        )
+        try:
+            response = await self.provider.chat([{"role": "user", "content": prompt}], tools=[])
+            return (response.get("content") or "").strip()
+        except Exception:
+            logger.debug("_summarize_branch failed", exc_info=True)
+            return ""
 
     async def _agent_loop(self) -> str:
         """Agent 主循环。工具预算耗尽时直接收尾。"""
@@ -624,7 +676,7 @@ class Agent:
                             console.print("[dim]  \u21bb 空回复 \u2192 回调 LLM…[/dim]")
                             continue
                     content = reasoning or "\uff08\u65e0\u56de\u590d\uff09"
-                self.session.add_message("assistant", content)
+                self.session.add_message("assistant", content, usage=self._extract_usage(response))
                 self.context.add({"role": "assistant", "content": content})
                 return content
 
@@ -645,7 +697,7 @@ class Agent:
                 content = content.strip()
                 if not content:
                     content = "已达到调用上限。"
-                self.session.add_message("assistant", content)
+                self.session.add_message("assistant", content, usage=self._extract_usage(response))
                 self.context.add({"role": "assistant", "content": content})
                 return content
             tool_calls = valid_calls
@@ -700,7 +752,9 @@ class Agent:
         if reasoning:
             logger.debug("_dispatch_tool_calls: response 有 reasoning (%d chars) 但未传入 context", len(reasoning))
         self.context.add({"role": "assistant", "content": assistant_content, "tool_calls": api_tool_calls})
-        self.session.add_message("assistant", assistant_content, tool_calls=api_tool_calls)
+        self.session.add_message(
+            "assistant", assistant_content, tool_calls=api_tool_calls, usage=self._extract_usage(response)
+        )
         logger.debug("⚙ 执行 %d 个工具调用: %s", len(tool_calls), [tc["name"] for tc in tool_calls])
         await self._execute_tool_calls(tool_calls)
 

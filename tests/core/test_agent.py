@@ -559,6 +559,64 @@ async def test_agent_create_injects_managers_into_task_tool(monkeypatch, tmp_pat
     assert task_tool._sub_agent_manager is agent.sub_agent_manager
 
 
+class TestSummarizeBranch:
+    """测试 _summarize_branch 门槛与失败护栏"""
+
+    @pytest.mark.asyncio
+    async def test_below_threshold_returns_empty(self, test_agent):
+        """消息数 < min_messages -> 返回空串，不调 provider"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.config.session_summarize_min_messages = 8
+        test_agent.provider = MockModelProvider([{"content": "should not be called"}])
+        for i in range(3):
+            test_agent.session.add_message("user", f"msg {i}")
+            test_agent.session.add_message("assistant", f"reply {i}")
+        # 6 条 < 8
+        result = await test_agent._summarize_branch()
+        assert result == ""
+        assert len(test_agent.provider.calls) == 0  # 没调 LLM
+
+    @pytest.mark.asyncio
+    async def test_disabled_returns_empty(self, test_agent):
+        """session_summarize=False -> 返回空串"""
+        test_agent.config.session_summarize = False
+        for i in range(10):
+            test_agent.session.add_message("user", f"msg {i}")
+            test_agent.session.add_message("assistant", f"reply {i}")
+        result = await test_agent._summarize_branch()
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_returns_empty(self, test_agent):
+        """provider 抛异常 -> 返回空串，不影响调用方"""
+        from tests.conftest import MockModelProvider
+
+        class BoomProvider(MockModelProvider):
+            async def chat(self, messages, tools=None, tool_choice="auto"):
+                raise RuntimeError("LLM down")
+
+        test_agent.provider = BoomProvider()
+        for i in range(10):
+            test_agent.session.add_message("user", f"msg {i}")
+            test_agent.session.add_message("assistant", f"reply {i}")
+        result = await test_agent._summarize_branch()
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_returns_summary_when_enough_messages(self, test_agent):
+        """消息足够 + provider 正常 -> 返回非空摘要"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider([{"content": "目标: 测试\n进展: 完成"}])
+        for i in range(10):
+            test_agent.session.add_message("user", f"msg {i}")
+            test_agent.session.add_message("assistant", f"reply {i}")
+        result = await test_agent._summarize_branch()
+        assert result == "目标: 测试\n进展: 完成"
+        assert len(test_agent.provider.calls) == 1
+
+
 # ── Task 12: plugin dynamic loading regression tests ─────────
 
 # 9 个 builtin 的期望激活序：boot(observability) 先于 restore，其余按 priority 降序
@@ -749,3 +807,100 @@ async def test_agent_has_provider_property_and_model_registry(monkeypatch, tmp_p
     assert agent.model_registry.get("openai").name == "openai"
 
     # provider is the canonical interface (legacy llm alias removed in Task 16)
+
+
+class TestUsageCapture:
+    """测试 Agent 把 response.usage 挂到 assistant 消息并落库"""
+
+    @pytest.mark.asyncio
+    async def test_assistant_message_carries_usage(self, test_agent):
+        """exit 路径：response 带 usage -> session 消息有 usage -> 落库后聚合正确"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider(
+            [{"content": "hello", "usage": {"prompt_tokens": 100, "completion_tokens": 20, "cached_tokens": 5}}]
+        )
+        await test_agent.run("hi")
+        asst = [m for m in test_agent.session.messages if m["role"] == "assistant"][0]
+        assert asst["usage"] == {"tokens_in": 100, "tokens_out": 20, "cached_tokens": 5}
+        test_agent.session.save()
+        sdata = test_agent._session_store.load_session(test_agent.session.id)
+        assert sdata["total_tokens_in"] == 100
+        assert sdata["total_tokens_out"] == 20
+        assert sdata["total_cached_tokens"] == 5
+
+    @pytest.mark.asyncio
+    async def test_tool_call_path_carries_usage(self, test_agent):
+        """工具调用路径：带 tool_calls 的 assistant 消息也挂 usage"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider(
+            [
+                {"tool_calls": [{"id": "t1", "name": "echo", "arguments": {"message": "hi"}}],
+                 "usage": {"prompt_tokens": 50, "completion_tokens": 10, "cached_tokens": 0}},
+                {"content": "done", "usage": {"prompt_tokens": 60, "completion_tokens": 5, "cached_tokens": 0}},
+            ]
+        )
+        await test_agent.run("echo hi")
+        asst_msgs = [m for m in test_agent.session.messages if m["role"] == "assistant"]
+        assert asst_msgs[0]["usage"]["tokens_in"] == 50
+        assert asst_msgs[1]["usage"]["tokens_in"] == 60
+        test_agent.session.save()
+        sdata = test_agent._session_store.load_session(test_agent.session.id)
+        assert sdata["total_tokens_in"] == 110
+
+    @pytest.mark.asyncio
+    async def test_no_usage_in_response(self, test_agent):
+        """response 无 usage -> 消息 usage 为空 dict，聚合列不变"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider([{"content": "hello"}])
+        await test_agent.run("hi")
+        asst = [m for m in test_agent.session.messages if m["role"] == "assistant"][0]
+        assert asst["usage"] == {}
+        test_agent.session.save()
+        sdata = test_agent._session_store.load_session(test_agent.session.id)
+        assert sdata["total_tokens_in"] == 0
+
+
+class TestRestoreContextSummary:
+    """测试 _restore_context 注入分支摘要"""
+
+    @pytest.mark.asyncio
+    async def test_injects_summary_as_first_system_message(self, test_agent):
+        test_agent.session.metadata["context_summary"] = "目标: 完成 X"
+        test_agent.session.add_message("user", "hi")
+        test_agent.session.add_message("assistant", "hello")
+        test_agent._restore_context()
+        # 首条 context 消息是 system 摘要
+        first = test_agent.context.messages[0]
+        assert first["role"] == "system"
+        assert first["content"] == "目标: 完成 X"
+
+    @pytest.mark.asyncio
+    async def test_no_summary_no_injection(self, test_agent):
+        test_agent.session.add_message("user", "hi")
+        test_agent.session.add_message("assistant", "hello")
+        test_agent._restore_context()
+        # 无摘要时首条不是额外 system 摘要
+        assert not any(
+            m["role"] == "system" and m["content"] == "目标: 完成 X"
+            for m in test_agent.context.messages
+        )
+
+    @pytest.mark.asyncio
+    async def test_summary_before_compress_checkpoint(self, test_agent):
+        """分支摘要与压缩 checkpoint 共存，摘要在前"""
+        test_agent.session.metadata["context_summary"] = "BRANCH SUMMARY"
+        test_agent.session.metadata["compress_checkpoint"] = {
+            "summary": "CHECKPOINT SUMMARY",
+            "tail_count": 1,
+            "original_count": 2,
+        }
+        test_agent.session.add_message("user", "hi")
+        test_agent.session.add_message("assistant", "hello")
+        test_agent._restore_context()
+        sys_msgs = [m for m in test_agent.context.messages if m["role"] == "system"]
+        # 分支摘要在 checkpoint 摘要之前
+        assert sys_msgs[0]["content"] == "BRANCH SUMMARY"
+        assert sys_msgs[1]["content"] == "CHECKPOINT SUMMARY"

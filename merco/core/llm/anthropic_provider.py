@@ -259,9 +259,13 @@ class AnthropicNativeProvider(ModelProvider):
         if usage:
             input_tokens = getattr(usage, "input_tokens", 0) or 0
             output_tokens = getattr(usage, "output_tokens", 0) or 0
-            chunk["usage"] = {
+            usage_dict = {
                 "prompt_tokens": input_tokens,
                 "completion_tokens": output_tokens,
                 "total_tokens": input_tokens + output_tokens,
             }
+            cached = getattr(usage, "cache_read_input_tokens", None)
+            if cached is not None:
+                usage_dict["cached_tokens"] = cached
+            chunk["usage"] = usage_dict
         return chunk

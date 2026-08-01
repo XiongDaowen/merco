@@ -111,6 +111,11 @@ def make_fake_agent(
     agent.observer.snapshot = MagicMock(return_value={})
     agent.observer.report = MagicMock(return_value="report content")
 
+    # 支持新增的 _summarize_branch（cmd_fork）和 load_session（cmd_report）调用
+    agent._summarize_branch = AsyncMock(return_value="")
+    agent._session_store = MagicMock()
+    agent._session_store.load_session.return_value = None
+
     return agent
 
 

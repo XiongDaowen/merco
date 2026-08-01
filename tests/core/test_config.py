@@ -40,3 +40,25 @@ def test_load_no_longer_calls_resolve(monkeypatch):
     monkeypatch.setattr(MercoConfig, "_find_config", lambda: None)
     cfg = MercoConfig.load(None)
     assert cfg.model.provider == "openai"
+
+
+class TestSessionSummarizeConfig:
+    def test_defaults(self):
+        from merco.core.config import MercoConfig
+
+        cfg = MercoConfig()
+        assert cfg.session_summarize is True
+        assert cfg.session_summarize_min_messages == 8
+
+    def test_roundtrip(self, tmp_path):
+        from merco.core.config import MercoConfig
+
+        cfg = MercoConfig()
+        cfg.session_summarize = False
+        cfg.session_summarize_min_messages = 12
+        path = str(tmp_path / "cfg.json")
+        cfg.save(path)
+
+        loaded = MercoConfig.load(path)
+        assert loaded.session_summarize is False
+        assert loaded.session_summarize_min_messages == 12
