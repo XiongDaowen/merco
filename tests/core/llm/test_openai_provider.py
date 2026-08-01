@@ -323,3 +323,22 @@ def test_fetch_context_window_none_on_http_error():
     fake_client.get = AsyncMock(side_effect=Exception("network down"))
     provider.client = fake_client
     assert asyncio.run(provider.fetch_context_window()) is None
+
+
+def test_fetch_context_window_passes_cast_to():
+    """fetch 调用 client.get 时必须传 cast_to（openai SDK 必填 kwarg）"""
+    from unittest.mock import AsyncMock, MagicMock
+
+    provider = OpenAICompatibleProvider(api_key="k", model="m", base_url="https://api.example.com/v1")
+    fake_client = MagicMock()
+    fake_response = AsyncMock()
+    fake_response.status_code = 200
+    fake_response.json = MagicMock(return_value={"data": [{"id": "m", "context_length": 100}]})
+    fake_client.get = AsyncMock(return_value=fake_response)
+    provider.client = fake_client
+
+    import asyncio
+    result = asyncio.run(provider.fetch_context_window())
+    assert result == 100
+    _, kwargs = fake_client.get.call_args
+    assert "cast_to" in kwargs, "openai SDK 的 get 要求 cast_to，缺了会 TypeError 回 None"

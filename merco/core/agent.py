@@ -667,6 +667,8 @@ class Agent:
                         logger.info("-> 切换模型: %s/%s", ctx.switch_model.provider, ctx.switch_model.model)
                         self.config.model = ctx.switch_model
                         self._model_provider = None  # invalidate -> re-resolve on next access
+                        # 切换模型后窗口可能不同（如 200K 降到 64K），重新自动设置
+                        await self._maybe_auto_context_window()
                     continue
                 from merco.core.llm.errors import llm_error
 

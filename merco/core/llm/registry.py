@@ -39,8 +39,9 @@ _BUILTIN_PROVIDERS: list[ModelProviderInfo] = [
         default_model="MiniMax-M2.7",
         models=["MiniMax-M2.7", "MiniMax-Text-01", "abab7-chat"],
         context_windows={
-            "MiniMax-M2.7": 1000000, "MiniMax-Text-01": 1000000,
-            "MiniMax-M3": 1000000, "abab7-chat": 128000,
+            # M2.7/M3 暂按 200K（实际约 204800，保守取整），用户可调整
+            "MiniMax-M2.7": 200000, "MiniMax-Text-01": 1000000,
+            "MiniMax-M3": 200000, "abab7-chat": 128000,
         },
         description="国产平台，MiniMax-M2.7 性价比高",
     ),
