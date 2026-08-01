@@ -10,6 +10,40 @@ from merco.core.context import msg_tokens
 logger = logging.getLogger("merco.context.compress")
 
 
+def fix_orphan_tool_results(all_messages: list[dict], kept: list[dict]) -> list[dict]:
+    """补全孤立 tool 结果的前导 assistant tool_call。
+
+    切点可能落在 assistant(tool_calls) 与 tool(result) 之间，使 tool 结果孤立，
+    导致 LLM API 报 "tool result's tool id not found"。向前在全历史里找匹配的
+    assistant tool_call 并补回 kept 头部。
+    """
+    while True:
+        orphan_at = None
+        for i, msg in enumerate(kept):
+            if msg.get("role") != "tool":
+                continue
+            prev = kept[i - 1] if i > 0 else None
+            if not (prev and prev.get("role") == "assistant" and prev.get("tool_calls")):
+                orphan_at = i
+                break
+        if orphan_at is None:
+            break
+        try:
+            orig_idx = all_messages.index(kept[orphan_at])
+        except ValueError:
+            break
+        found = None
+        for j in range(orig_idx - 1, -1, -1):
+            msg = all_messages[j]
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                found = msg
+                break
+        if found is None or found in kept:
+            break
+        kept.insert(0, found)
+    return kept
+
+
 class CompressProcessor(ContextProcessor):
     """压缩：超过阈值时摘要旧消息"""
 
@@ -80,32 +114,8 @@ class CompressProcessor(ContextProcessor):
         return self._extend_to_chain(messages, messages[:-6], kept)
 
     def _extend_to_chain(self, all_messages, before, kept):
-        """补全孤立 tool 消息的前导 assistant"""
-        while True:
-            orphan_at = None
-            for i, msg in enumerate(kept):
-                if msg.get("role") != "tool":
-                    continue
-                prev = kept[i - 1] if i > 0 else None
-                if not (prev and prev.get("role") == "assistant" and prev.get("tool_calls")):
-                    orphan_at = i
-                    break
-            if orphan_at is None:
-                break
-            try:
-                orig_idx = all_messages.index(kept[orphan_at])
-            except ValueError:
-                break
-            found = None
-            for j in range(orig_idx - 1, -1, -1):
-                msg = all_messages[j]
-                if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                    found = msg
-                    break
-            if found is None or found in kept:
-                break
-            kept.insert(0, found)
-        return kept
+        """补全孤立 tool 消息的前导 assistant（委托 fix_orphan_tool_results）。"""
+        return fix_orphan_tool_results(all_messages, kept)
 
     def _build_summary(self, messages: list[dict]) -> dict:
         """Fallback 摘要"""

@@ -446,6 +446,8 @@ class Agent:
 
         checkpoint = self.session.metadata.get("compress_checkpoint")
         if checkpoint:
+            from merco.context.processors.compress import fix_orphan_tool_results
+
             # Restore from checkpoint: summary + tail only
             summary = checkpoint.get("summary", "")
             tail_count = checkpoint.get("tail_count", 5)
@@ -461,6 +463,8 @@ class Agent:
                 # fall through to full restore below
             else:
                 tail = all_msgs[-tail_count * 2 :] if len(all_msgs) > tail_count * 2 else all_msgs
+                # 补全孤立 tool 结果的前导 assistant tool_call（切点可能切在 tool 交换中间）
+                tail = fix_orphan_tool_results(all_msgs, tail)
 
                 if summary:
                     self.context.add({"role": "system", "content": summary})

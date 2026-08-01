@@ -923,6 +923,44 @@ class TestRestoreContextSummary:
         assert sys_msgs[1]["content"] == "CHECKPOINT SUMMARY"
 
 
+class TestRestoreContextOrphanFix:
+    """测试 checkpoint 恢复时修复孤立 tool 结果"""
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_restore_pulls_in_orphaned_assistant_toolcall(self, test_agent):
+        """切点孤立了 tool 结果时，恢复时补回前导 assistant tool_call"""
+        # 12 条历史；tail_count*2=10 -> tail = messages[2:12]
+        # messages[2] 是 tool(call_A)，其前导 assistant(tc call_A) 在 messages[1]（窗口外）-> 孤立
+        test_agent.session.messages = [
+            {"role": "user", "content": "q1"},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "call_A", "type": "function", "function": {"name": "echo", "arguments": "{}"}}]},
+            {"role": "tool", "tool_call_id": "call_A", "content": "r1"},  # tail 起点，孤立
+            {"role": "assistant", "content": "a1"},
+            {"role": "user", "content": "q2"},
+            {"role": "assistant", "content": "a2"},
+            {"role": "user", "content": "q3"},
+            {"role": "assistant", "content": "a3"},
+            {"role": "user", "content": "q4"},
+            {"role": "assistant", "content": "a4"},
+            {"role": "user", "content": "q5"},
+            {"role": "assistant", "content": "a5"},
+        ]
+        test_agent.session.metadata["compress_checkpoint"] = {
+            "summary": "earlier summary",
+            "tail_count": 5,
+            "original_count": 12,
+        }
+        test_agent._restore_context()
+        # 修复后：每个 tool 结果前必须有匹配的 assistant tool_call
+        msgs = test_agent.context.messages
+        for i, m in enumerate(msgs):
+            if m.get("role") == "tool":
+                prev = msgs[i - 1] if i > 0 else None
+                assert prev is not None and prev.get("role") == "assistant" and prev.get("tool_calls"), (
+                    f"tool 结果在位置 {i} 孤立，前导消息不是 assistant(tool_calls): {prev}"
+                )
+
+
 class TestLlmSummaryStructured:
     """测试 _llm_summary 生成结构化摘要（目标/进展/关键决策/下一步）"""
 
