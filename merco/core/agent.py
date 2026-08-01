@@ -950,10 +950,9 @@ class Agent:
                 lines.append(f"[{role}]: {text}")
 
         prompt = (
-            "Summarize this conversation segment into one concise paragraph "
-            "(under 150 words). Include: what the user asked, what tools were "
-            "used, key findings or decisions. Use natural language, not bullet "
-            "points.\n\n"
+            "Summarize this conversation segment so a continuation has context. "
+            "Use this format, under 300 words:\n"
+            "目标: ...\n进展: ...(已完成/进行中/阻塞)\n关键决策: ...\n下一步: ...\n\n"
             + "\n".join(lines[-30:])  # 最多 30 条
             + "\n\nSummary:"
         )

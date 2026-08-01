@@ -921,3 +921,43 @@ class TestRestoreContextSummary:
         # 分支摘要在 checkpoint 摘要之前
         assert sys_msgs[0]["content"] == "BRANCH SUMMARY"
         assert sys_msgs[1]["content"] == "CHECKPOINT SUMMARY"
+
+
+class TestLlmSummaryStructured:
+    """测试 _llm_summary 生成结构化摘要（目标/进展/关键决策/下一步）"""
+
+    @pytest.mark.asyncio
+    async def test_summary_prompt_requests_structured_format(self, test_agent):
+        """_llm_summary 的 prompt 要求结构化输出格式"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider(
+            [{"content": "目标: 重构X\n进展: 已完成A\n关键决策: 用方案B\n下一步: 做C"}]
+        )
+        messages = [
+            {"role": "user", "content": "帮我重构认证模块"},
+            {"role": "assistant", "content": "好的，先看现有代码"},
+        ]
+        result = await test_agent._llm_summary(messages)
+        # prompt 要求结构化格式
+        prompt = test_agent.provider.calls[0]["messages"][0]["content"]
+        assert "目标" in prompt
+        assert "进展" in prompt
+        assert "关键决策" in prompt
+        assert "下一步" in prompt
+        # 返回值保留前缀 + 结构化内容
+        assert "[Earlier conversation summary]" in result
+        assert "目标: 重构X" in result
+
+    @pytest.mark.asyncio
+    async def test_summary_failure_returns_fallback(self, test_agent):
+        """LLM 失败时返回降级占位，不抛异常"""
+        from tests.conftest import MockModelProvider
+
+        class BoomProvider(MockModelProvider):
+            async def chat(self, messages, tools=None, tool_choice="auto"):
+                raise RuntimeError("LLM down")
+
+        test_agent.provider = BoomProvider()
+        result = await test_agent._llm_summary([{"role": "user", "content": "hi"}])
+        assert "earlier messages" in result  # 降级占位
