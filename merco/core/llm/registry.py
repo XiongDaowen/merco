@@ -23,6 +23,10 @@ _BUILTIN_PROVIDERS: list[ModelProviderInfo] = [
         key_help="https://platform.openai.com/api-keys",
         default_model="gpt-4o",
         models=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini", "o1"],
+        context_windows={
+            "gpt-4o": 128000, "gpt-4o-mini": 128000, "gpt-4-turbo": 128000,
+            "o3-mini": 200000, "o1": 200000,
+        },
         description="最通用的平台，GPT-4o / o3 系列",
     ),
     ModelProviderInfo(
@@ -34,6 +38,10 @@ _BUILTIN_PROVIDERS: list[ModelProviderInfo] = [
         key_help="https://platform.minimaxi.com/user-center/basic-information",
         default_model="MiniMax-M2.7",
         models=["MiniMax-M2.7", "MiniMax-Text-01", "abab7-chat"],
+        context_windows={
+            "MiniMax-M2.7": 1000000, "MiniMax-Text-01": 1000000,
+            "MiniMax-M3": 1000000, "abab7-chat": 128000,
+        },
         description="国产平台，MiniMax-M2.7 性价比高",
     ),
     ModelProviderInfo(
@@ -50,6 +58,12 @@ _BUILTIN_PROVIDERS: list[ModelProviderInfo] = [
             "claude-3-opus-20240229",
             "claude-3-5-sonnet-20241022",
         ],
+        context_windows={
+            "claude-sonnet-4-20250514": 200000,
+            "claude-3-5-haiku-20241022": 200000,
+            "claude-3-opus-20240229": 200000,
+            "claude-3-5-sonnet-20241022": 200000,
+        },
         description="Claude 系列，代码能力优秀（原生 Messages API）",
     ),
     ModelProviderInfo(
@@ -72,6 +86,7 @@ _BUILTIN_PROVIDERS: list[ModelProviderInfo] = [
         key_help="https://platform.deepseek.com/api_keys",
         default_model="deepseek-chat",
         models=["deepseek-chat", "deepseek-reasoner"],
+        context_windows={"deepseek-chat": 64000, "deepseek-reasoner": 64000},
         description="国产平台，deepseek-reasoner 推理能力强",
     ),
 ]
@@ -93,6 +108,13 @@ class ModelRegistry:
 
     def list(self) -> list[ModelProviderInfo]:
         return list(self._providers.values())
+
+    def get_context_window(self, provider: str, model: str) -> int | None:
+        """查 provider 的 context_windows 静态表。未知返回 None（走配置回退）。"""
+        info = self._providers.get(provider)
+        if not info:
+            return None
+        return info.context_windows.get(model)
 
     def select(self, model_config) -> ModelProvider:
         """Resolve credentials (config > env > info defaults) + build provider.
