@@ -436,6 +436,8 @@ class Agent:
     def _restore_context(self):
         """清空上下文，然后从持久化会话恢复消息"""
         self.context = ContextManager(max_tokens=self.config.max_input_tokens)
+        # 恢复上次实测 token（避免续接时进度条回退到漏算开销的估算值）
+        self.context.last_actual_tokens = self.session.metadata.get("last_actual_tokens", 0)
         # 分支摘要：整条会话定位，作为首条 system 注入（与 compress_checkpoint 共存，摘要在前）
         branch_summary = self.session.metadata.get("context_summary")
         if branch_summary:
@@ -632,6 +634,8 @@ class Agent:
             usage = response.get("usage")
             if usage and usage.get("prompt_tokens"):
                 self.context.last_actual_tokens = usage["prompt_tokens"]
+                # 持久化实测值，续接时进度条不再回退到估算
+                self.session.metadata["last_actual_tokens"] = usage["prompt_tokens"]
 
             tokens_in = usage.get("prompt_tokens") if usage else self.context.total_tokens
             tokens_out = (

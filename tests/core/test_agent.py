@@ -1037,3 +1037,33 @@ class TestLlmSummaryStructured:
         test_agent.provider = BoomProvider()
         result = await test_agent._llm_summary([{"role": "user", "content": "hi"}])
         assert "earlier messages" in result  # 降级占位
+
+
+class TestLastActualTokensPersist:
+    """测试 last_actual_tokens 跨会话持久化（避免续接时进度条跳变）"""
+
+    @pytest.mark.asyncio
+    async def test_run_persists_last_actual_tokens_to_metadata(self, test_agent):
+        """run 后 last_actual_tokens 写入 session.metadata"""
+        from tests.conftest import MockModelProvider
+
+        test_agent.provider = MockModelProvider(
+            [{"content": "hello", "usage": {"prompt_tokens": 1234, "completion_tokens": 20, "cached_tokens": 0}}]
+        )
+        await test_agent.run("hi")
+        assert test_agent.session.metadata.get("last_actual_tokens") == 1234
+
+    @pytest.mark.asyncio
+    async def test_restore_restores_last_actual_tokens(self, test_agent):
+        """_restore_context 从 metadata 恢复 last_actual_tokens"""
+        test_agent.session.metadata["last_actual_tokens"] = 5678
+        test_agent.session.add_message("user", "hi")
+        test_agent._restore_context()
+        assert test_agent.context.last_actual_tokens == 5678
+
+    @pytest.mark.asyncio
+    async def test_restore_without_metadata_defaults_zero(self, test_agent):
+        """无 last_actual_tokens metadata 时恢复为 0"""
+        test_agent.session.add_message("user", "hi")
+        test_agent._restore_context()
+        assert test_agent.context.last_actual_tokens == 0
