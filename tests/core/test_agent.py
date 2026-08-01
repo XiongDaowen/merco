@@ -960,6 +960,44 @@ class TestRestoreContextOrphanFix:
                     f"tool 结果在位置 {i} 孤立，前导消息不是 assistant(tool_calls): {prev}"
                 )
 
+    @pytest.mark.asyncio
+    async def test_checkpoint_restore_multi_tool_split_pulls_all_results(self, test_agent):
+        """多 tool 结果被切点分开时，恢复时拉回 assistant + 其全部结果（不能只拉 assistant）"""
+        # 13 条；tail = last 10 = messages[3:13]
+        # messages[3] = tool(call_B) 是 tail 起点（孤立），其 assistant(tc A,B) 在 [1]、tool(A) 在 [2]（窗口外）
+        test_agent.session.messages = [
+            {"role": "user", "content": "q1"},
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"id": "call_A", "type": "function", "function": {"name": "echo", "arguments": "{}"}},
+                {"id": "call_B", "type": "function", "function": {"name": "echo", "arguments": "{}"}},
+            ]},
+            {"role": "tool", "tool_call_id": "call_A", "content": "rA"},  # 窗口外
+            {"role": "tool", "tool_call_id": "call_B", "content": "rB"},  # tail 起点，孤立
+            {"role": "assistant", "content": "a1"},
+            {"role": "user", "content": "q2"},
+            {"role": "assistant", "content": "a2"},
+            {"role": "user", "content": "q3"},
+            {"role": "assistant", "content": "a3"},
+            {"role": "user", "content": "q4"},
+            {"role": "assistant", "content": "a4"},
+            {"role": "user", "content": "q5"},
+            {"role": "assistant", "content": "a5"},
+        ]
+        test_agent.session.metadata["compress_checkpoint"] = {
+            "summary": "earlier", "tail_count": 5, "original_count": 13,
+        }
+        test_agent._restore_context()
+        msgs = test_agent.context.messages
+        roles = [(m.get("role"), m.get("tool_call_id")) for m in msgs]
+        # assistant(tc A,B) 必须在 context，且 call_A、call_B 两个结果都在（不能只留 call_B）
+        assert any(
+            m.get("role") == "assistant"
+            and any(tc.get("id") == "call_A" for tc in m.get("tool_calls", []))
+            for m in msgs
+        ), "assistant(tc call_A) 必须被拉回"
+        assert ("tool", "call_A") in roles, "call_A 的 tool 结果必须被拉回（不能只拉 assistant）"
+        assert ("tool", "call_B") in roles, "call_B 的 tool 结果应在 tail 里"
+
 
 class TestLlmSummaryStructured:
     """测试 _llm_summary 生成结构化摘要（目标/进展/关键决策/下一步）"""

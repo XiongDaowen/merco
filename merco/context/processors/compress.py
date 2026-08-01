@@ -32,15 +32,19 @@ def fix_orphan_tool_results(all_messages: list[dict], kept: list[dict]) -> list[
             orig_idx = all_messages.index(kept[orphan_at])
         except ValueError:
             break
-        found = None
+        asst_idx = None
         for j in range(orig_idx - 1, -1, -1):
             msg = all_messages[j]
             if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                found = msg
+                asst_idx = j
                 break
-        if found is None or found in kept:
+        if asst_idx is None:
             break
-        kept.insert(0, found)
+        # 拉回 assistant + 它在切点前的所有 tool 结果（避免 tool_call 有声明无结果）
+        to_add = [m for m in all_messages[asst_idx:orig_idx] if m not in kept]
+        if not to_add:
+            break
+        kept[:0] = to_add
     return kept
 
 
