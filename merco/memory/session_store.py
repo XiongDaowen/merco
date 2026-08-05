@@ -308,10 +308,11 @@ class SessionStore:
     def save_metadata(self, session_id: str, metadata: dict):
         import json
 
+        now = _now()
         with self._conn() as conn:
             conn.execute(
-                "UPDATE sessions SET metadata = ? WHERE id = ?",
-                (json.dumps(metadata, ensure_ascii=False), session_id),
+                "UPDATE sessions SET metadata = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(metadata, ensure_ascii=False), now, session_id),
             )
             conn.commit()
 

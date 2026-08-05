@@ -94,6 +94,35 @@ class TestCloneSession:
         assert cloned["messages"][1]["role"] == "assistant"
         assert cloned["messages"][1]["content"] == "Hi there"
 
+    def test_save_metadata_keeps_active_ahead_of_clone(self, tmp_path, monkeypatch):
+        """回归：压缩后 save_metadata 必须刷新 updated_at，使活动会话在 list_sessions
+        中排在归档 clone 之前。
+
+        旧 bug：save_metadata 不更新 updated_at，而 clone_session 设 updated_at=now。
+        压缩（刷新 checkpoint）后活动会话 updated_at 停留在上次聊天，clone 反而最新 ->
+        resume_or_create 加载 clone（其 checkpoint 在新 checkpoint 写入前复制，已过期）
+        -> 每次启动全量恢复 + 重新压缩 + 归档，无限循环。
+        """
+        import merco.memory.session_store as mod
+
+        db_path = str(tmp_path / "archive_cycle.db")
+        store = SessionStore(db_path)
+        sid = "active"
+        store.create_session(sid, title="active")
+        store.save_message(sid, "user", "hi")  # 活动会话有消息
+
+        # 受控时间：clone 在 T1，save_metadata 在 T2（> T1）
+        times = iter(["2026-08-05T10:00:00", "2026-08-05T10:00:05"])
+        monkeypatch.setattr(mod, "_now", lambda: next(times))
+
+        clone_id = store.clone_session(sid)  # 模拟压缩 auto-fork：clone updated_at=T1
+        # 模拟压缩后刷新 checkpoint 并退出持久化
+        store.save_metadata(sid, {"compress_checkpoint": {"original_count": 1}})  # active updated_at=T2
+
+        recent = store.list_sessions(limit=1)
+        assert recent[0]["id"] == sid  # 活动会话最新，不是归档 clone
+        assert store.load_session(sid)["updated_at"] > store.load_session(clone_id)["updated_at"]
+
     def test_clone_nonexistent_raises_value_error(self, tmp_path):
         """Cloning a nonexistent session should raise ValueError."""
         db_path = str(tmp_path / "clone_error.db")
