@@ -1,8 +1,8 @@
-# 🧠 merco — Mercury Code
+# 🧠 merco - Mercury Code
 
-> **Mer**(cury) + **Co**(de) = 默客 — 一个轻量、可拓展的 AI 编程助手，跑在你的终端里。
+> **Mer**(cury) + **Co**(de) = 默客 - 一个轻量、可拓展的 AI 编程助手，跑在你的终端里。
 
-`pip install merco && merco` 就能开始。没有 Docker、没有数据库依赖。架构上就是一个 Agent 循环 + 插件系统——你需要的功能全是你自己选的插件。
+`pip install merco && merco` 就能开始。没有 Docker、没有数据库依赖--架构就是一个 Agent 循环 + 插件系统，你需要的功能全是你自己选的插件。
 
 ---
 
@@ -14,13 +14,11 @@ merco setup             # 首次运行交互引导（选平台 / 填 Key / 选�
 merco                   # 启动 REPL
 ```
 
-**一条命令安装，一条命令启动。** 配置文件是可选的——环境变量 `OPENAI_API_KEY` 或 `OPENROUTER_API_KEY` 就够了。底层 Python 3.12+ 原生 asyncio，uv 构建。
-
----
+一条命令安装，一条命令启动。配置文件可选--`OPENAI_API_KEY` 或 `OPENROUTER_API_KEY` 环境变量就够。底层 Python 3.12+ 原生 asyncio，uv 构建。
 
 ## 🔌 插件拓展
 
-**merco 的所有子系统都是插件。** 8 个内置插件全部通过 `pyproject.toml` 的 `entry_points` 动态发现，零硬编码。你可以关掉任何一个、或用自己的替代——也可以注册全新的。
+**所有子系统都是插件。** 8 个内置插件全部通过 `pyproject.toml` 的 `entry_points` 动态发现，零硬编码--关掉任何一个、用自己的替代、或注册全新的都行。
 
 ```python
 from merco.plugins.base import Plugin, PluginContext
@@ -39,7 +37,7 @@ class MyPlugin(Plugin):
         ctx.add_processor("result_pipeline", MyProcessor()) # 接管管线
 ```
 
-### 内置插件
+**内置插件**（按激活顺序）：
 
 | 插件 | priority | 做什么 |
 |------|:--:|------|
@@ -52,7 +50,7 @@ class MyPlugin(Plugin):
 | **Scheduler** | 20 | 创建 CronScheduler，AgentRuntime 后台调度 |
 | **Superpower** | 10 | 事件注入、self-healing |
 
-### 三行装上
+**三行装上你自己的**：
 
 ```toml
 # 在你的 pyproject.toml 里：
@@ -60,9 +58,9 @@ class MyPlugin(Plugin):
 my_plugin = "my_package.my_plugin:MyPlugin"
 ```
 
-merco 安装即被发现。也支持目录扫描（扔一个 `plugin.toml` 到 `~/.config/merco/plugins/` 下）和 `merco.json` 的 `plugins` 字段手动切 enabled / 传自定义 config。
+安装即被发现。也支持目录扫描（扔一个 `plugin.toml` 到 `~/.config/merco/plugins/`）和 `merco.json` 的 `plugins` 字段切 enabled / 传自定义 config。
 
-### 还要怎么拓展？
+**扩展点速查**：
 
 | 你想做的事 | 用这个 |
 |------------|--------|
@@ -74,8 +72,6 @@ merco 安装即被发现。也支持目录扫描（扔一个 `plugin.toml` 到 `
 | 加一个记忆存储后端 | `ctx.add_memory_backend(backend)` |
 | 加一个安全策略 | `ctx.add_security_policy(policy)` |
 | 订阅生命周期事件 | `ctx.hooks.on("event", handler)` |
-
----
 
 ## 🏗️ 架构一览
 
@@ -94,14 +90,12 @@ CLI   Webhook   Cron   Custom
   LLM Tools Mem Plugins
 ```
 
-- **AgentRuntime** — 统一生命周期。`start()` 触发插件两阶段激活 + gateway/scheduler 启动；`stop()` 幂等收尾。CLI / webhook / cron / 任何入口都通过它调用 Agent。
-- **ModelProvider ABC** + **ModelRegistry** — 多模型层。内置 OpenAI / Anthropic / 任意 OAI-兼容端点（填 `base_url` 就行）。`select()` 独占凭证解析，Agent 不感知 `api_key`。
-- **GatewayAdapter ABC** + **GatewayRegistry** — 多入口接入。内置 `WebhookGateway`（FastAPI/uvicorn，`port=0` OS 自动分配，POST `/message` → `{reply}`）。注册你的 adapter 后 Runtime 自动接管 inbound/outbound；单个 gateway 启动失败不影响其他。
-- **CronScheduler** — 定时任务，由 SchedulerPlugin 创建，Runtime 自动后台 `asyncio.create_task` 拉起。
+- **AgentRuntime** - 统一生命周期。`start()` 触发插件两阶段激活 + gateway/scheduler 启动；`stop()` 幂等收尾。CLI / webhook / cron / 任何入口都通过它调用 Agent。
+- **ModelProvider ABC** + **ModelRegistry** - 多模型层。内置 OpenAI / Anthropic / 任意 OAI-兼容端点（填 `base_url` 就行）。`select()` 独占凭证解析，Agent 不感知 `api_key`。
+- **GatewayAdapter ABC** + **GatewayRegistry** - 多入口接入。内置 `WebhookGateway`（FastAPI/uvicorn，`port=0` OS 自动分配，POST `/message` -> `{reply}`）。注册你的 adapter 后 Runtime 自动接管 inbound/outbound；单个 gateway 启动失败不影响其他。
+- **CronScheduler** - 定时任务，由 SchedulerPlugin 创建，Runtime 自动后台 `asyncio.create_task` 拉起。
 
----
-
-## ⚙️ 配置示例
+## ⚙️ 配置
 
 最小即可跑（其余字段均有合理默认值）：
 
@@ -169,7 +163,7 @@ CLI   Webhook   Cron   Custom
 
 </details>
 
----
+## 📋 更多
 
 <details>
 <summary>🗂️ 完整命令列表（27 个 /command）</summary>
@@ -185,8 +179,6 @@ CLI   Webhook   Cron   Custom
 | **control** | `/exit` `/quit` `/q` | 退出（自动保存 session + observer snapshot） |
 
 </details>
-
----
 
 <details>
 <summary>🏗️ 模块状态总览</summary>
@@ -209,8 +201,6 @@ CLI   Webhook   Cron   Custom
 | Gateway | 🟢 NEW | GatewayAdapter ABC + GatewayRegistry + WebhookGateway |
 
 </details>
-
----
 
 <details>
 <summary>📁 完整项目结构</summary>
@@ -244,9 +234,9 @@ merco/
 
 ## 📖 文档
 
-- 模块状态总览 → [`docs/project-vision/references/architecture.md`](docs/project-vision/references/architecture.md)
-- 项目进展与决策记录 → [`docs/project-vision/references/progress.md`](docs/project-vision/references/progress.md)
-- 下一个投入方向 → [`docs/project-vision/references/next-focus.md`](docs/project-vision/references/next-focus.md)
+- 模块状态总览 -> [`docs/project-vision/references/architecture.md`](docs/project-vision/references/architecture.md)
+- 项目进展与决策记录 -> [`docs/project-vision/references/progress.md`](docs/project-vision/references/progress.md)
+- 下一个投入方向 -> [`docs/project-vision/references/next-focus.md`](docs/project-vision/references/next-focus.md)
 
 ## 📄 许可证
 
