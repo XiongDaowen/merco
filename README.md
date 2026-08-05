@@ -77,10 +77,13 @@ my_plugin = "my_package.my_plugin:MyPlugin"
 
 ![merco 架构](docs/architecture.svg)
 
-- **AgentRuntime** - 统一生命周期。`start()` 触发插件两阶段激活 + gateway/scheduler 启动；`stop()` 幂等收尾。CLI / webhook / cron / 任何入口都通过它调用 Agent。
-- **ModelProvider ABC** + **ModelRegistry** - 多模型层。内置 OpenAI / Anthropic / 任意 OAI-兼容端点（填 `base_url` 就行）。`select()` 独占凭证解析，Agent 不感知 `api_key`。
-- **GatewayAdapter ABC** + **GatewayRegistry** - 多入口接入。内置 `WebhookGateway`（FastAPI/uvicorn，`port=0` OS 自动分配，POST `/message` -> `{reply}`）。注册你的 adapter 后 Runtime 自动接管 inbound/outbound；单个 gateway 启动失败不影响其他。
-- **CronScheduler** - 定时任务，由 SchedulerPlugin 创建，Runtime 自动后台 `asyncio.create_task` 拉起。
+- **入口层** — CLI（`merco` REPL）/ Webhook（内置 FastAPI，`port=0` 自动分配）/ Cron（SchedulerPlugin 定时任务）/ Custom（你的 `GatewayAdapter`）。全部经 `handle_inbound()` 进 Runtime。
+- **AgentRuntime** — 统一生命周期。`start()` 触发插件两阶段激活 + gateway/scheduler 启动；`stop()` 幂等收尾。
+- **Agent Loop** — 一次 turn-loop：组装上下文 → 调 Models → 执行 Tool Calls → 写 Memory → 通过 Hooks 发事件 → 回结果。
+- **Models** — `ModelProvider` ABC + `ModelRegistry` 唯一真源。内置 OpenAI / Anthropic / 任意 OAI-兼容端点（填 `base_url`）。`select()` 独占凭证解析，Loop 不感知 `api_key`。
+- **Tools** — bash / file / edit / web / MCP / skill / task。Loop 通过统一协议调度，插件可经 `ctx.register_tool` 替换或新增。
+- **Memory** — SessionStore（SQLite WAL）+ HybridRecaller（FTS5 + JSON）。Loop 写消息、读召回、自动压缩超长上下文。
+- **Hooks** — 15+ 生命周期事件的 `HookRegistry`。Scheduler 订阅 `conversation.turn` 触发 cron、Gateway 订阅 inbound、MCP 订阅 `tool.before_execute`、Observability 订阅全部。Loop 不直接调 plugin，只发事件。
 
 ## ⚙️ 配置
 
