@@ -82,6 +82,30 @@ class TestBashTool:
         # 0xff/0xfe/0xfd 均非合法 UTF-8 起始字节 -> decode(errors="replace") 产生 �
         assert "�" in result["stdout"]
 
+    @pytest.mark.asyncio
+    async def test_stdin_not_inherited(self, bash_tool):
+        """stdin 不继承终端：读 stdin 的命令（cat）立即收到 EOF 返回，不挂起劫持输入。"""
+        result = await bash_tool.execute("cat", timeout=3)
+        assert "error" not in result
+        assert result["returncode"] == 0
+        assert result["stdout"] == ""
+
+    @pytest.mark.asyncio
+    async def test_subprocess_in_new_session(self, bash_tool):
+        """start_new_session：子进程在新会话（sid 与 merco 不同），隔离控制终端。
+
+        TUI 程序经 /dev/tty 污染 merco 终端的根因是控制终端共享；新会话下子进程
+        无控制终端，/dev/tty 打不开，无法写转义序列覆盖 merco 终端。
+        """
+        import os
+
+        parent_sid = str(os.getsid(os.getpid()))
+        result = await bash_tool.execute("ps -o sid= -p $$")
+        assert "error" not in result
+        child_sid = result["stdout"].strip()
+        assert child_sid.isdigit()
+        assert child_sid != parent_sid
+
     def test_kill_all_processes(self, bash_tool):
         """测试kill_all方法终止所有活跃进程"""
 

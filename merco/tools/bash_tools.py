@@ -29,9 +29,13 @@ class BashTool(BaseTool):
         try:
             process = await asyncio.create_subprocess_shell(
                 command,
+                stdin=subprocess.DEVNULL,  # 不继承终端 stdin：交互式程序无法劫持 merco 输入
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=workdir,
+                # 新会话：子进程 setsid() 后无控制终端，TUI 程序打开 /dev/tty 会失败，
+                # 无法写转义序列污染 merco 终端。根因是控制终端共享（非 isatty）。
+                start_new_session=True,
             )
             self._active_processes.add(process)
 
