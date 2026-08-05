@@ -933,7 +933,11 @@ class TestRestoreContextOrphanFix:
         # messages[2] 是 tool(call_A)，其前导 assistant(tc call_A) 在 messages[1]（窗口外）-> 孤立
         test_agent.session.messages = [
             {"role": "user", "content": "q1"},
-            {"role": "assistant", "content": "", "tool_calls": [{"id": "call_A", "type": "function", "function": {"name": "echo", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "call_A", "type": "function", "function": {"name": "echo", "arguments": "{}"}}],
+            },
             {"role": "tool", "tool_call_id": "call_A", "content": "r1"},  # tail 起点，孤立
             {"role": "assistant", "content": "a1"},
             {"role": "user", "content": "q2"},

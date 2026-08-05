@@ -3,7 +3,6 @@
 import pytest
 
 from merco.core.session import Session
-from merco.memory.session_store import SessionStore
 
 
 class FakeStore:

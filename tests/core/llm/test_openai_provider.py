@@ -226,7 +226,6 @@ def test_parse_response_handles_none_arguments():
 def test_parse_chunk_extracts_cached_tokens():
     """_parse_chunk 从 usage.prompt_tokens_details.cached_tokens 提取 cached_tokens（流式）。"""
     from types import SimpleNamespace
-    from unittest.mock import MagicMock
 
     from merco.core.llm.openai_provider import OpenAICompatibleProvider
 
@@ -278,7 +277,9 @@ def test_fetch_context_window_returns_context_length():
     fake_client = MagicMock()
     fake_response = AsyncMock()
     fake_response.status_code = 200
-    fake_response.json = MagicMock(return_value={"data": [{"id": "other", "context_length": 1}, {"id": "my-model", "context_length": 200000}]})
+    fake_response.json = MagicMock(
+        return_value={"data": [{"id": "other", "context_length": 1}, {"id": "my-model", "context_length": 200000}]}
+    )
     fake_client.get = AsyncMock(return_value=fake_response)
     provider.client = fake_client
 

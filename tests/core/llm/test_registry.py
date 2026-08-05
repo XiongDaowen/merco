@@ -110,7 +110,7 @@ def test_get_context_window_unknown_returns_none():
 
 def test_get_context_window_plugin_registered():
     """插件注册的 provider 携带 context_windows 可查"""
-    from merco.core.llm.base import ModelProviderInfo, ModelProvider
+    from merco.core.llm.base import ModelProvider, ModelProviderInfo
     from merco.core.llm.registry import ModelRegistry
 
     reg = ModelRegistry()

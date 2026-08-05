@@ -2,7 +2,7 @@
 
 import pytest
 
-from cli.commands import cmd_fork, cmd_sessions, cmd_report
+from cli.commands import cmd_fork, cmd_report, cmd_sessions
 from tests.conftest import MockModelProvider
 
 
