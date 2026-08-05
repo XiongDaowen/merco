@@ -1,18 +1,14 @@
 """MiniMax plugin - registers a MiniMax-specific ModelProvider.
 
-MiniMax protocol quirk: the model occasionally emits the user-visible reply
-*inside* the `` block (e.g. ``hello你好！``),
-before the closing tag. The default ThinkTagStrategy extracts the entire
-block content as `reasoning`, leaving `content` empty -- which then triggers
-a spurious EmptyResponsePipeline callback in the agent loop.
+MiniMax 在推理过程中可能字面写出闭标签（如讨论 think 格式时输出 ``</think>``
+/ ``[/think]``）。核心 ThinkTagStrategy 用 find-first 匹配，会把 reasoning 中
+第一个字面闭标签误当成 think 块结束，导致 reasoning 中间被截断、剩余部分错归
+为 content。
 
-This plugin wraps OpenAICompatibleProvider in MiniMaxProvider, which re-runs
-the think-tag extraction against the *complete* `message.content` (or
-assembled chunk content for streaming) so the user-visible text outside the
-last `` tag is restored to `content`.
-
-The fix is scoped to model names that match MiniMax's quirks; other
-providers are unaffected (they keep using OpenAICompatibleProvider).
+MiniMax 语义下 think 块只有一个：reasoning 中较早出现的闭标签是字面文本，最后
+一个闭标签才是真正结束。本 provider 用 find-last 重新提取（非流式 ``_parse_response``
++ 流式 ``chat_stream`` 流末 reconcile），覆盖核心的 find-first。其他 provider 不受
+影响，仍用 OpenAICompatibleProvider。
 """
 from __future__ import annotations
 
@@ -20,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from merco.core.llm.openai_provider import OpenAICompatibleProvider
+from merco.core.llm.thinking import THINK_TAG_PAIRS, make_thinking_extractor
 from merco.plugins.base import Plugin
 
 if TYPE_CHECKING:
@@ -43,105 +40,91 @@ def _is_minimax_model(model: str) -> bool:
 
 
 class MiniMaxProvider(OpenAICompatibleProvider):
-    """OpenAI-compatible transport with MiniMax protocol fixes.
+    """OpenAI-compatible transport with MiniMax think-tag extraction fix.
 
-    Inherits *all* behaviour from OpenAICompatibleProvider (timeouts,
-    retries, error translation, usage extraction, tool_calls
-    normalisation, streaming chunk assembly) and only overrides the two
-    response-parsing methods that suffer from MiniMax's `` quirk.
+    MiniMax 在推理过程中可能字面写出闭标签（如讨论 think 格式时输出
+    ``</think>`` / ``[/think]``）。核心 ThinkTagStrategy 用 find-first 匹配，
+    会把 reasoning 中第一个字面闭标签误当成 think 块结束，导致 reasoning 在
+    中间被截断、剩余部分被错归为 content。
+
+    MiniMax 语义：think 块只有一个，reasoning 中较早出现的闭标签都是字面文本，
+    最后一个闭标签才是真正的结束。故本 provider 用 find-last 重新提取：
+
+    - 非流式 ``_parse_response``：核心提取后，用 find-last 对完整原文重新切分，
+      覆盖 reasoning / content。
+    - 流式 ``chat_stream``：逐 chunk 仍走核心 find-first（供实时显示），流结束后
+      用 find-last 对累积原文重新切分，发一个 ``_reconcile`` chunk 覆盖累积结果
+      （字面闭标签与真闭标签往往落在不同 chunk，per-chunk find-first 处理不了）。
     """
 
     def _parse_response(self, response) -> dict:
         result = super()._parse_response(response)
-        # MiniMax fix: if thinking extraction emptied `content` because the
-        # model replied inside ``, recover the post-think text from
-        # the *original* message.content and prepend it.
-        if (
-            not result.get("content")
-            and not result.get("tool_calls")
-            and not result.get("reasoning", "").rstrip().endswith("")
-        ):
-            # reasoning ended cleanly on a closing tag -- the model
-            # likely put everything in ``; nothing to recover.
+        if not response.choices:
             return result
-        if not result.get("content") and response.choices:
-            original = response.choices[0].message.content or ""
-            recovered = _split_think_blocks(original)[1]
-            if recovered:
-                result["content"] = recovered
-                logger.debug(
-                    "MiniMax fix: recovered %d chars of content from think-block boundary",
-                    len(recovered),
-                )
+        original = response.choices[0].message.content or ""
+        reasoning, content = _split_think_blocks(original)
+        # 命中 think 块（有 reasoning 或原文含闭标签）时，用 find-last 覆盖核心 find-first
+        if reasoning or any(ct in original for _ot, ct in THINK_TAG_PAIRS):
+            if reasoning:
+                result["reasoning"] = reasoning
+            result["content"] = content.strip()
         return result
 
-    def _parse_chunk(self, chunk, extractor=None):
-        result = super()._parse_chunk(chunk, extractor)
-        if not result:
-            return result
-        # MiniMax streaming fix: per-chunk the state machine may swallow
-        # content that arrived before `` closed. When the stream ends
-        # we have the full assembled chunk text in `reasoning`; the last
-        # segment after the closing tag is the real reply.
-        if not result.get("content") and result.get("reasoning"):
-            recovered = _split_think_blocks(result["reasoning"])[1]
-            if recovered:
-                result["content"] = recovered
-                result["reasoning"] = _split_think_blocks(result["reasoning"])[0]
-        return result
+    async def chat_stream(self, messages, tools=None, tool_choice="auto"):
+        # 逐 chunk 走核心 find-first（实时显示）；流末用 find-last 对完整原文重新切分
+        extractor = make_thinking_extractor(self.model)
+        params = self._build_params(messages, tools, tool_choice, stream=True)
+        stream = await self._request(params)
+        raw_buf = ""
+        async for chunk in stream:
+            if chunk.choices:
+                delta = chunk.choices[0].delta
+                if delta is not None:
+                    raw_buf += getattr(delta, "content", None) or ""
+            if parsed := self._parse_chunk(chunk, extractor):
+                yield parsed
+        reasoning, content = _split_think_blocks(raw_buf)
+        yield {"_reconcile": True, "reasoning": reasoning, "content": content.strip()}
 
 
 def _split_think_blocks(text: str) -> tuple[str, str]:
-    """Split ``text`` into (thinking, post-thinking reply).
+    """用 find-last 把 ``text`` 切成 (reasoning, content)。
 
-    Tries each (open, close) tag pair in THINK_TAG_PAIRS, in order, scanning
-    for the LAST matching pair. The reasoning segment is everything from
-    the matched open tag to the matched close tag (inclusive); the reply
-    segment is everything after the close tag, stripped.
-
-    Returns ``("", text)`` if no think block is found -- meaning the entire
-    text is the user-visible reply.
+    语义：think 块只有一个--第一个开标签到最后一个闭标签之间是 reasoning
+    （其中较早出现的闭标签视为字面文本，不作为结束），开标签之前 + 最后一个
+    闭标签之后是 content。无开标签返回 ``("", text)``；有开标签无闭标签
+    （流式未闭合）时开标签之后全部当 reasoning。
     """
-    from merco.core.llm.thinking import THINK_TAG_PAIRS
-
     if not text:
         return "", ""
 
-    best_open = -1
-    best_close = -1
-
-    # Find the LAST matching (open, close) pair by scanning all open positions
-    # in reverse and looking for the corresponding close after each.
-    for ot, ct in THINK_TAG_PAIRS:
-        # Walk every occurrence of `ot` (from last to first); for each, the
-        # matching close is the first `ct` after that position.
-        start = len(text)
-        while True:
-            start = text.rfind(ot, 0, start)
-            if start < 0:
-                break
-            end = text.find(ct, start + len(ot))
-            if end < 0:
-                # This open has no matching close; skip and look for an earlier open.
-                continue
-            # Pick this pair if it's later than what we have so far.
-            if end > best_close:
-                best_open = start
-                best_close = end
-                # Tag tracker only used for readability (same as best_close_tag below).
-                best_open_tag = ot  # noqa: F841
-                best_close_tag = ct
-            # Continue searching earlier opens for the same tag pair.
-            # (don't break — we want the LAST matching pair, so keep going
-            #  backwards from this start)
-
-    if best_open < 0:
-        # No matching think block at all.
+    # 第一个开标签（THINK_TAG_PAIRS 开标签去重保序）
+    first_open = -1
+    open_tag = ""
+    for ot in dict.fromkeys(ot for ot, _ct in THINK_TAG_PAIRS):
+        idx = text.find(ot)
+        if idx != -1 and (first_open == -1 or idx < first_open):
+            first_open = idx
+            open_tag = ot
+    if first_open == -1:
         return "", text
 
-    reasoning = text[best_open : best_close + len(best_close_tag)]
-    after = text[best_close + len(best_close_tag) :]
-    return reasoning, after.strip()
+    # 该开标签的所有候选闭标签中，最后一个（在开标签之后）
+    close_tags = [ct for (o, ct) in THINK_TAG_PAIRS if o == open_tag]
+    last_close = -1
+    close_tag = ""
+    for ct in close_tags:
+        idx = text.rfind(ct, first_open + len(open_tag))
+        if idx != -1 and idx > last_close:
+            last_close = idx
+            close_tag = ct
+    if last_close == -1:
+        # 开标签已出现但闭标签未到（流式跨 chunk 未闭合）：之后全部当 reasoning
+        return text[first_open + len(open_tag) :], text[:first_open]
+
+    reasoning = text[first_open + len(open_tag) : last_close]
+    content = text[:first_open] + text[last_close + len(close_tag) :]
+    return reasoning, content
 
 
 class MiniMaxPlugin(Plugin):

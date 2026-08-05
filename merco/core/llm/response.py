@@ -157,6 +157,13 @@ class StreamingProvider(ResponseProvider):
                             "assistant", content_buf, reasoning=reasoning_buf, tool_calls=assembled.get("tool_calls")
                         )
                     raise asyncio.CancelledError()
+                if chunk.get("_reconcile"):
+                    # provider 流末重新提取（如 MiniMax find-last）：用完整原文覆盖
+                    # per-chunk 累积，修正 find-first 对 reasoning 中字面闭标签的误切。
+                    # finish_reason / usage 已在前序真实 chunk 中处理，此处只覆盖文本。
+                    reasoning_buf = chunk.get("reasoning", "") or ""
+                    content_buf = chunk.get("content", "") or ""
+                    continue
                 r = chunk.get("reasoning", "")
                 if r:
                     reasoning_buf += r
