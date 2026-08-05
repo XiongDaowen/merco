@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 440" font-family="-apple-system,'Segoe UI',Roboto,sans-serif" text-rendering="geometricPrecision">
+  <title>merco 架构一览</title>
+  <desc>入口层（CLI / Webhook / Cron / Custom）汇聚到 AgentRuntime，再到 Agent Loop，分发到 LLM / Tools / Memory / Plugins 四个子系统。</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8c959f"/>
+    </marker>
+  </defs>
+
+  <!-- 入口层 -->
+  <g font-size="15" text-anchor="middle" fill="#1a7f37">
+    <rect x="60"  y="36" width="120" height="44" rx="8" fill="#ddf4e6" stroke="#2da44e" stroke-width="1.5"/>
+    <text x="120" y="63">CLI</text>
+    <rect x="220" y="36" width="120" height="44" rx="8" fill="#ddf4e6" stroke="#2da44e" stroke-width="1.5"/>
+    <text x="280" y="63">Webhook</text>
+    <rect x="380" y="36" width="120" height="44" rx="8" fill="#ddf4e6" stroke="#2da44e" stroke-width="1.5"/>
+    <text x="440" y="63">Cron</text>
+    <rect x="540" y="36" width="120" height="44" rx="8" fill="#ddf4e6" stroke="#2da44e" stroke-width="1.5"/>
+    <text x="600" y="63">Custom</text>
+  </g>
+
+  <!-- 入口 -> 汇聚总线 -->
+  <g stroke="#8c959f" stroke-width="1.5" fill="none">
+    <path d="M120,80 L120,120"/>
+    <path d="M280,80 L280,120"/>
+    <path d="M440,80 L440,120"/>
+    <path d="M600,80 L600,120"/>
+    <path d="M120,120 L600,120"/>
+  </g>
+  <path d="M360,120 L360,154" stroke="#8c959f" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- AgentRuntime（核心，高亮） -->
+  <g font-size="16" text-anchor="middle">
+    <rect x="240" y="156" width="240" height="48" rx="8" fill="#2da44e" stroke="#1a7f37" stroke-width="1.5"/>
+    <text x="360" y="186" fill="#ffffff" font-weight="600">AgentRuntime</text>
+  </g>
+
+  <!-- Runtime -> Agent Loop -->
+  <path d="M360,204 L360,254" stroke="#8c959f" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Agent Loop -->
+  <g font-size="16" text-anchor="middle">
+    <rect x="300" y="256" width="120" height="48" rx="8" fill="#ddf4e6" stroke="#2da44e" stroke-width="1.5"/>
+    <text x="360" y="286" fill="#1a7f37" font-weight="600">Agent Loop</text>
+  </g>
+
+  <!-- Agent Loop -> 分发总线 -->
+  <g stroke="#8c959f" stroke-width="1.5" fill="none">
+    <path d="M360,304 L360,340"/>
+    <path d="M120,340 L600,340"/>
+  </g>
+  <g stroke="#8c959f" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
+    <path d="M120,340 L120,374"/>
+    <path d="M280,340 L280,374"/>
+    <path d="M440,340 L440,374"/>
+    <path d="M600,340 L600,374"/>
+  </g>
+
+  <!-- 子系统层 -->
+  <g font-size="15" text-anchor="middle" fill="#24292f">
+    <rect x="60"  y="376" width="120" height="44" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+    <text x="120" y="403">LLM</text>
+    <rect x="220" y="376" width="120" height="44" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+    <text x="280" y="403">Tools</text>
+    <rect x="380" y="376" width="120" height="44" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+    <text x="440" y="403">Memory</text>
+    <rect x="540" y="376" width="120" height="44" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+    <text x="600" y="403">Hooks</text>
+  </g>
+</svg>

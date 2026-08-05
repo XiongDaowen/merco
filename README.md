@@ -75,20 +75,7 @@ my_plugin = "my_package.my_plugin:MyPlugin"
 
 ## 🏗️ 架构一览
 
-```
-CLI   Webhook   Cron   Custom
- |       |        |       |
- +-------+--------+-------+
-         |
-         v
-   AgentRuntime
-         |
-         v
-   Agent Loop
-    |   |   |   |
-    v   v   v   v
-  LLM Tools Mem Plugins
-```
+![merco 架构](docs/architecture.svg)
 
 - **AgentRuntime** - 统一生命周期。`start()` 触发插件两阶段激活 + gateway/scheduler 启动；`stop()` 幂等收尾。CLI / webhook / cron / 任何入口都通过它调用 Agent。
 - **ModelProvider ABC** + **ModelRegistry** - 多模型层。内置 OpenAI / Anthropic / 任意 OAI-兼容端点（填 `base_url` 就行）。`select()` 独占凭证解析，Agent 不感知 `api_key`。
