@@ -119,7 +119,7 @@ class TestMCPServerManager:
 
         # Simulate a successful connection and tool discovery
         async def mock_connect_stdio(config):
-            return mock_tools
+            return (MagicMock(), mock_tools, AsyncMock())
 
         with patch("merco.mcp.manager._MCP_AVAILABLE", True):
             with patch.object(manager, "_connect_stdio", side_effect=mock_connect_stdio):
@@ -143,7 +143,7 @@ class TestMCPServerManager:
         mock_tools = [{"name": "tool_x", "description": "X", "inputSchema": {}}]
 
         async def mock_connect_stdio(config):
-            return mock_tools
+            return (MagicMock(), mock_tools, AsyncMock())
 
         with patch("merco.mcp.manager._MCP_AVAILABLE", True):
             with patch.object(manager, "_connect_stdio", side_effect=mock_connect_stdio):
@@ -176,7 +176,7 @@ class TestMCPServerManager:
         ]
 
         async def mock_connect_stdio(config):
-            return mock_tools
+            return (MagicMock(), mock_tools, AsyncMock())
 
         with patch("merco.mcp.manager._MCP_AVAILABLE", True):
             with patch.object(manager, "_connect_stdio", side_effect=mock_connect_stdio):
@@ -235,7 +235,7 @@ class TestMCPServerManager:
         mock_tools = [{"name": "tool_x", "description": "X", "inputSchema": {}}]
 
         async def mock_connect_stdio(config):
-            return mock_tools
+            return (MagicMock(), mock_tools, AsyncMock())
 
         with patch("merco.mcp.manager._MCP_AVAILABLE", True):
             with patch.object(manager, "_connect_stdio", side_effect=mock_connect_stdio):
@@ -249,7 +249,7 @@ class TestMCPServerManager:
         mock_tools2 = [{"name": "tool_y", "description": "Y", "inputSchema": {}}]
 
         async def mock_connect_stdio2(config):
-            return mock_tools2
+            return (MagicMock(), mock_tools2, AsyncMock())
 
         with patch("merco.mcp.manager._MCP_AVAILABLE", True):
             with patch.object(manager, "_connect_stdio", side_effect=mock_connect_stdio2):
@@ -271,33 +271,85 @@ class TestMCPServerManager:
 
     @pytest.mark.asyncio
     async def test_call_tool_finds_and_delegates(self, manager):
-        """_call_tool finds the tool and delegates to _call_stdio_tool."""
+        """_call_tool 找到工具后用持久 session 调用（不再走 _call_stdio_tool）。"""
         cfg = MCPServerConfig(name="srv", command="echo")
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"result": "ok"}
+        mock_session.call_tool.return_value = mock_result
         tool = MCPServerTool({"name": "tool_x", "inputSchema": {}}, server_name="srv", handler=None)
-        manager._servers["srv"] = {"config": cfg, "tools": [tool]}
+        manager._servers["srv"] = {"config": cfg, "tools": [tool], "session": mock_session, "cleanup": None}
 
-        with patch.object(
-            manager, "_call_stdio_tool", new_callable=AsyncMock, return_value={"result": "ok"}
-        ) as mock_call:
-            result = await manager._call_tool("tool_x", {"arg": 1})
+        result = await manager._call_tool("tool_x", {"arg": 1})
 
         assert result == {"result": "ok"}
-        mock_call.assert_called_once_with(cfg, "tool_x", {"arg": 1})
+        mock_session.call_tool.assert_called_once_with("tool_x", {"arg": 1})
 
     @pytest.mark.asyncio
-    async def test_call_tool_http_delegates(self, manager):
-        """_call_tool delegates to _call_http_tool for URL-based configs."""
+    async def test_call_tool_url_server_uses_session(self, manager):
+        """URL 配置的服务器同样用持久 session 调用（传输层在 connect 时已定）。"""
         cfg = MCPServerConfig(name="srv", url="http://localhost/mcp")
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"data": "http_result"}
+        mock_session.call_tool.return_value = mock_result
         tool = MCPServerTool({"name": "tool_h", "inputSchema": {}}, server_name="srv", handler=None)
-        manager._servers["srv"] = {"config": cfg, "tools": [tool]}
+        manager._servers["srv"] = {"config": cfg, "tools": [tool], "session": mock_session, "cleanup": None}
 
-        with patch.object(
-            manager, "_call_http_tool", new_callable=AsyncMock, return_value={"data": "http_result"}
-        ) as mock_call:
-            result = await manager._call_tool("tool_h", {})
+        result = await manager._call_tool("tool_h", {})
 
         assert result == {"data": "http_result"}
-        mock_call.assert_called_once_with(cfg, "tool_h", {})
+        mock_session.call_tool.assert_called_once_with("tool_h", {})
+
+    @pytest.mark.asyncio
+    async def test_call_tool_reuses_session(self, manager, registry):
+        """工具调用复用持久 session，不每次重连（回归：旧实现每次 fork+握手）。"""
+        cfg = MCPServerConfig(name="srv", command="echo")
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"ok": True}
+        mock_session.call_tool.return_value = mock_result
+
+        async def mock_connect_stdio(config):
+            return mock_session, [{"name": "tool_x", "inputSchema": {}}], AsyncMock()
+
+        with patch("merco.mcp.manager._MCP_AVAILABLE", True):
+            with patch.object(manager, "_connect_stdio", side_effect=mock_connect_stdio) as mock_connect:
+                await manager.connect("srv", cfg)
+
+        await manager._call_tool("tool_x", {"a": 1})
+        await manager._call_tool("tool_x", {"a": 2})
+
+        # session.call_tool 调两次，但 _connect_stdio 只调一次（复用，不重连）
+        assert mock_session.call_tool.call_count == 2
+        mock_connect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_call_tool_reconnects_on_failure(self, manager, registry):
+        """session 调用抛异常（死亡）时重连一次重试。"""
+        cfg = MCPServerConfig(name="srv", command="echo")
+        dead_session = AsyncMock()
+        dead_session.call_tool.side_effect = RuntimeError("dead")
+        live_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"ok": True}
+        live_session.call_tool.return_value = mock_result
+
+        call_count = [0]
+
+        async def mock_connect_stdio(config):
+            call_count[0] += 1
+            # 第一次返回死 session，重连后返回活 session
+            sess = dead_session if call_count[0] == 1 else live_session
+            return sess, [{"name": "tool_x", "inputSchema": {}}], AsyncMock()
+
+        with patch("merco.mcp.manager._MCP_AVAILABLE", True):
+            with patch.object(manager, "_connect_stdio", side_effect=mock_connect_stdio):
+                await manager.connect("srv", cfg)
+                result = await manager._call_tool("tool_x", {})
+
+        assert result == {"ok": True}
+        assert call_count[0] == 2  # 初始连接 + 重连一次
 
     # --- _unregister_tools tests ---
 
