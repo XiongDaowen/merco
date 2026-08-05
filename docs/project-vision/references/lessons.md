@@ -4,6 +4,42 @@
 
 ---
 
+## 2026-08-05: 归档 clone 会被 resume 当活动会话--元数据保存要刷 updated_at
+
+**场景**：每次启动 merco 都"📦 原会话已归档 + Context compressed"，无限循环。
+
+**根因**：压缩前 auto-fork 的 `clone_session` 设 clone `updated_at=now`，而 `save_metadata`（持久化刷新后的 compress_checkpoint）不更新 `updated_at`。活动会话 updated_at 停留上次聊天，归档 clone 反而最新 -> `resume_or_create`（`list_sessions` 按 `updated_at DESC`）加载 clone。clone 的 checkpoint 在新 checkpoint 写入前复制，已过期 -> 全量恢复 -> 重新压缩 -> 新 clone -> 循环。
+
+**修复**（`08c0b34`）：`save_metadata` 加 `updated_at = now`，活动会话（新鲜 checkpoint）排在归档 clone 之前，被 resume 加载。用户数据不丢。
+
+**教训**：auto-fork/归档产生的 clone 会和活动会话竞争 resume 候选（同表 + 按 updated_at 排序）。凡是改了"是否该被 resume"相关状态（checkpoint、active 标记）的元数据写，都要同步刷 updated_at，否则归档 clone 会凭创建时间抢到 resume 槽位。更彻底的修法是 resume 候选排除 parent_id 非空的 clone，但那会让 bug 期间误存于 clone 的用户消息丢失--bump updated_at 兼顾断链与保数据。
+
+---
+
+## 2026-08-05: think 标签 find-first vs find-last 是对称权衡，按模型语义选，别做全局默认
+
+**场景**：reasoning 中字面出现 `</think>`（模型讨论 think 格式时）被 find-first 当 think 块结束，reasoning 中间截断、剩余漏进 content。
+
+**根因**：标签定界本质上无法区分"字面标签"与"定界符"。find-first 在"字面闭标签在 reasoning"时错（截断）；find-last 在"字面闭标签在 content"时错（吞回复）；两者还互斥地牺牲多 think 块。没有全局正确解。
+
+**修复**（`1d587e2`）：MiniMax 语义只有一个 think 块、字面闭标签只在 reasoning 出现，故选 find-last，且只放 MiniMax 插件（`_split_think_blocks` + 流末 `_reconcile`）。核心 `ThinkTagStrategy` 保持 find-first（保多块 / 字面-in-content 给其他模型）。
+
+**教训**：标签定界的歧义没万能解，find-first/find-last 是按"字面标签更可能出现在 reasoning 还是 content"下注。选哪个取决于模型行为（MiniMax 偏 reasoning），不该拍脑袋做全局默认--放对应 provider 插件里，核心保守。流式下字面/真闭标签常落不同 chunk，per-chunk 怎么选都错，必须流末对完整原文重切（reconcile）。
+
+---
+
+## 2026-08-05: bash 工具污染终端的根因是控制终端共享，不是 isatty；start_new_session 比 PTY 干净
+
+**场景**：LLM 经 bash 工具跑 TUI/交互式程序（hermes 等），merco 终端被转义序列覆盖、输入被劫持。
+
+**根因**：`create_subprocess_shell` 不设 stdin（继承终端 stdin）+ 不 `start_new_session`（子进程与 merco 共享控制终端）。TUI 程序经 `/dev/tty`（控制终端）直接写转义序列、读终端 stdin。stdout/stderr 走 PIPE 已被捕获，不污染终端--污染来自 /dev/tty + stdin，不是 isatty。
+
+**修复**（`1487e78`）：`stdin=DEVNULL`（断输入劫持）+ `start_new_session=True`（子进程 setsid 后无控制终端，/dev/tty 打不开）。不用 PTY：PTY 会引入转义码污染输出（要额外 ANSI 清洗）、stdin-reading 命令死锁（pty 无 EOF）、stdout+stderr 合并（破坏工具 API）。
+
+**教训**：终端污染先查控制终端与 stdin 继承，别上来就 PTY。`start_new_session=True` 让子进程脱离控制终端是最小且足够的隔离；PTY 是重武器，只在真需要 isatty=True 的交互式工具（那应是另一个独立工具，可插件拓展）才上。诊断报告的"isatty"方向不准，要验证根因。
+
+---
+
 ## 2026-07-24: 删 `@skip` 测试前先真跑一次 — 跳过的可能是被掩盖的真失败
 
 **场景**：一个 bash 工具非 UTF-8 输出测试长期 `@skip` 标"非关键"，去债时准备删掉。

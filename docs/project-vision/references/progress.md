@@ -1,7 +1,7 @@
 # 项目进展
 
 > 每次开发会话后更新。每次重大提交后必须根据提交内容同步更新。
-> 最后更新: 2026-07-24 (Wave 3 完成 + 去债 ruff 498→0 + pre-commit + 测试跳过修复 → 999 passed / 0 skipped / 0 failed)
+> 最后更新: 2026-08-05 (代码审查 4 项 bug 修复 v0.5.2: bash 终端隔离 / MCP session 复用 / MiniMax think-tag find-last / 会话归档循环 -> 295+ 测试绿 / ruff=0)
 
 ## 目标对标
 
@@ -10,6 +10,17 @@
 ## 当前状态
 
 **阶段**: Wave 1+2+3 插件/模型/gateway 动态化 完成 + 技术债清零（ruff 498→0 + pre-commit）| **焦点**: 下一站候选方向——`Gateway 生态扩展`（Telegram/Discord 适配器；详见 `references/next-focus.md`，推荐 A 候选；Self-Improving Loop 延后）
+
+### 本次会话更新 (2026-08-05) - 代码审查 bug 修复 4 项（v0.5.2）
+
+**4 个 commit**（`1487e78`..`08c0b34`），分支 `fix/code-review-bugs` 合入 main。**295+ 测试绿 / ruff=0**。源于 `docs/others/code-review-report.md` 评审（7 项中 3 项真 bug 修 + 1 项会话生命周期 bug 修，3 项不修）。
+
+- **bash 工具终端隔离**（`1487e78`，`merco/tools/bash_tools.py`）：`stdin=DEVNULL` + `start_new_session=True`。根因是子进程与 merco 共享控制终端 + 继承终端 stdin，TUI 程序经 `/dev/tty` 写转义序列污染 merco 终端、劫持输入（非 isatty）。不用 PTY（避免转义码污染输出 / stdin EOF 死锁 / stdout+stderr 合并破坏 API）。
+- **MCP stdio session 复用**（`119e462`，`merco/mcp/manager.py`）：`_connect_stdio`/`_connect_http` 用 `AsyncExitStack` 打开持久 `ClientSession`，`_call_tool` 复用；session 死亡（call 抛异常）`_reconnect` 重连一次重试；`disconnect`/`shutdown` 调 cleanup 关 session+transport。旧实现每次工具调用 fork 子进程 + 握手（Python MCP server 单次启动数百 ms）。
+- **MiniMax think-tag find-last**（`1d587e2`，`merco/plugins/builtin/minimax/plugin.py` + `merco/core/llm/response.py`）：reasoning 中字面出现闭标签（模型讨论 think 格式时写出 `</think>`/`[/think]`）被核心 find-first 误匹配为 think 块结束 -> reasoning 中间截断、剩余漏进 content。MiniMax 语义只有一个 think 块、最后闭标签才是结束。`_split_think_blocks` 改 find-last；非流式 `_parse_response` 覆盖核心 find-first，流式 `chat_stream` 逐 chunk 走 find-first（实时显示）+ 流末发 `_reconcile` chunk 用 find-last 重切（字面/真闭标签常落不同 chunk，per-chunk find-first 处理不了）。核心保持 find-first（find-last 牺牲多 think 块，不做全局默认）。
+- **会话归档循环**（`08c0b34`，`merco/memory/session_store.py`）：每次启动归档+压缩的根因--`clone_session`（压缩前 auto-fork）设 `updated_at=now`，而 `save_metadata`（持久化刷新后的 checkpoint）不更新 `updated_at` -> 活动会话 updated_at 停留上次聊天、归档 clone 反而最新 -> `resume_or_create` 加载 clone（其 checkpoint 在新 checkpoint 写入前复制，已过期）-> 全量恢复 -> 重新压缩 -> 新 clone -> 无限循环。修：`save_metadata` 加 `updated_at = now`，活动会话（新鲜 checkpoint）排在归档 clone 之前。用户数据不丢（活动会话继续被恢复，再压缩一次后稳定）。
+
+**报告未修 3 项**：Bug 2（compress O(n) 查找）是正确代码的非热路径；坏味道 1（`context.add` WARNING）是合理不变量守卫；坏味道 2（guard `"rm "` 误伤 `rmdir`）前提错误（带空格不匹配 rmdir）；坏味道 3（minimax 注释）已在 `5ced3ab` 修过。
 
 ### 本次会话更新 (2026-07-24) - Wave 3 Scheduler→Runtime + GatewayRegistry
 
